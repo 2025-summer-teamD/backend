@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - develop # 메인 브렌치에 브랜치 머지 시 자동으로 실행
-  pull_requests:
+  pull_request:
     branches:
       - "**"
 jobs:
@@ -21,8 +21,11 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
      - name : build dockerfile
+       env:
+        #DOCKER_IMAGE_TAG: ${{ steps.set_docker_image_tag.outputs.DOCKER_IMAGE_TAG }}
        run: docker build -t ${{baikhyunjun}}/도커허브 레퍼지토리 이름
             docker push ${{baikhyunjun}}/도커허브 래퍼지토리 이름  
-            
+
 #도커로 로그인 후 빌드 후 푸시까지
 #도커 래퍼지토리 이름 추가 예정
+#마지막 run 코드 수정 필요?
