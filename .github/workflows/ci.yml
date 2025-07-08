@@ -11,14 +11,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4 # 레포 클론
 
-    - name: Set up Go 1.23
-      uses: actions/setup-go@v5 # 저는 고 언어 빌드를 했습니다. 다른 언어는 marketplace에 찾으시면 됩니다
-      with:
-        go-version: '1.23'
-    - run: go version
-    - name: Show build number # 도커 허브에 올릴 빌드 넘버 만들기
-      run: |
-        echo "Build Number: ${{ github.run_number }}" # 빌드 넘버는 런 넘버 입니다
     - name: Show pull request number # 여기는 pr 인지 확인 해주고 빌드 해줍니다.
       if: ${{ github.event_name == 'pull_request' }}
       run: |
