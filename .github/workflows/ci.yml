@@ -12,14 +12,17 @@ jobs:
     runs-on : ubuntu-latest
 
     steps:
-      -uses : actions/checkout@v4
-      -name: login to docker
+     - uses : actions/checkout@v4
+
+     - name: login to docker
        uses: docker/login-action@v2
-      with:
+       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
-      -name : build dockerfile
-      run: docker build -t ${{baikhyunjun}} #/도커허브 레퍼지토리 이름
-           docker push ${{baikhyunjun}} #/도커허브 래퍼지토리 이름
+     - name : build dockerfile
+       run: docker build -t ${{baikhyunjun}}/도커허브 레퍼지토리 이름
+            docker push ${{baikhyunjun}}/도커허브 래퍼지토리 이름  
+            
 #도커로 로그인 후 빌드 후 푸시까지
+#도커 래퍼지토리 이름 추가 예정
