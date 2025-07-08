@@ -5,10 +5,13 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
 # Go modules 파일 복사
-COPY go.mod go.sum ./
+COPY go.mod ./
 
-# 의존성 다운로드
-RUN go mod download
+# go.sum 파일 복사 (있는 경우)
+COPY go.su[m] ./
+
+# 의존성 다운로드 및 go.sum 생성
+RUN go mod tidy && go mod download
 
 # 소스 코드 복사
 COPY . .
