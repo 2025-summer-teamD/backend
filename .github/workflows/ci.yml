@@ -21,7 +21,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
      - name : build dockerfile
-       env:
+       #env:
         #DOCKER_IMAGE_TAG: ${{ steps.set_docker_image_tag.outputs.DOCKER_IMAGE_TAG }}
        run: |
         docker build -t baikhyunjun/도커허브 레퍼지토리 이름
