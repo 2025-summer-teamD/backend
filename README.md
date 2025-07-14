@@ -1,5 +1,7 @@
 # backend
 
+<img width="676" height="366" alt="Screenshot 2025-07-14 at 23 40 49" src="https://github.com/user-attachments/assets/b130fdac-5632-4c4d-9d04-91eeeec4140c" />
+
 ## Node.js/Express 프로젝트 초기 세팅 및 실행법
 
 ### 1. Node.js 버전 관리 (nvm 사용)
