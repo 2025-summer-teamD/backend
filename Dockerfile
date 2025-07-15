@@ -6,8 +6,10 @@ WORKDIR /app
 # package.json과 package-lock.json 복사
 COPY package*.json ./
 
-# 의존성 설치
-RUN npm install
+# production 환경에서는 devDependencies를 설치하지 않음
+ARG NODE_ENV=production
+ENV NODE_ENV=$NODE_ENV
+RUN if [ "$NODE_ENV" = "production" ]; then npm install --omit=dev; else npm install; fi
 
 # 앱 소스 복사
 COPY . .
