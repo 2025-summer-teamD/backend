@@ -41,6 +41,7 @@ http://localhost:EXPRESS_PORT/api-docs
 ---
 
 # 디렉토리 구조
+```text
 .
 ├── __tests__/
 │   ├── setup.js                # 테스트 전역 설정 (DB 초기화 등)
@@ -85,6 +86,7 @@ http://localhost:EXPRESS_PORT/api-docs
 ├── .dockerignore
 ├── package.json
 └── README.md
+```
 
 ## src/index.js 와 src/app.js 차이
 
