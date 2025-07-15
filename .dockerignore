@@ -14,6 +14,7 @@ coverage
 __tests__
 *.test.js
 *.spec.js
+jest.config.js
 
 # OS/에디터 관련 불필요 파일
 .DS_Store

@@ -11,7 +11,7 @@ const swaggerOptions = {
     info: {
       title: 'Express API',
       version: '1.0.0',
-      description: 'Express + Swagger 샘플 API 문서',
+      description: 'Swagger API 문서',
     },
   },
   apis: ['./src/routes/*.js'], // JSDoc 주석에서 API 정보 추출
