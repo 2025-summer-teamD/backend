@@ -11,17 +11,29 @@
 ## 2. 컨테이너 실행 및 종료
 
 ### 실행
+
+#### Mac
 ```bash
 sh start.sh
 ```
 - Docker 데몬이 실행 중인지 자동으로 확인합니다.
 - Express, PostgreSQL, Redis가 함께 실행됩니다.
 
+#### Window
+
+docker compose up --build -d
+
 ### 종료
+
+#### Mac
 ```bash
 sh stop.sh
 ```
 - 모든 컨테이너를 중지 및 정리합니다.
+
+#### Window
+
+docker compose down
 
 ## 3. 서버 접속
 - 브라우저에서 (http://localhost:EXPRESS_PORT) 접속
