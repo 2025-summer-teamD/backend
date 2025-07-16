@@ -1,8 +1,11 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
-
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');
+const userRoutes = require('./routes/userRoutes');
+const charactersRoutes = require('./routes/charactersRoutes');
+const errorHandler = require('./middlewares/errorHandler');
 
 // Swagger 설정
 const swaggerOptions = {
@@ -20,12 +23,14 @@ const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 미들웨어
+app.use(cors()); // ✅ CORS 허용!
 app.use(express.json());
 
-// 기본 라우트
-app.get('/', (req, res) => {
-  res.send('Hello, Express!');
-});
+// 라우터 등록
+app.use('/users', userRoutes);
+app.use('/characters', charactersRoutes);
 
-module.exports = app;
+// 에러 핸들러 등록
+app.use(errorHandler);
 
+module.exports = app
