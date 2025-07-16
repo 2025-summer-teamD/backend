@@ -219,6 +219,19 @@ const chatLogs = [
  *                 current_page: 1
  *                 total_pages: 1
  *                 total_elements: 2
+ *       
+ *       400:
+*         description: 잘못된 요청 파라미터
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 message:
+*                   type: string
+*             example:
+*               message: "페이지 번호는 1 이상이어야 합니다."
+
  *       404:
  *         description: 채팅한 캐릭터가 없음
  *         content:
