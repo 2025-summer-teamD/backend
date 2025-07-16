@@ -29,3 +29,11 @@ coverage/
 .idea/
 .vscode/
 /generated/prisma
+
+
+# Docker Compose PID files
+docker-compose.pid
+
+# Google Cloud credentials
+/google-credentials/
+
