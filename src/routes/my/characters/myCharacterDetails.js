@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-// 더미 캐릭터 데이터
-
-const characters = [
+// 더미 데이터
+const personas = [
   {
-    character_id: 1,
+    id: 1,
     user_id: 5,
     name: '인기 페르소나',
     image_url: 'https://example.com/image1.png',
@@ -18,31 +17,17 @@ const characters = [
     uses_count: 1502,
     likes: 352,
     liked: false,
+    is_public: false,
   },
-
-  {
-    character_id: 2,
-    user_id: 7,
-    name: '차분한 페르소나',
-    image_url: 'https://example.com/image2.png',
-    introduction: '차분하고 신중한 페르소나입니다.',
-    prompt: {
-      tone: '차분한 말투',
-      personality: '신중함',
-      tag: '#차분',
-    },
-    uses_count: 800,
-    likes: 120,
-    liked: true,
-  },
+  // ...다른 캐릭터
 ];
 
 /**
  * @swagger
- * /communities/characters/{character_id}:
+ * /my/characters/{character_id}:
  *   get:
- *     summary: 커뮤니티 캐릭터 상세 조회
- *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
+ *     summary: 내 캐릭터 상세 조회
+ *     description: character_id로 내 캐릭터의 상세 정보를 조회합니다.
  *     parameters:
  *       - in: path
  *         name: character_id
@@ -83,6 +68,8 @@ const characters = [
  *                   type: integer
  *                 liked:
  *                   type: boolean
+ *                 is_public:
+ *                   type: boolean
  *       404:
  *         description: 캐릭터를 찾을 수 없음
  *         content:
@@ -97,7 +84,7 @@ const characters = [
  */
 router.get('/:character_id', (req, res) => {
   const characterId = parseInt(req.params.character_id, 10);
-  const character = characters.find((c) => c.character_id === characterId);
+  const character = personas.find((c) => c.id === characterId);
 
   if (!character) {
     return res.status(404).json({
@@ -106,8 +93,18 @@ router.get('/:character_id', (req, res) => {
     });
   }
 
-  res.status(200).json(character);
+  res.status(200).json({
+    character_id: character.id,
+    user_id: character.user_id,
+    name: character.name,
+    image_url: character.image_url,
+    introduction: character.introduction,
+    prompt: character.prompt,
+    uses_count: character.uses_count,
+    likes: character.likes,
+    liked: character.liked,
+    is_public: character.is_public,
+  });
 });
-
 
 module.exports = router;

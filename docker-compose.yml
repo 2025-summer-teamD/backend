@@ -47,6 +47,13 @@ services:
     networks:
       - app-network
 
+  backend:
+    build: .
+    volumes:
+      - ./google-credentials:/app/google-credentials:ro
+    env_file:
+      - .env
+
   migrate:
     build: .
     env_file:
