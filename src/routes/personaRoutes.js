@@ -4,7 +4,7 @@ const personaController = require('../controllers/personaController');
 
 /**
  * @swagger
- * /personas/existing:
+ * /api/personas/existing:
  *   post:
  *     summary: 캐릭터 생성
  *     tags: [Persona]
