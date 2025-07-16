@@ -1,13 +1,19 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+// 임시 저장소 (메모리 배열)
+const personas = [];
+let nextId = 1;
 
-exports.createPersona = async ({ name, image_url, clerk_id, is_public }) => {
-  return await prisma.persona.create({
-    data: {
-      name,
-      image_url,
-      clerk_id,
-      is_public,
-    },
-  });
-};
+function createCustomPersonaService({ name, image_url, is_public, prompt, description }) {
+  const persona = {
+    id: nextId++,
+    name,
+    image_url,
+    is_public,
+    prompt,
+    description,
+    createdAt: new Date().toISOString(),
+  };
+  personas.push(persona);
+  return persona;
+}
+
+module.exports = { createCustomPersonaService };
