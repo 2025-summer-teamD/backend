@@ -35,12 +35,16 @@ sh stop.sh
 
 docker compose down
 
-## 3. 서버 접속
+## 3.환경 변수 설정
+./.env 파일 생성 및 변수 입력
+./google-credentials 디렉토리 생성 및 안에 json 키 입력
+
+## 4. 서버 접속
 - 브라우저에서 (http://localhost:EXPRESS_PORT) 접속
 
 ---
 
-## 4. Swagger API 문서 접속 방법
+## 5. Swagger API 문서 접속 방법
 - 브라우저에서 아래 주소로 접속하면 API 명세(Swagger UI)를 확인할 수 있습니다.
 
 ```
@@ -114,6 +118,6 @@ http://localhost:EXPRESS_PORT/api-docs
 
 app.js는 “Express 앱의 모든 설정(미들웨어, 라우트, 에러처리 등)”을 담당하는 파일
 실제 서버 실행(포트 listen)은 index.js에서 담당
-.
+
 서비스 → 컨트롤러 → 클라이언트로의 데이터 흐름이 실제로 잘 분리되어 있는지, 컨트롤러에서 비즈니스 로직이 섞여 있지 않은지 점검 필요.
 에러 핸들러가 모든 라우터/미들웨어 뒤에 등록되어 있는지(Express에서 순서 중요) 확인.
