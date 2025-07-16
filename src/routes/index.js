@@ -30,12 +30,12 @@
 const express = require('express');
 const router = express.Router();
 
-// 기존 라우터 예시
-// const userRoutes = require('./userRoutes');
-// router.use('/users', userRoutes);
+const characterRouter = require('./communities/characters');
+router.use('/communities/characters', characterRouter);
 
 // 커뮤니티 캐릭터 상세 라우터 등록
 const characterDetailRouter = require('./communities/characters');
 router.use('/communities/characters', characterDetailRouter);
 
 module.exports = router;
+
