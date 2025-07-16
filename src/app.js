@@ -13,8 +13,22 @@ const swaggerOptions = {
       version: '1.0.0',
       description: 'Swagger API 문서',
     },
+    components: {              //여기서부터 토큰 생성을 위해 추가함
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',           
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
   },
-  apis: [__dirname + '/routes/*.js'], // 민정 수정 오류떠서 이거 한줄만 수정함. 
+  apis: [__dirname + '/routes/*.js'],  // 여기까지 토큰 생성을 위해 추가함
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

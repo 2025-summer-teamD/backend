@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { verifyToken } = require('../middlewares/authMiddleware'); // 토큰 불러오기
 
 // ✅ 새로운 캐릭터와 채팅방 생성
 /**
@@ -21,7 +22,7 @@ const router = express.Router();
  *       201:
  *         description: 채팅방 생성 성공
  */
-router.post('/rooms', async (req, res) => {
+router.post('/rooms', verifyToken, async (req, res) => {
     const { character_id } = req.body;
   
     if (!character_id) {
@@ -67,7 +68,7 @@ router.post('/rooms', async (req, res) => {
  *       201:
  *         description: 메시지 전송 성공
  */
-router.post('/rooms/:room_id', async (req, res) => {
+router.post('/rooms/:room_id', verifyToken, async (req, res) => {
   const { room_id } = req.params;
   const { message } = req.body;
 
@@ -80,7 +81,7 @@ router.post('/rooms/:room_id', async (req, res) => {
   res.status(201).json({
     room_id,
     message,
-    sender: 'minjeong',
+    sender: req.user?.username || 'minjeong',
     timestamp: new Date(),
   });
 });
