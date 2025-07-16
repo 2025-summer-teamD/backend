@@ -22,6 +22,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // 미들웨어
 app.use(express.json());
 
+// chat 라우터
+const chatRouter = require('./routes/chat');
+app.use('/chat', chatRouter);
+
 // 기본 라우트
 app.get('/', (req, res) => {
   res.send('Hello, Express!');
