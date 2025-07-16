@@ -16,8 +16,26 @@ const swaggerOptions = {
       version: '1.0.0',
       description: 'Swagger API 문서',
     },
+    components: {              //여기서부터 토큰 생성을 위해 추가함
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',           
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
   },
+  
+  // apis: [__dirname + '/routes/*.js'],   여기까지 토큰 생성을 위해 추가함
+
   apis: ['./src/routes/**/*.js'], // JSDoc 주석에서 API 정보 추출
+
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -30,6 +48,12 @@ app.use('/api/personas', personaRoutes);
 
 // 기본 라우트
 
+
+// chat 라우터
+const chatRouter = require('./routes/chat');
+app.use('/chat', chatRouter);
+
+// 기본 라우트
 
 const mainRouter = require('./routes'); // src/routes/index.js를 불러옴
 app.use('/', mainRouter); // 모든 라우트의 엔트리 포인트
