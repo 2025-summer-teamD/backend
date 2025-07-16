@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -36,6 +34,13 @@ services:
     restart: unless-stopped
     networks:
       - app-network
+
+  backend:
+    build: .
+    volumes:
+      - ./google-credentials:/app/google-credentials:ro
+    env_file:
+      - .env
 
 volumes:
   pgdata:
