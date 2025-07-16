@@ -14,7 +14,7 @@ const swaggerOptions = {
       description: 'Swagger API 문서',
     },
   },
-  apis: ['./src/routes/*.js'], // JSDoc 주석에서 API 정보 추출
+  apis: [__dirname + '/routes/*.js'], // 민정 수정 오류떠서 이거 한줄만 수정함. 
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
