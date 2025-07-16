@@ -38,4 +38,8 @@ const router = express.Router();
 const characterDetailRouter = require('./communities/characters');
 router.use('/communities/characters', characterDetailRouter);
 
+// 채팅 캐릭터 라우터 등록
+const chattedCharacterRouter = require('./Chat/chattedCharacter');
+router.use('/my/chat-characters', chattedCharacterRouter);
+
 module.exports = router;
