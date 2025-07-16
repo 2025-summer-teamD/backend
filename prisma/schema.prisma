@@ -33,7 +33,7 @@ model User {
 
 model Persona {
   id           Int      @id @default(autoincrement())
-  clerk_id     String   @index
+  clerk_id     String
   user         User     @relation(fields: [clerk_id], references: [clerk_id], onDelete: Cascade)
   name         String   @db.VarChar(100)
   image_url    String   @db.VarChar(1024)
@@ -46,6 +46,8 @@ model Persona {
   updated_at   DateTime?
   is_deleted   Boolean  @default(false)
   chatRooms    ChatRoom[]
+
+  @@index([clerk_id])
 }
 
 model ChatRoom {
@@ -65,11 +67,13 @@ model ChatRoom {
 
 model ChatLog {
   id          Int           @id @default(autoincrement())
-  chatroom_id Int   @index
+  chatroom_id Int
   chatRoom    ChatRoom @relation(fields: [chatroom_id], references: [id], onDelete: Cascade)
   text        String
   type        ChatLogType
   speaker     ChatLogSpeaker
   time        DateTime @default(now())
   is_deleted  Boolean  @default(false)
+
+  @@index([chatroom_id])
 }
