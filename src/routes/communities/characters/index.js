@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-const characterDetails = require('./characterDetails');
+
 const communityList = require('./communityList');
+const characterDetails = require('./characterDetails');
+
 
 
 router.use('/', communityList);
