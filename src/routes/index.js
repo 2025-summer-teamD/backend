@@ -37,5 +37,8 @@ router.use('/communities/characters', characterRouter);
 const characterDetailRouter = require('./communities/characters');
 router.use('/communities/characters', characterDetailRouter);
 
+const myCharacterDetails = require('./my/characters');
+router.use('/my/characters', myCharacterDetails);
+
 module.exports = router;
 
