@@ -30,8 +30,8 @@
 const express = require('express');
 const router = express.Router();
 
-const communitiesRouter = require('./communities/characters');
-const myRouter = require('./my/characters');
+const communitiesRouter = require('./communities');
+const myRouter = require('./my');
 
 router.use('/communities', communitiesRouter);
 router.use('/my', myRouter);
