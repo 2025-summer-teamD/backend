@@ -40,11 +40,10 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-
 // 미들웨어
 app.use(express.json());
 
-app.use('/api/personas', personaRoutes);
+app.use('/personas', personaRoutes);
 
 // 기본 라우트
 
