@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// 더미 캐릭터 데이터 (communityList.js와 동일하게 맞춰주세요)
+// 더미 캐릭터 데이터
+
 const characters = [
   {
     character_id: 1,
@@ -18,7 +19,22 @@ const characters = [
     likes: 352,
     liked: false,
   },
-  // ...다른 캐릭터들
+
+  {
+    character_id: 2,
+    user_id: 7,
+    name: '차분한 페르소나',
+    image_url: 'https://example.com/image2.png',
+    introduction: '차분하고 신중한 페르소나입니다.',
+    prompt: {
+      tone: '차분한 말투',
+      personality: '신중함',
+      tag: '#차분',
+    },
+    uses_count: 800,
+    likes: 120,
+    liked: true,
+  },
 ];
 
 /**
@@ -92,5 +108,6 @@ router.get('/:character_id', (req, res) => {
 
   res.status(200).json(character);
 });
+
 
 module.exports = router;

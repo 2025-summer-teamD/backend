@@ -33,4 +33,9 @@ const router = express.Router();
 const characterRouter = require('./communities/characters');
 router.use('/communities/characters', characterRouter);
 
+// 커뮤니티 캐릭터 상세 라우터 등록
+const characterDetailRouter = require('./communities/characters');
+router.use('/communities/characters', characterDetailRouter);
+
 module.exports = router;
+
