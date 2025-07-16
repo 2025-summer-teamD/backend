@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // 더미 캐릭터 데이터
+
 const characters = [
   {
     character_id: 1,
@@ -18,6 +19,7 @@ const characters = [
     likes: 352,
     liked: false,
   },
+
   {
     character_id: 2,
     user_id: 7,
@@ -106,5 +108,6 @@ router.get('/:character_id', (req, res) => {
 
   res.status(200).json(character);
 });
+
 
 module.exports = router;
