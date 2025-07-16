@@ -14,13 +14,16 @@ const swaggerOptions = {
       description: 'Swagger API 문서',
     },
   },
-  apis: ['./src/routes/*.js'], // JSDoc 주석에서 API 정보 추출
+  apis: ['./src/routes/**/*.js'], // JSDoc 주석에서 API 정보 추출
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 미들웨어
 app.use(express.json());
+
+const mainRouter = require('./routes');
+app.use('/', mainRouter);
 
 // 기본 라우트
 app.get('/', (req, res) => {
