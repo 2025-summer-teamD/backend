@@ -30,15 +30,10 @@
 const express = require('express');
 const router = express.Router();
 
+const communitiesRouter = require('./communities/characters');
+const myRouter = require('./my/characters');
 
-const myCharacterList = require('./my/characters/myCharacterList'); // 실제 API 파일
-router.use('/my/characters', myCharacterList); // /my/characters/list로 들어오는 요청 처리
-
-const characterRouter = require('./communities/characters');
-router.use('/communities/characters', characterRouter);
-
-// 커뮤니티 캐릭터 상세 라우터 등록
-const characterDetailRouter = require('./communities/characters');
-router.use('/communities/characters', characterDetailRouter);
+router.use('/communities', communitiesRouter);
+router.use('/my', myRouter);
 
 module.exports = router;

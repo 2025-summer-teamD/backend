@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 
-const characterDetails = require('./characterDetails');
-const communityList = require('./communityList');
 
-router.use('/', characterDetails);
-router.use('/', communityList);
+const myCharacterDetails = require('./myCharacterDetails');
+const myCharacterList = require('./myCharacterList');
+
+router.use('/', myCharacterDetails);    
+router.use('/', myCharacterList);
 
 module.exports = router; 
+
