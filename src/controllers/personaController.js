@@ -1,13 +1,30 @@
-const personaService = require('../services/personaService');
+// 임시 저장소 (메모리 배열)
+const personas = [];
+let nextId = 1;
 
-exports.createPersona = async (req, res) => {
-  const { name, image_url, clerk_id, is_public } = req.body;
-
-  try {
-    await personaService.createPersona({ name, image_url, clerk_id, is_public });
-    return res.status(201).json({ message: '캐릭터 생성 성공' });
-  } catch (error) {
-    console.error(error);
-    return res.status(400).json({ message: '캐릭터 생성 실패' });
+function createCustomPersona(req, res) {
+  const { name, image_url, is_public, prompt, description } = req.body;
+  if (!name || !image_url || typeof is_public !== 'boolean' || !prompt || !description) {
+    return res.status(400).json({ message: '필수 값이 누락되었습니다.' });
   }
-};
+  if (
+    typeof prompt.tone !== 'string' ||
+    typeof prompt.personality !== 'string' ||
+    typeof prompt.tag !== 'string'
+  ) {
+    return res.status(400).json({ message: 'prompt의 각 필드는 문자열이어야 합니다.' });
+  }
+  const persona = {
+    id: nextId++,
+    name,
+    image_url,
+    is_public,
+    prompt,
+    description,
+    createdAt: new Date().toISOString(),
+  };
+  personas.push(persona);
+  res.status(201).json({ message: '사용자 정의 캐릭터가 생성되었습니다.', persona });
+}
+
+module.exports = { createCustomPersona };
