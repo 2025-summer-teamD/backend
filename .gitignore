@@ -29,3 +29,6 @@ coverage/
 .idea/
 .vscode/
 /generated/prisma
+
+# Google Cloud credentials
+/google-credentials/
