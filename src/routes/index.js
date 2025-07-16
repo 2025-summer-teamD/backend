@@ -27,3 +27,10 @@
  *       503:
  *         description: 서비스 불가 (Service Unavailable)
  */
+const express = require('express');
+const router = express.Router();
+
+const characterRouter = require('./communities/characters');
+router.use('/communities/characters', characterRouter);
+
+module.exports = router;
