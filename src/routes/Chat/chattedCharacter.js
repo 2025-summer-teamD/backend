@@ -252,6 +252,20 @@ const chatLogs = [
 router.get('/', (req, res) => {
   const { user_id = 'user_2abc123def456', page = 1, size = 10 } = req.query;
   
+
+  if (pageNum < 1) {
+        return res.status(400).json({
+        essage: "페이지 번호는 1 이상이어야 합니다."
+        });
+      }
+     
+      if (sizeNum < 1 || sizeNum > 100) {
+        return res.status(400).json({
+          message: "페이지 크기는 1-100 사이여야 합니다."
+     });
+   }
+
+
   // 해당 사용자의 채팅방 찾기
   const userChatRooms = chatRooms.filter(room => room.clerk_id === user_id && !room.is_deleted);
   
