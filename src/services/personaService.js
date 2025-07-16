@@ -8,20 +8,32 @@ import { prisma } from '../config/prisma.js';
  * @returns {Promise<object>} 생성된 페르소나 객체
  */
 export const createPersona = async (personaData, userId) => {
-  const { name, image_url, is_public, prompt, description } = personaData;
+  try {
+    const { name, image_url, is_public, prompt, description } = personaData;
 
-  // DB에 저장하는 로직 (Prisma 예시)
-  // 여기서 prompt는 JSON 타입으로 DB에 저장될 수 있습니다.
-  const newPersona = await prisma.persona.create({
-    data: {
-      name,
-      imageUrl: image_url, // DB 스키마 필드명에 맞게 매핑 (camelCase)
+    // Sanitize string inputs
+    const sanitizedData = {
+      name: name.trim(),
+      imageUrl: image_url.trim(),
       isPublic: is_public,
-      description,
-      prompt, // prompt 객체 그대로 저장 (DB가 JSON 타입을 지원할 경우)
-      creatorId: userId, // 페르소나를 생성한 사용자 ID 연결
+      description: description.trim(),
+      prompt: {
+        tone: prompt.tone.trim(),
+        personality: prompt.personality.trim(),
+        tag: prompt.tag.trim()
+      },
+      creatorId: userId
+    };
+    // DB에 저장하는 로직 (Prisma 예시)
+    // 여기서 prompt는 JSON 타입으로 DB에 저장될 수 있습니다.
+    const newPersona = await prisma.persona.create({
+      data: sanitizedData
+    });
+    
+    return newPersona;
+    } catch (error) {
+      // Log the error for debugging
+      console.error('Error creating persona:', error);
+      throw new Error('페르소나 생성 중 오류가 발생했습니다.');
     }
-  });
-
-  return newPersona;
 };
