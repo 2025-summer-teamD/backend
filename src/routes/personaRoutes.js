@@ -1,16 +1,13 @@
 const express = require('express');
 const router = express.Router();
-
-// 테스트용 임시 저장소 (메모리 배열)
-const personas = [];
-let nextId = 1;
+const { createCustomPersona } = require('../controllers/personaController');
 
 /**
  * @swagger
- * /api/personas/existing:
+ * /characters/custom:
  *   post:
- *     summary: 실제 캐릭터(페르소나) 생성 (테스트용)
- *     description: DB 대신 임시 배열에 persona를 저장합니다.
+ *     summary: 사용자 정의 캐릭터(페르소나) 생성 (테스트용)
+ *     description: name, image_url, is_public, prompt, description을 받아 Persona를 임시 배열에 저장합니다.
  *     tags:
  *       - Personas
  *     requestBody:
@@ -20,23 +17,36 @@ let nextId = 1;
  *           schema:
  *             type: object
  *             required:
- *               - clerk_id
  *               - name
  *               - image_url
  *               - is_public
+ *               - prompt
+ *               - description
  *             properties:
- *               clerk_id:
- *                 type: string
- *                 example: user_12345
  *               name:
  *                 type: string
- *                 example: 테스트 캐릭터
+ *                 example: 캐릭터 이름
  *               image_url:
  *                 type: string
  *                 example: https://example.com/image.png
  *               is_public:
  *                 type: boolean
  *                 example: true
+ *               prompt:
+ *                 type: object
+ *                 properties:
+ *                   tone:
+ *                     type: string
+ *                     example: 말투입니다
+ *                   personality:
+ *                     type: string
+ *                     example: 성격입니다
+ *                   tag:
+ *                     type: string
+ *                     example: "#태그"
+ *               description:
+ *                 type: string
+ *                 example: 추가설명입니다
  *     responses:
  *       201:
  *         description: 생성 성공
@@ -47,41 +57,42 @@ let nextId = 1;
  *               properties:
  *                 message:
  *                   type: string
- *                   example: 캐릭터가 생성되었습니다.
+ *                   example: 사용자 정의 캐릭터가 생성되었습니다.
  *                 persona:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: integer
  *                       example: 1
- *                     clerk_id:
- *                       type: string
- *                       example: user_12345
  *                     name:
  *                       type: string
- *                       example: 테스트 캐릭터
+ *                       example: 캐릭터 이름
  *                     image_url:
  *                       type: string
  *                       example: https://example.com/image.png
  *                     is_public:
  *                       type: boolean
  *                       example: true
+ *                     prompt:
+ *                       type: object
+ *                       properties:
+ *                         tone:
+ *                           type: string
+ *                           example: 말투입니다
+ *                         personality:
+ *                           type: string
+ *                           example: 성격입니다
+ *                         tag:
+ *                           type: string
+ *                           example: "#태그"
+ *                     description:
+ *                       type: string
+ *                       example: 추가설명입니다
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: 2025-07-16T14:10:00.000Z
  */
-router.post('/existing', (req, res) => {
-  const { clerk_id, name, image_url, is_public } = req.body;
-  if (!clerk_id || !name || !image_url || typeof is_public !== 'boolean') {
-    return res.status(400).json({ message: '필수 값이 누락되었습니다.' });
-  }
-  const persona = {
-    id: nextId++,
-    clerk_id,
-    name,
-    image_url,
-    is_public,
-    createdAt: new Date().toISOString(),
-  };
-  personas.push(persona);
-  res.status(201).json({ message: '캐릭터가 생성되었습니다.', persona });
-});
+router.post('/characters/custom', createCustomPersona);
 
 module.exports = router;
