@@ -4,7 +4,7 @@ const { createCustomPersona } = require('../controllers/personaController');
 
 /**
  * @swagger
- * /characters/custom:
+ * /personas/custom:
  *   post:
  *     summary: 사용자 정의 캐릭터(페르소나) 생성 (테스트용)
  *     description: name, image_url, is_public, prompt, description을 받아 Persona를 임시 배열에 저장합니다.
@@ -93,6 +93,6 @@ const { createCustomPersona } = require('../controllers/personaController');
  *                       format: date-time
  *                       example: 2025-07-16T14:10:00.000Z
  */
-router.post('/characters/custom', createCustomPersona);
+router.post('/custom', createCustomPersona);
 
 module.exports = router;

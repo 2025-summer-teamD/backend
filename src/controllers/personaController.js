@@ -1,4 +1,6 @@
-const { createCustomPersonaService } = require('../services/personaService');
+// 임시 저장소 (메모리 배열)
+const personas = [];
+let nextId = 1;
 
 function createCustomPersona(req, res) {
   const { name, image_url, is_public, prompt, description } = req.body;
@@ -12,7 +14,16 @@ function createCustomPersona(req, res) {
   ) {
     return res.status(400).json({ message: 'prompt의 각 필드는 문자열이어야 합니다.' });
   }
-  const persona = createCustomPersonaService({ name, image_url, is_public, prompt, description });
+  const persona = {
+    id: nextId++,
+    name,
+    image_url,
+    is_public,
+    prompt,
+    description,
+    createdAt: new Date().toISOString(),
+  };
+  personas.push(persona);
   res.status(201).json({ message: '사용자 정의 캐릭터가 생성되었습니다.', persona });
 }
 
