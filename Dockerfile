@@ -15,5 +15,7 @@ RUN if [ "$NODE_ENV" = "production" ]; then npm install --omit=dev; else npm ins
 COPY src ./src
 COPY prisma ./prisma
 
+RUN npx prisma generate
+
 # 앱 실행 (필요에 따라 수정)
 CMD ["npm", "start"]
