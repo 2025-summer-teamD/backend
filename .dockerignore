@@ -29,3 +29,6 @@ jest.config.js
 # 기타
 docker.log
 docker-compose.pid
+
+# Google Cloud credentials
+/google-credentials/
