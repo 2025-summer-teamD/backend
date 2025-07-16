@@ -30,6 +30,10 @@
 const express = require('express');
 const router = express.Router();
 
+
+const myCharacterList = require('./my/characters/myCharacterList'); // 실제 API 파일
+router.use('/my/characters', myCharacterList); // /my/characters/list로 들어오는 요청 처리
+
 const characterRouter = require('./communities/characters');
 router.use('/communities/characters', characterRouter);
 
@@ -38,4 +42,3 @@ const characterDetailRouter = require('./communities/characters');
 router.use('/communities/characters', characterDetailRouter);
 
 module.exports = router;
-
