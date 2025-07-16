@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const prisma = require('./config/prisma'); // Prisma 클라이언트 추가
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');
@@ -32,3 +33,4 @@ app.get('/', (req, res) => {
 
 module.exports = app;
 
+// /api-docs

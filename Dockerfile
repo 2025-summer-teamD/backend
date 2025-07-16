@@ -14,7 +14,6 @@ RUN if [ "$NODE_ENV" = "production" ]; then npm install --omit=dev; else npm ins
 # 실제 서비스에 필요한 소스만 복사
 COPY src ./src
 COPY prisma ./prisma
-
 RUN npx prisma generate
 
 # (테스트, 개발용 파일/폴더는 .dockerignore로 제외)
