@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middlewares/authMiddleware');
 const characterController = require('../controllers/characterController');
 
 /**
@@ -8,11 +7,9 @@ const characterController = require('../controllers/characterController');
  * /characters/existing:
  *   post:
  *     summary: 캐릭터(페르소나) 생성
- *     description: name, image_url, is_public을 받아 Persona를 생성합니다. (로그인 필요)
+ *     description: clerk_id, name, image_url, is_public을 받아 Persona를 생성합니다.
  *     tags:
  *       - Characters
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -20,10 +17,14 @@ const characterController = require('../controllers/characterController');
  *           schema:
  *             type: object
  *             required:
+ *               - clerk_id
  *               - name
  *               - image_url
  *               - is_public
  *             properties:
+ *               clerk_id:
+ *                 type: string
+ *                 example: user_xxxxx
  *               name:
  *                 type: string
  *                 example: 아이언맨
@@ -36,9 +37,7 @@ const characterController = require('../controllers/characterController');
  *     responses:
  *       201:
  *         description: 생성 성공 (응답 바디 없음)
- *       401:
- *         description: 인증 필요/실패
  */
-router.post('/existing', authMiddleware, characterController.createCharacter);
+router.post('/existing', characterController.createCharacter);
 
-module.exports = router; 
+module.exports = router;
