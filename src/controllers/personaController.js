@@ -1,30 +1,24 @@
-// 임시 저장소 (메모리 배열)
-const personas = [];
-let nextId = 1;
+import * as PersonaService from '../services/personaService.js';
 
-function createCustomPersona(req, res) {
-  const { name, image_url, is_public, prompt, description } = req.body;
-  if (!name || !image_url || typeof is_public !== 'boolean' || !prompt || !description) {
-    return res.status(400).json({ message: '필수 값이 누락되었습니다.' });
-  }
-  if (
-    typeof prompt.tone !== 'string' ||
-    typeof prompt.personality !== 'string' ||
-    typeof prompt.tag !== 'string'
-  ) {
-    return res.status(400).json({ message: 'prompt의 각 필드는 문자열이어야 합니다.' });
-  }
-  const persona = {
-    id: nextId++,
-    name,
-    image_url,
-    is_public,
-    prompt,
-    description,
-    createdAt: new Date().toISOString(),
-  };
-  personas.push(persona);
-  res.status(201).json({ message: '사용자 정의 캐릭터가 생성되었습니다.', persona });
-}
+/**
+ * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
+ */
+export const createCustomPersona = async (req, res, next) => {
+  try {
+    // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
+    const { userId } = req.auth; 
+    
+    // 2. 서비스 호출: 실제 생성 작업은 서비스에 위임
+    //    요청 body 전체를 서비스에 전달
+    const newPersona = await PersonaService.createPersona(req.body, userId);
 
-module.exports = { createCustomPersona };
+    // 3. 성공 응답 생성
+    res.status(201).json({ 
+      message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
+      data: newPersona,
+    });
+  } catch (error) {
+    // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
+    next(error);
+  }
+};

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { createCustomPersona } = require('../controllers/personaController');
+import { createCustomPersona } from '../controllers/personaController.js';
+import { requireAuth } from '../middlewares/authMiddleware.js';
+import { validateCreatePersona } from '../middlewares/personaValidator.js';
 
 /**
  * @swagger
@@ -93,6 +95,11 @@ const { createCustomPersona } = require('../controllers/personaController');
  *                       format: date-time
  *                       example: 2025-07-16T14:10:00.000Z
  */
-router.post('/custom', createCustomPersona);
-
-module.exports = router;
+router.post(
+    '/characters/custom', 
+    requireAuth,             // 1. 로그인 했는지 확인
+    validateCreatePersona,   // 2. 요청 데이터가 유효한지 확인
+    createCustomPersona      // 3. 모든 검사를 통과하면 컨트롤러 실행
+  );
+  
+export default router;
