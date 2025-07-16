@@ -30,15 +30,10 @@
 const express = require('express');
 const router = express.Router();
 
-const characterRouter = require('./communities/characters');
-router.use('/communities/characters', characterRouter);
+const communitiesRouter = require('./communities/characters');
+const myRouter = require('./my/characters');
 
-// 커뮤니티 캐릭터 상세 라우터 등록
-const characterDetailRouter = require('./communities/characters');
-router.use('/communities/characters', characterDetailRouter);
-
-const myCharacterDetails = require('./my/characters');
-router.use('/my/characters', myCharacterDetails);
+router.use('/communities', communitiesRouter);
+router.use('/my', myRouter);
 
 module.exports = router;
-
