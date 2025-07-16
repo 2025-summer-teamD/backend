@@ -8,6 +8,8 @@
     "test": "jest"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "@google-cloud/aiplatform": "^4.3.0",
     "@prisma/client": "^6.11.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
