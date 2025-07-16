@@ -16,7 +16,7 @@ COPY src ./src
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# (테스트, 개발용 파일/폴더는 .dockerignore로 제외)
+RUN npx prisma generate
 
 # 앱 실행 (필요에 따라 수정)
 CMD ["npm", "start"]
