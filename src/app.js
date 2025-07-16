@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const prisma = require('./config/prisma'); // Prisma 클라이언트 추가
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');
@@ -14,7 +15,7 @@ const swaggerOptions = {
       description: 'Swagger API 문서',
     },
   },
-  apis: ['./src/routes/*.js'], // JSDoc 주석에서 API 정보 추출
+  apis: ['./src/routes/*.js']
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
