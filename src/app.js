@@ -1,9 +1,10 @@
 const express = require('express');
 const app = express();
 
+const personaRoutes = require('./routes/personaRoutes');
+
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');
-const characterRoutes = require('./routes/charactersRoutes');
 
 // Swagger 설정
 const swaggerOptions = {
@@ -20,11 +21,11 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+
 // 미들웨어
 app.use(express.json());
 
-// /characters 라우터 등록
-app.use('/characters', characterRoutes);
+app.use('/api/personas', personaRoutes);
 
 // 기본 라우트
 app.get('/', (req, res) => {
