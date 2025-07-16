@@ -36,4 +36,10 @@ const myRouter = require('./my');
 router.use('/communities', communitiesRouter);
 router.use('/my', myRouter);
 
+// 채팅 캐릭터 라우터 등록
+const chattedCharacterRouter = require('./Chat/chattedCharacter');
+router.use('/my/chat-characters', chattedCharacterRouter);
+
 module.exports = router;
+
+
