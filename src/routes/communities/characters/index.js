@@ -7,5 +7,4 @@ const communityList = require('./communityList');
 router.use('/', communityList);
 router.use('/', characterDetails);
 
-
 module.exports = router;
