@@ -17,11 +17,3 @@
  *       403:
  *         description: 권한 없음 (Forbidden)
  */
-
-const express = require('express');
-const router = express.Router();
-const charactersRoutes = require('./charactersRoutes');
-
-router.use('/characters', charactersRoutes);
-
-module.exports = router;
