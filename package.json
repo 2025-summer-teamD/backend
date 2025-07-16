@@ -7,8 +7,8 @@
     "dev": "nodemon src/index.js",
     "test": "jest"
   },
-
   "dependencies": {
+    "@clerk/clerk-sdk-node": "^4.13.23",
     "@google-cloud/aiplatform": "^4.3.0",
     "@prisma/client": "^6.11.1",
     "cors": "^2.8.5",
