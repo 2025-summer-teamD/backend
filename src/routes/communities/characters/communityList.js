@@ -83,6 +83,7 @@ const characters = [
  *                     total_elements:
  *                       type: integer
  */
+
 router.get('/list', (req, res) => {
   let result = [...characters];
   const { keyword, sort } = req.query;

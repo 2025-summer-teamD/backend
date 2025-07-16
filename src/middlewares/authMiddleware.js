@@ -1,59 +1,74 @@
-// JWT 토큰 검증 미들웨어
 
-// src/middlewares/authMiddleware.js
-const jwt = require('jsonwebtoken');
+// // src/middlewares/authMiddleware.js
+// const jwt = require('jsonwebtoken');
 
-const SECRET_KEY = 'your-secret-key'; // 실제 서비스에서는 환경변수로 관리하세요!
+// const SECRET_KEY = 'your-secret-key'; // 실제 서비스에서는 환경변수로 관리하세요!
 
-function verifyToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+// function verifyToken(req, res, next) {
+//   const authHeader = req.headers['authorization'];
+//   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
 
-  if (!token) {
-    return res.status(401).json({ error: '토큰이 필요합니다.' });
-  }
+//   if (!token) {
+//     return res.status(401).json({ error: '토큰이 필요합니다.' });
+//   }
 
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: '유효하지 않은 토큰입니다.' });
-    }
-    req.user = user; // 토큰에 담긴 정보 사용 가능
-    next();
-  });
-}
+//   jwt.verify(token, SECRET_KEY, (err, user) => {
+//     if (err) {
+//       return res.status(403).json({ error: '유효하지 않은 토큰입니다.' });
+//     }
+//     req.user = user; // 토큰에 담긴 정보 사용 가능
+//     next();
+//   });
+// }
 
-const { ClerkExpressRequireAuth } = require('@clerk/clerk-sdk-node');
+// const { ClerkExpressRequireAuth } = require('@clerk/clerk-sdk-node');
 
-// Clerk 인증 미들웨어
-const requireAuth = ClerkExpressRequireAuth();
+// // Clerk 인증 미들웨어
+// const requireAuth = ClerkExpressRequireAuth();
 
-// 사용자 ID 추출 미들웨어
-const extractUserId = (req, res, next) => {
-  try {
-    // Clerk에서 인증된 사용자 정보 가져오기
-    const userId = req.auth?.userId;
+// // 사용자 ID 추출 미들웨어
+// const extractUserId = (req, res, next) => {
+//   try {
+//     // Clerk에서 인증된 사용자 정보 가져오기
+//     const userId = req.auth?.userId;
     
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: '인증이 필요합니다.'
-      });
-    }
+//     if (!userId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: '인증이 필요합니다.'
+//       });
+//     }
     
-    // req.user에 사용자 ID 저장
-    req.user = { clerk_id: userId };
-    next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: '인증 처리 중 오류가 발생했습니다.',
-      error: error.message
-    });
+//     // req.user에 사용자 ID 저장
+//     req.user = { clerk_id: userId };
+//     next();
+//   } catch (error) {
+//     return res.status(401).json({
+//       success: false,
+//       message: '인증 처리 중 오류가 발생했습니다.',
+//       error: error.message
+//     });
+//   }
+// };
+
+// module.exports = {
+//   requireAuth,
+//   extractUserId,
+//   verifyToken
+// };
+import { ClerkExpressWithAuth } from '@clerk/clerk-sdk-node';
+
+// Clerk 인증 미들웨어를 생성합니다.
+// 이 미들웨어는 토큰을 검증하고 성공 시 req.auth 객체를 채웁니다.
+const clerkAuthMiddleware = ClerkExpressWithAuth();
+
+// 추가로, req.auth가 존재하는지 확인하는 미들웨어를 만들 수 있습니다.
+// 이 미들웨어는 로그인한 사용자만 접근 가능한 라우트를 보호하는 데 사용됩니다.
+const requireAuth = (req, res, next) => {
+  if (!req.auth) {
+    return res.status(401).json({ error: '인증이 필요합니다.' });
   }
+  next();
 };
 
-module.exports = {
-  requireAuth,
-  extractUserId,
-  verifyToken
-};
+export { clerkAuthMiddleware, requireAuth };
