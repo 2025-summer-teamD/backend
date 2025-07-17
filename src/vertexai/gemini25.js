@@ -26,9 +26,28 @@ async function generateText(prompt) {
   }
 }
 
-// 사용 예시 (직접 실행 시)
-if (require.main === module) {
-  generateText('안녕, Gemini 2.5 Pro!').then(console.log).catch(console.error);
-}
+/**
+ * Gemini 모델에 단일 프롬프트를 보내고, JSON 형식의 응답을 받습니다.
+ * @param {string} promptText - Gemini에 보낼 프롬프트
+ * @returns {Promise<object>} 파싱된 JSON 객체
+ */
+export const generatePersonaDetailsWithGemini = async (promptText) => {
+  try {
+    const request = {
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      generationConfig: {
+        responseMimeType: 'application/json', // ★★★ JSON 모드 활성화
+      },
+    };
 
-module.exports = { generateText }; 
+    const result = await generativeModel.generateContent(request);
+    const response = result.response;
+    const jsonString = response.candidates[0].content.parts[0].text;
+
+    return JSON.parse(jsonString); // JSON 문자열을 객체로 파싱하여 반환
+
+  } catch (error) {
+    console.error('Vertex AI Gemini Generation Error:', error);
+    throw new Error('Gemini API를 통해 페르소나 상세 정보를 생성하는 데 실패했습니다.');
+  }
+};

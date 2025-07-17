@@ -6,7 +6,7 @@ import { validateMyPersonaList, validateIdParam } from '../middlewares/personaVa
 import { getMyChats } from '../controllers/chatController.js';
 import { validatePagination } from '../middlewares/paginationValidator.js';
 
-const router = Router();
+const router = express.Router();
 
 // /api/users/profile 경로에 대한 GET 요청을 처리합니다.
 // 요청이 오면, 먼저 requireAuth 미들웨어를 실행하여 인증 여부를 확인합니다.
@@ -143,80 +143,55 @@ router.get('/my/characters/:character_id',
  * @swagger
  * /my/chat-characters:
  *   get:
- *     summary: 대화한 캐릭터 목록 조회
- *     description: 현재 사용자가 대화한 적이 있는 캐릭터들의 목록을 조회합니다.
+ *     summary: 내가 대화한 캐릭터 목록 조회
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
+ *         required: false
  *         schema:
  *           type: integer
- *           minimum: 1
  *           default: 1
  *         description: 페이지 번호
  *       - in: query
- *         name: size
+ *         name: pageSize
+ *         required: false
  *         schema:
  *           type: integer
- *           minimum: 1
- *           maximum: 100
  *           default: 10
- *         description: 한 페이지당 개수
+ *         description: 한 페이지당 항목 수
  *     responses:
  *       200:
- *         description: 조회 성공
+ *         description: 내가 대화한 캐릭터 목록 반환
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 pageSize:
+ *                   type: integer
  *                 data:
  *                   type: array
  *                   items:
  *                     type: object
  *                     properties:
  *                       character_id:
- *                         type: integer
+ *                         type: string
  *                       name:
  *                         type: string
- *                       image_url:
+ *                       lastMessage:
  *                         type: string
- *                       last_chat:
+ *                       lastMessageAt:
  *                         type: string
- *                       time:
- *                         type: string
- *                 page_info:
- *                   type: object
- *                   properties:
- *                     current_page:
- *                       type: integer
- *                     total_pages:
- *                       type: integer
- *                     total_elements:
- *                       type: integer
- *       400:
- *         description: 잘못된 요청 파라미터
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *       404:
- *         description: 대화한 캐릭터가 없음
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 result:
- *                   type: string
- *       500:
- *         description: 서버 내부 오류
+ *                         format: date-time
+ *                       ...: # 실제 반환 필드에 맞게 추가
+ *       401:
+ *         description: 인증 필요
  */
 // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
 router.get(

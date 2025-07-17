@@ -1,13 +1,10 @@
-const express = require('express');
-const { createCustomPersona } = require('../controllers/personaController.js');
-const { requireAuth } = require('../middlewares/authMiddleware.js');
-const { validateCreatePersona } = require('../middlewares/personaValidator.js');
+import express from 'express';
+import { createCustomPersona } from '../controllers/personaController.js';
+import { requireAuth } from '../middlewares/authMiddleware.js';
+import { validateCreatePersona } from '../middlewares/personaValidator.js';
 
 const router = express.Router();
 
-// 테스트용 배열과 id 카운터 추가
-const testPersonas = [];
-let testPersonaId = 1;
 
 /**
  * @swagger
@@ -100,6 +97,13 @@ let testPersonaId = 1;
  *                       format: date-time
  *                       example: 2025-07-16T14:10:00.000Z
  */
+router.post(
+  '/characters/custom', 
+  requireAuth,             // 1. 로그인 했는지 확인
+  validateCreatePersona,   // 2. 요청 데이터가 유효한지 확인
+  createCustomPersona      // 3. 모든 검사를 통과하면 컨트롤러 실행
+);
+
 
 /**
  * @swagger
@@ -167,28 +171,13 @@ let testPersonaId = 1;
  *                       format: date-time
  *                       example: 2025-07-16T14:10:00.000Z
  */
-router.post('/existing', (req, res) => {
-    const { name, image_url, is_public, clerk_id } = req.body;
-    if (!name || !image_url || typeof is_public !== 'boolean' || !clerk_id) {
-      return res.status(400).json({ message: '필수 값이 누락되었습니다.' });
-    }
-    const persona = {
-      id: testPersonaId++,
-      name,
-      image_url,
-      is_public,
-      clerk_id,
-      createdAt: new Date().toISOString(),
-    };
-    testPersonas.push(persona);
-    res.status(201).json({ message: '테스트용 캐릭터가 생성되었습니다.', persona });
-  });
 
+// AI를 사용하여 나의 페르소나 생성 (POST /api/my/personas/ai-generate)
 router.post(
-    '/personas/custom', 
-    requireAuth,             // 1. 로그인 했는지 확인
-    validateCreatePersona,   // 2. 요청 데이터가 유효한지 확인
-    createCustomPersona      // 3. 모든 검사를 통과하면 컨트롤러 실행
-  );
-  
-module.exports = router;
+  '/characters/existing',
+  requireAuth,
+  validateAiCreatePersona,
+  createAiPersona
+);
+
+export default router;
