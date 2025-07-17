@@ -83,22 +83,67 @@ export const getPersonas = async (options = {}) => {
 };
 
 /**
- * ID로 특정 페르소나의 상세 정보를 조회합니다.
- * @param {number} id - 조회할 페르소나의 ID
- * @returns {Promise<object|null>} 조회된 페르소나 객체 또는 찾지 못한 경우 null
+ * ID로 페르소나의 상세 정보를 조회합니다.
+ * 소유권 검증 및 '좋아요' 상태 계산을 선택적으로 수행합니다.
+ * @param {object} options - 조회 옵션
+ * @param {number} options.personaId - 조회할 페르소나의 ID (필수)
+ * @param {string} [options.ownerId] - 소유권을 검증할 사용자 ID. 제공되면 이 사용자의 페르소나만 찾음.
+ * @param {string} [options.currentUserId] - '좋아요' 상태를 계산할 현재 사용자 ID.
+ * @returns {Promise<object|null>} 조회된 페르소나 객체 또는 null
  */
-export const getPersonaById = async (id) => {
+export const getPersonaDetails = async (options) => {
+  const { personaId, ownerId, currentUserId } = options;
+
+  // 1. 조회 조건(where)을 동적으로 구성
+  const whereCondition = {
+    id: personaId,
+  };
+  
+  // 'ownerId'가 제공되면, 소유권 검증 조건을 추가
+  if (ownerId) {
+    whereCondition.creatorId = ownerId;
+  }
+  
+  // 'isPublic'이 true인 커뮤니티 페르소나만 조회하도록 조건을 추가할 수도 있음
+  // if (!ownerId) {
+  //   whereCondition.isPublic = true;
+  // }
+
   const persona = await prisma.persona.findUnique({
-    where: {
-      id: id, // DB 스키마의 id 필드와 매핑
-    },
-    // (선택) 관련 데이터를 함께 로드하고 싶을 때 사용
-    // include: {
-    //   creator: true, // 생성자 정보
-    // }
+    where: whereCondition,
   });
 
-  return persona; // 찾으면 객체, 못 찾으면 null 반환
+  if (!persona) {
+    return null;
+  }
+
+  // 2. 'liked' 상태를 계산
+  let liked = false;
+  if (currentUserId) { // 'currentUserId'가 제공된 경우에만 '좋아요' 상태를 확인
+    const chatRoom = await prisma.chatRoom.findUnique({
+      where: {
+        creatorId_personaId: {
+          creatorId: currentUserId,
+          personaId: personaId,
+        },
+      },
+    });
+    liked = chatRoom ? chatRoom.liked : false;
+  }
+
+  // 3. 최종 응답 객체 조립
+  return {
+    character_id: persona.id,
+    user_id: persona.creatorId,
+    name: persona.name,
+    image_url: persona.imageUrl,
+    introduction: persona.description,
+    prompt: persona.prompt,
+    uses_count: persona.usesCount,
+    likes: persona.likes,
+    is_public: persona.isPublic,
+    liked: liked,
+  };
 };
 
 /**
