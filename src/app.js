@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const prisma = require('./config/prisma'); // Prisma 클라이언트 추가
 
-const personaRoutes = require('./routes/personaRoutes');
+const personaRoutes = require('./routes/personaRoute');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerJSDoc = require('swagger-jsdoc');

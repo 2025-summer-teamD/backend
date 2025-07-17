@@ -1,4 +1,4 @@
-import { ClerkExpressWithAuth } from '@clerk/clerk-sdk-node';
+const { ClerkExpressWithAuth } = require('@clerk/clerk-sdk-node');
 
 // Clerk 인증 미들웨어를 생성합니다.
 // 이 미들웨어는 토큰을 검증하고 성공 시 req.auth 객체를 채웁니다.
@@ -13,4 +13,4 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-export { clerkAuthMiddleware, requireAuth };
+module.exports = { clerkAuthMiddleware, requireAuth };
