@@ -1,4 +1,4 @@
-import * as ChatService from '../services/chat.service.js';
+import * as ChatService from '../services/chatService.js';
 
 /**
  * 나의 채팅 목록을 조회하는 컨트롤러
