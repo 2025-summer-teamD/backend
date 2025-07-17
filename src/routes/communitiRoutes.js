@@ -5,6 +5,7 @@ import { validateGetPersonas,  validateIdParam } from '../middlewares/personaVal
 
 const router = Router();
 
+router.get('/', validateGetPersonas, getPersonaList);
 
 /**
  * @swagger
@@ -66,11 +67,10 @@ router.get(
     getPersonaList       // 2. 컨트롤러 실행
 );
 
-export default router;
 
 /**
  * @swagger
- * /communities/characters/{character_id}:
+ * /api/communities/characters/{character_id}:
  *   get:
  *     summary: 커뮤니티 캐릭터 상세 조회
  *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
@@ -126,20 +126,11 @@ export default router;
  *                 result:
  *                   type: string
  */
-router.get('/:character_id', (req, res) => {
-    const characterId = parseInt(req.params.character_id, 10);
-    const character = characters.find((c) => c.character_id === characterId);
+// 페르소나 상세 조회 (GET /api/communities/characters/:character_id)
+router.get(
+    '/:character_id', 
+    validateIdParam,     // 1. ID가 유효한 숫자인지 확인
+    getPersonaDetails    // 2. 컨트롤러 실행
+);
   
-    if (!character) {
-      return res.status(404).json({
-        message: '해당 페르소나를 찾을 수 없습니다.',
-        result: null,
-      });
-    }
-  
-    res.status(200).json(character);
-  });
-  
-  
-  module.exports = router;
-  
+export default router;
