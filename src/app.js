@@ -1,13 +1,13 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './config/prisma.js';
 import personaRoutes from './routes/personaRoute.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import chatRouter from './routes/chat.js';
 import mainRouter from './routes/index.js';
 
+
 const app = express();
-const prisma = new PrismaClient(); // Prisma 클라이언트 추가
 
 // Swagger 설정
 const swaggerOptions = {
