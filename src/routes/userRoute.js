@@ -171,7 +171,7 @@ router.get('/my/characters/:character_id',
  *             schema:
  *               type: object
  *               properties:
- *                 characters:
+ *                 data:
  *                   type: array
  *                   items:
  *                     type: object
