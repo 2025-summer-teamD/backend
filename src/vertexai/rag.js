@@ -1,22 +1,30 @@
-// RAG 파이프라인 예시 (실제 구현은 벡터DB, 검색, LLM 호출 등 필요)
-const { generateText } = require('./gemini25');
+import pkg from '@google-cloud/aiplatform';
+const { IndexEndpointServiceClient } = pkg.v1;
 
-async function runRag(query, context) {
-  if (!query || typeof query !== 'string') {
-    throw new Error('Query must be a non-empty string');
-  }
-  if (!context || typeof context !== 'string') {
-    throw new Error('Context must be a non-empty string');
-  }
-  
-  try {
-   // context: 검색 결과, 벡터DB 등에서 가져온 문서
-     const prompt = `${context}\n\n질문: ${query}`;
-     return await generateText(prompt);
-  } catch (error) {
-    console.error('RAG 파이프라인 에러:', error);
-    throw error;
-  }
+const indexEndpointServiceClient = new IndexEndpointServiceClient({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  apiEndpoint: `${process.env.GOOGLE_CLOUD_REGION || 'us-central1'}-aiplatform.googleapis.com`,
+});
+
+// 실제 endpoint, deployedIndexId 등은 환경에 맞게 수정 필요
+const INDEX_ENDPOINT = 'projects/' + process.env.GOOGLE_CLOUD_PROJECT + '/locations/' + (process.env.GOOGLE_CLOUD_REGION || 'us-central1') + '/indexEndpoints/INDEX_ENDPOINT_ID';
+const DEPLOYED_INDEX_ID = 'DEPLOYED_INDEX_ID';
+
+async function runRag(embedding) {
+  // embedding: 임베딩 벡터 (Array<number>)
+  const [response] = await indexEndpointServiceClient.findNeighbors({
+    indexEndpoint: INDEX_ENDPOINT,
+    deployedIndexId: DEPLOYED_INDEX_ID,
+    queries: [
+      {
+        datapoint: {
+          featureVector: embedding,
+        },
+        neighborCount: 5,
+      },
+    ],
+  });
+  return response;
 }
 
-module.exports = { runRag }; 
+export { runRag }; 
