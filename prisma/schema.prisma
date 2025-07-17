@@ -34,7 +34,7 @@ model User {
 model Persona {
   id           Int      @id @default(autoincrement())
   clerkId     String
-  user         User     @relation(fields: [clerk_id], references: [clerk_id], onDelete: Cascade)
+  user         User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
   name         String   @db.VarChar(100)
   imageUrl    String   @db.VarChar(1024)
   isPublic    Boolean  @default(true)
@@ -47,15 +47,15 @@ model Persona {
   isDeleted   Boolean  @default(false)
   chatRooms    ChatRoom[]
 
-  @@index([clerk_id])
+  @@index([clerkId])
 }
 
 model ChatRoom {
   id           Int      @id @default(autoincrement()) @unique
   clerkId     String
-  user         User     @relation(fields: [clerk_id], references: [clerk_id])
+  user         User     @relation(fields: [clerkId], references: [clerkId])
   characterId Int
-  persona      Persona  @relation(fields: [character_id], references: [id])
+  persona      Persona  @relation(fields: [characterId], references: [id])
   friendship   Int      @default(1)
   exp          Int      @default(0)
   likes        Boolean  @default(false)
@@ -68,12 +68,12 @@ model ChatRoom {
 model ChatLog {
   id          Int           @id @default(autoincrement())
   chatroomId Int
-  chatRoom    ChatRoom @relation(fields: [chatroom_id], references: [id], onDelete: Cascade)
+  chatRoom    ChatRoom @relation(fields: [chatroomId], references: [id], onDelete: Cascade)
   text        String
   type        ChatLogType
   speaker     ChatLogSpeaker
   time        DateTime @default(now())
   isDeleted  Boolean  @default(false)
 
-  @@index([chatroom_id])
+  @@index([chatroomId])
 }
