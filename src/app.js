@@ -1,11 +1,13 @@
-const express = require('express');
+import express from 'express';
+import { prisma } from './config/prisma.js';
+import personaRoutes from './routes/personaRoute.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJSDoc from 'swagger-jsdoc';
+import chatRouter from './routes/chat.js';
+import mainRouter from './routes/index.js';
+
+
 const app = express();
-const prisma = require('./config/prisma'); // Prisma 클라이언트 추가
-
-const personaRoutes = require('./routes/personaRoute');
-
-const swaggerUi = require('swagger-ui-express');
-const swaggerJSDoc = require('swagger-jsdoc');
 
 // Swagger 설정
 const swaggerOptions = {
@@ -32,7 +34,6 @@ const swaggerOptions = {
     ],
   },
   
-  // apis: [__dirname + '/routes/*.js'],   여기까지 토큰 생성을 위해 추가함
 
   apis: ['./src/routes/**/*.js'], // JSDoc 주석에서 API 정보 추출
 
@@ -47,12 +48,13 @@ app.use(express.json());
 
 
 // chat 라우터
-const chatRouter = require('./routes/chat');
 app.use('/chat', chatRouter);
+
+// persona 라우터
+app.use('/personas', personaRoutes);
 
 // 기본 라우트
 
-const mainRouter = require('./routes'); // src/routes/index.js를 불러옴
 app.use('/', mainRouter); // 모든 라우트의 엔트리 포인트
 
 
@@ -61,6 +63,6 @@ app.get('/', (req, res) => {
 });
 
 
-module.exports = app;
+export default app;
 
 

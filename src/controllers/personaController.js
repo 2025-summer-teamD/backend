@@ -49,3 +49,33 @@ export const getPersonaList = async (req, res, next) => {
     next(error); // 서비스 에러는 중앙 핸들러로
   }
 };
+
+/**
+ * 특정 ID의 페르소나 상세 정보를 조회하는 컨트롤러
+ */
+export const getPersonaDetails = async (req, res, next) => {
+  try {
+    // validateIdParam 미들웨어를 통과했으므로, req.params.character_id는 유효한 숫자 문자열
+    const characterId = parseInt(req.params.character_id, 10);
+
+    // 1. 서비스 호출
+    const persona = await PersonaService.getPersonaById(characterId);
+
+    // 2. 서비스 결과에 따른 분기 처리
+    if (!persona) {
+      // 서비스가 null을 반환하면, '찾을 수 없음' 응답
+      return res.status(404).json({
+        message: '해당 페르소나를 찾을 수 없습니다.',
+        data: null, // 일관성을 위해 data 필드를 null로 포함
+      });
+    }
+
+    // 3. 성공 응답
+    res.status(200).json({
+      message: '페르소나 상세 정보를 성공적으로 조회했습니다.',
+      data: persona,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

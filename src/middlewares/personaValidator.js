@@ -48,3 +48,17 @@ export const validateGetPersonas = (req, res, next) => {
   // 모든 검사를 통과하면 컨트롤러로 넘어감
   next();
 };
+
+// 경로 파라미터 ID가 유효한 숫자인지 검증하는 미들웨어
+export const validateIdParam = (req, res, next) => {
+  const id = parseInt(req.params.character_id, 10);
+
+  // isNaN(id)는 id가 숫자가 아님을 의미합니다.
+  // id <= 0은 유효하지 않은 ID 값(보통 ID는 1부터 시작)임을 의미합니다.
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: '유효하지 않은 캐릭터 ID입니다. ID는 양의 정수여야 합니다.' });
+  }
+
+  // 검사를 통과하면 다음으로 넘어감
+  next();
+};
