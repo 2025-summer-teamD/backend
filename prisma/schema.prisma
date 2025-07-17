@@ -21,10 +21,10 @@ enum ChatLogSpeaker {
 }
 
 model User {
-  clerk_id   String   @id
-  created_at DateTime @default(now())
-  updated_at DateTime?
-  is_deleted Boolean  @default(false)
+  clerkId   String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime?
+  isDeleted Boolean  @default(false)
   personas   Persona[]
   chatRooms  ChatRoom[]
 
@@ -33,18 +33,18 @@ model User {
 
 model Persona {
   id           Int      @id @default(autoincrement())
-  clerk_id     String
+  clerkId     String
   user         User     @relation(fields: [clerk_id], references: [clerk_id], onDelete: Cascade)
   name         String   @db.VarChar(100)
-  image_url    String   @db.VarChar(1024)
-  is_public    Boolean  @default(true)
+  imageUrl    String   @db.VarChar(1024)
+  isPublic    Boolean  @default(true)
   introduction String?
   prompt       Json
-  uses_count   Int      @default(0)
-  likes_count  Int      @default(0)
-  created_at   DateTime @default(now())
-  updated_at   DateTime?
-  is_deleted   Boolean  @default(false)
+  usesCount   Int      @default(0)
+  likesCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime?
+  isDeleted   Boolean  @default(false)
   chatRooms    ChatRoom[]
 
   @@index([clerk_id])
@@ -52,28 +52,28 @@ model Persona {
 
 model ChatRoom {
   id           Int      @id @default(autoincrement()) @unique
-  clerk_id     String
+  clerkId     String
   user         User     @relation(fields: [clerk_id], references: [clerk_id])
-  character_id Int
+  characterId Int
   persona      Persona  @relation(fields: [character_id], references: [id])
   friendship   Int      @default(1)
   exp          Int      @default(0)
   likes        Boolean  @default(false)
-  created_at   DateTime @default(now())
-  updated_at   DateTime?
-  is_deleted   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime?
+  isDeleted   Boolean  @default(false)
   ChatLogs     ChatLog[]
 }
 
 model ChatLog {
   id          Int           @id @default(autoincrement())
-  chatroom_id Int
+  chatroomId Int
   chatRoom    ChatRoom @relation(fields: [chatroom_id], references: [id], onDelete: Cascade)
   text        String
   type        ChatLogType
   speaker     ChatLogSpeaker
   time        DateTime @default(now())
-  is_deleted  Boolean  @default(false)
+  isDeleted  Boolean  @default(false)
 
   @@index([chatroom_id])
 }

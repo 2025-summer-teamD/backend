@@ -16,7 +16,7 @@ const getUserProfile = async (req, res) => {
   
       res.status(200).json({
         message: '성공적으로 프로필 정보를 가져왔습니다.',
-        clerk_id: userId,
+        clerkId: userId,
         // dbUserData: user
       });
     } catch (error) {
