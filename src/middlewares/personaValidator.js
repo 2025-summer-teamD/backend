@@ -62,3 +62,17 @@ export const validateIdParam = (req, res, next) => {
   // 검사를 통과하면 다음으로 넘어감
   next();
 };
+
+// '나의 페르소나 목록' 조회 요청의 쿼리를 검증하는 미들웨어
+export const validateMyPersonaList = (req, res, next) => {
+  const { type } = req.query;
+
+  // type 파라미터가 존재하지만, 허용된 값이 아닌 경우
+  if (type && !['liked', 'created'].includes(type)) { // 'created'를 기본값으로 명시
+    return res.status(400).json({ 
+      error: "잘못된 type 값입니다. 'liked', 'created' 중 하나를 사용하거나 생략해주세요." 
+    });
+  }
+
+  next();
+};
