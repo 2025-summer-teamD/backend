@@ -1,5 +1,5 @@
 // 페이지네이션 쿼리를 검증하고 기본값을 설정하는 미들웨어
-export const validatePagination = (req, res, next) => {
+const validatePagination = (req, res, next) => {
     // 쿼리 파라미터는 문자열이므로 숫자로 변환
     let page = parseInt(req.query.page, 10);
     let size = parseInt(req.query.size, 10);
@@ -27,3 +27,9 @@ export const validatePagination = (req, res, next) => {
   
     next();
 };
+
+const paginationValidator = {
+  validatePagination,
+};
+
+export default paginationValidator;

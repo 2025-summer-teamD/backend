@@ -1,29 +1,20 @@
-const { VertexAI } = require('@google-cloud/aiplatform');
+import pkg from '@google-cloud/aiplatform';
+const { PredictionServiceClient } = pkg.v1;
 
-const vertexAi = new VertexAI({
-  project: process.env.GOOGLE_CLOUD_PROJECT,
-  location: process.env.GOOGLE_CLOUD_REGION || 'us-central1',
+const predictionServiceClient = new PredictionServiceClient({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  apiEndpoint: `${process.env.GOOGLE_CLOUD_REGION || 'us-central1'}-aiplatform.googleapis.com`,
 });
 
-const model = 'gemini-2.5-pro';
+// 실제 endpoint는 프로젝트/위치에 맞게 수정 필요
+const GEMINI_ENDPOINT = 'projects/' + process.env.GOOGLE_CLOUD_PROJECT + '/locations/' + (process.env.GOOGLE_CLOUD_REGION || 'us-central1') + '/publishers/google/models/gemini-2.5-pro';
 
-/**
- * Gemini 2.5 Pro에 프롬프트를 보내고 응답을 받아온다.
- * @param {string} prompt - 사용자 프롬프트
- * @returns {Promise<any>} - Gemini 2.5 Pro의 응답
- */
 async function generateText(prompt) {
-  try {
-    const predictionService = vertexAi.getPredictionService();
-    const [response] = await predictionService.predict({
-      endpoint: model,
-      instances: [{ content: prompt }],
-    });
-    return response.predictions;
-  } catch (error) {
-    console.error('Gemini 2.5 Pro 호출 에러:', error);
-    throw error;
-  }
+  const [response] = await predictionServiceClient.predict({
+    endpoint: GEMINI_ENDPOINT,
+    instances: [{ content: prompt }],
+  });
+  return response;
 }
 
 /**
@@ -51,3 +42,5 @@ export const generatePersonaDetailsWithGemini = async (promptText) => {
     throw new Error('Gemini API를 통해 페르소나 상세 정보를 생성하는 데 실패했습니다.');
   }
 };
+
+export { generateText };

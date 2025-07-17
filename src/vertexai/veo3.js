@@ -1,27 +1,21 @@
 // Veo 3 연동 예시 (실제 엔드포인트/파라미터는 공식 문서 참고)
-const { VertexAI } = require('@google-cloud/aiplatform');
+import pkg from '@google-cloud/aiplatform';
+const { PredictionServiceClient } = pkg.v1;
 
-const vertexAi = new VertexAI({
-  project: process.env.GOOGLE_CLOUD_PROJECT,
-  location: process.env.GOOGLE_CLOUD_REGION || 'us-central1',
+const predictionServiceClient = new PredictionServiceClient({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  apiEndpoint: `${process.env.GOOGLE_CLOUD_REGION || 'us-central1'}-aiplatform.googleapis.com`,
 });
 
-const model = 'veo-3.0-generate-preview'; // Refer to https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/veo-video-generation
-/**
- * Veo 3 모델에 프롬프트를 보내고 비디오 생성 응답을 받아온다.
- * @param {string} prompt - 비디오 생성 프롬프트
- * @returns {Promise<any>} - Veo 3 모델의 응답
- */
+// 실제 endpoint는 프로젝트/위치에 맞게 수정 필요
+const VEO_ENDPOINT = 'projects/' + process.env.GOOGLE_CLOUD_PROJECT + '/locations/' + (process.env.GOOGLE_CLOUD_REGION || 'us-central1') + '/publishers/google/models/veo-3.0-generate-preview';
+
 async function generateVideo(prompt) {
-  try {
-    const predictionService = vertexAi.getPredictionService();
-    const [response] = await predictionService.predict({
-      endpoint: model,
-      instances: [{ content: prompt }],
-    });
-    return response.predictions;
-  } catch (error) {
-    console.error('Veo 3 모델 호출 에러:', error);
-    throw error;
-  }
+  const [response] = await predictionServiceClient.predict({
+    endpoint: VEO_ENDPOINT,
+    instances: [{ content: prompt }],
+  });
+  return response;
 }
+
+export { generateVideo };

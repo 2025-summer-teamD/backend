@@ -1,9 +1,5 @@
-const gemini25 = require('./gemini25');
-const veo3 = require('./veo3');
-const rag = require('./rag');
+import * as gemini25 from './gemini25.js';
+import * as veo3 from './veo3.js';
+import * as rag from './rag.js';
 
-module.exports = {
-  gemini25,
-  veo3,
-  rag,
-}; 
+export { gemini25, veo3, rag }; 
