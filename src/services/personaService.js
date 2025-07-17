@@ -100,3 +100,77 @@ export const getPersonaById = async (id) => {
 
   return persona; // 찾으면 객체, 못 찾으면 null 반환
 };
+
+/**
+ * 특정 사용자의 페르소나 목록을 조회합니다. (만든 것 또는 좋아요 한 것)
+ * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
+ * @param {string} type - 조회할 타입 ('created' 또는 'liked')
+ * @returns {Promise<Array<object>>} 가공된 페르소나 목록
+ */
+export const getMyPersonas = async (userId, type = 'created') => {
+  if (type === 'liked') {
+    // --- 내가 좋아요 한 페르소나 조회 로직 ---
+    
+    // 1. 내가 좋아요 한 ChatRoom을 먼저 찾는다.
+    const likedChatRooms = await prisma.chatRoom.findMany({
+      where: {
+        creatorId: userId,  // ChatRoom 생성자 ID가 내 ID이고
+        liked: true,        // liked가 true이며
+        persona: {          // 연결된 페르소나가
+          isDeleted: false, // 삭제되지 않은 경우
+        }
+      },
+      include: {
+        persona: true, // 관련된 페르소나 정보를 함께 가져온다 (Join)
+      }
+    });
+
+    // 2. 결과를 최종 응답 형태로 가공한다.
+    return likedChatRooms.map(room => ({
+      character_id: room.persona.id,
+      name: room.persona.name,
+      image_url: room.persona.imageUrl,
+      introduction: room.persona.description,
+      likes: room.persona.likes,
+      liked: true, // 이 목록은 항상 true
+      intimacy: room.intimacy, // friendship 대신 intimacy로 가정
+      is_deleted: room.persona.isDeleted,
+    }));
+
+  } else {
+    // --- 내가 만든 페르소나 조회 로직 ('created') ---
+
+    // 1. 내가 만든 페르소나를 모두 찾는다.
+    const myCreatedPersonas = await prisma.persona.findMany({
+      where: {
+        creatorId: userId,    // 페르소나 생성자 ID가 내 ID이고
+        isDeleted: false,     // 삭제되지 않은 경우
+      },
+      include: {
+        // 이 페르소나와 '나' 사이의 채팅방 정보를 함께 가져온다.
+        chatRooms: {
+          where: {
+            creatorId: userId,
+          }
+        }
+      }
+    });
+
+    // 2. 결과를 최종 응답 형태로 가공한다.
+    return myCreatedPersonas.map(p => {
+      // 나와의 채팅방은 유일하거나 없어야 한다.
+      const myRoom = p.chatRooms.length > 0 ? p.chatRooms[0] : null;
+      
+      return {
+        character_id: p.id,
+        name: p.name,
+        image_url: p.imageUrl,
+        introduction: p.description,
+        likes: p.likes,
+        liked: myRoom ? myRoom.liked : false,
+        intimacy: myRoom ? myRoom.intimacy : 0,
+        is_deleted: p.isDeleted,
+      };
+    });
+  }
+};

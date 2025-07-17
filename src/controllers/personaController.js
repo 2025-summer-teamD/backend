@@ -79,3 +79,30 @@ export const getPersonaDetails = async (req, res, next) => {
     next(error);
   }
 };
+
+import * as PersonaService from '../services/persona.service.js';
+
+// ... (기존 컨트롤러 함수들)
+
+/**
+ * 나의 페르소나 목록(만든 것/좋아요 한 것)을 조회하는 컨트롤러
+ */
+export const getMyPersonaList = async (req, res, next) => {
+  try {
+    // requireAuth 미들웨어가 userId를 보장
+    const { userId } = req.auth;
+    const { type } = req.query; // validator가 유효성 보장
+
+    // 서비스 호출: 모든 복잡한 로직은 서비스가 처리
+    const personas = await PersonaService.getMyPersonas(userId, type);
+
+    res.status(200).json({
+      data: personas,
+      page_info: {
+        total_elements: personas.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
