@@ -5,5 +5,4 @@ function getProjectId() {
 function getRegion() {
   return process.env.GOOGLE_CLOUD_REGION || 'us-central1';
 }
-
-module.exports = { getProjectId, getRegion }; 
+export { getProjectId, getRegion }; 

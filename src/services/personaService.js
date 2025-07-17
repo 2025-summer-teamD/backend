@@ -1,6 +1,8 @@
 // 현재는 메모리 내 배열을 사용하지만, 나중에 Prisma 같은 DB로 쉽게 교체 가능
 import { prisma } from '../config/prisma.js'; 
-import { generatePersonaDetailsWithGemini } from '../vertexai/gemini25.js';
+import { gemini25 } from '../vertexai/_index.js';
+
+const { generatePersonaDetailsWithGemini } = gemini25;
 
 /**
  * 새로운 페르소나를 생성하고 데이터베이스에 저장합니다.
@@ -8,7 +10,7 @@ import { generatePersonaDetailsWithGemini } from '../vertexai/gemini25.js';
  * @param {string} userId - 이 페르소나를 생성한 사용자의 Clerk ID
  * @returns {Promise<object>} 생성된 페르소나 객체
  */
-export const createPersona = async (personaData, userId) => {
+const createPersona = async (personaData, userId) => {
   try {
     const { name, image_url, is_public, prompt, description } = personaData;
 
@@ -45,7 +47,7 @@ export const createPersona = async (personaData, userId) => {
  * @param {string} userId - 생성자 Clerk ID
  * @returns {Promise<object>} 완전히 생성된 페르소나 객체
  */
-export const createPersonaWithAI = async (initialData, userId) => {
+const createPersonaWithAI = async (initialData, userId) => {
   const { name, image_url, is_public } = initialData;
 
   // 1. Gemini에 보낼 프롬프트 생성 (JSON 형식으로 응답하도록 지시)
@@ -92,7 +94,7 @@ export const createPersonaWithAI = async (initialData, userId) => {
  * @param {string} [options.sort] - 정렬 기준 ('likes', 'uses_count', 'createdAt')
  * @returns {Promise<{personas: Array<object>, total: number}>} 페르소나 목록과 총 개수
  */
-export const getPersonas = async (options = {}) => {
+const getPersonas = async (options = {}) => {
   const { keyword, sort } = options;
 
   // 1. Prisma 쿼리 조건 객체 생성
@@ -138,7 +140,7 @@ export const getPersonas = async (options = {}) => {
  * @param {string} [options.currentUserId] - '좋아요' 상태를 계산할 현재 사용자 ID.
  * @returns {Promise<object|null>} 조회된 페르소나 객체 또는 null
  */
-export const getPersonaDetails = async (options) => {
+const getPersonaDetails = async (options) => {
   const { personaId, ownerId, currentUserId } = options;
 
   // 1. 조회 조건(where)을 동적으로 구성
@@ -199,7 +201,7 @@ export const getPersonaDetails = async (options) => {
  * @param {string} type - 조회할 타입 ('created' 또는 'liked')
  * @returns {Promise<Array<object>>} 가공된 페르소나 목록
  */
-export const getMyPersonas = async (userId, type = 'created') => {
+const getMyPersonas = async (userId, type = 'created') => {
   if (type === 'liked') {
     // --- 내가 좋아요 한 페르소나 조회 로직 ---
     
@@ -274,7 +276,7 @@ export const getMyPersonas = async (userId, type = 'created') => {
  * @param {object} updateData - { introduction, personality, tone, tag } 중 일부
  * @returns {Promise<object>} 수정된 페르소나 객체
  */
-export const updatePersona = async (personaId, userId, updateData) => {
+const updatePersona = async (personaId, userId, updateData) => {
   // 1. 본인 소유 페르소나인지 확인
   const persona = await prisma.persona.findUnique({
     where: { id: personaId },
@@ -317,7 +319,7 @@ export const updatePersona = async (personaId, userId, updateData) => {
  * @param {string} userId - 요청자 Clerk ID
  * @returns {Promise<object>} 삭제된 페르소나 객체
  */
-export const deletePersona = async (personaId, userId) => {
+const deletePersona = async (personaId, userId) => {
   // 1. 본인 소유 페르소나인지 확인
   const persona = await prisma.persona.findUnique({
     where: { id: personaId },
@@ -332,3 +334,15 @@ export const deletePersona = async (personaId, userId) => {
   });
   return deleted;
 };
+
+const personaServiceService = {
+  deletePersona,
+  updatePersona,
+  getMyPersonas,
+  getPersonaDetails,
+  getPersonas,
+  createPersonaWithAI,
+  createPersona,
+};
+
+export default personaServiceService;

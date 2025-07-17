@@ -1,12 +1,7 @@
-// =========================
-// 서버 실행의 진입점 (index.js)
-// - app.js에서 설정한 Express 앱을 불러와 실제로 서버를 실행
-// =========================
+import app from './app.js';
 
-const app = require('./app');
-
-const PORT = process.env.EXPRESS_PORT || 3001 ;
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
