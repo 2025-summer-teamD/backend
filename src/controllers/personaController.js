@@ -80,9 +80,6 @@ export const getPersonaDetails = async (req, res, next) => {
   }
 };
 
-import * as PersonaService from '../services/persona.service.js';
-
-// ... (기존 컨트롤러 함수들)
 
 /**
  * 나의 페르소나 목록(만든 것/좋아요 한 것)을 조회하는 컨트롤러
