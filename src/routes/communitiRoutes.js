@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { getPersonaList, getCommunityPersonaDetails } from '../controllers/personaController.js';
 import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
-import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 
 const router = Router();
 router.get('/', validateGetPersonas, getPersonaList);
