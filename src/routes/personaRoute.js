@@ -5,6 +5,7 @@ const { validateCreatePersona } = require('../middlewares/personaValidator.js');
 
 const router = express.Router();
 
+
 /**
  * @swagger
  * /personas/custom:
