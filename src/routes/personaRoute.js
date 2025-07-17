@@ -1,7 +1,7 @@
 import express from 'express';
 import { createCustomPersona } from '../controllers/personaController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
-import { validateCreatePersona } from '../middlewares/personaMiddleware.js';
+import { validateCreatePersona } from '../middlewares/personaValidator.js';
 
 const router = express.Router();
 
