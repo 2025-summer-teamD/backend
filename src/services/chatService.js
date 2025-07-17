@@ -6,7 +6,7 @@ import { prisma } from '../config/prisma.js';
  * @param {object} pagination - 페이지네이션 옵션 { skip, take, page, size }
  * @returns {Promise<object>} { chatList, totalElements, totalPages }
  */
-export const getMyChatList = async (userId, pagination) => {
+const getMyChatList = async (userId, pagination) => {
   const { skip, take, page, size } = pagination;
 
   // 1. 내가 참여하고 삭제되지 않은 채팅방의 총 개수를 먼저 구한다.
@@ -79,7 +79,7 @@ export const getMyChatList = async (userId, pagination) => {
  * @param {number} characterId - 찜한 캐릭터의 persona id
  * @returns {Promise<object>} 삭제된 ChatRoom 객체
  */
-export const deleteLikedCharacter = async (userId, characterId) => {
+const deleteLikedCharacter = async (userId, characterId) => {
   // 1. ChatRoom에서 해당 관계 찾기
   const chatRoom = await prisma.chatRoom.findFirst({
     where: {
@@ -98,3 +98,10 @@ export const deleteLikedCharacter = async (userId, characterId) => {
   });
   return deleted;
 };
+
+const chatService = {
+  getMyChatList,
+  deleteLikedCharacter
+};
+
+export default chatService;

@@ -1,35 +1,14 @@
-/**
- * @swagger
- * /:
- *   get:
- *     summary: 기본 홈 라우트
- *     responses:
- *       200:
- *         description: 성공 (OK)
- *       201:
- *         description: 생성됨 (Created)
- *       204:
- *         description: 내용 없음 (No Content)
- *       400:
- *         description: 잘못된 요청 (Bad Request)
- *       401:
- *         description: 인증 필요/실패 (Unauthorized)
- *       403:
- *         description: 권한 없음 (Forbidden)
- */
-const express = require('express');
+import express from 'express';
+// import chatRouter from './chat.js';
+import communitiRouter from './communitiRoutes.js';
+import personaRouter from './personaRoute.js';
+import userRouter from './userRoute.js';
+
 const router = express.Router();
 
-const communitiesRouter = require('./communities');
-const myRouter = require('./my');
+// router.use('/chat', chatRouter);
+router.use('/communities', communitiRouter);
+router.use('/my', userRouter);
+router.use('/characters', personaRouter);
 
-router.use('/communities', communitiesRouter);
-router.use('/my', myRouter);
-
-// 채팅 캐릭터 라우터 등록
-const chattedCharacterRouter = require('./Chat/chattedCharacter');
-router.use('/my/chat-characters', chattedCharacterRouter);
-
-module.exports = router;
-
-
+export default router;

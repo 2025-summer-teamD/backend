@@ -1,5 +1,5 @@
 // 나중에 데이터베이스 로직을 위해 service를 가져올 수 있습니다.
-// import * as UserService from '../services/user.service.js';
+// import { userService } from '../services/_index.js';
 
 const getUserProfile = async (req, res) => {
     try {
@@ -9,7 +9,7 @@ const getUserProfile = async (req, res) => {
       console.log(`컨트롤러에서 받아온 Clerk User ID: ${userId}`);
   
       // 예를 들어, 이 userId를 사용하여 데이터베이스에서 사용자 정보를 조회합니다.
-      // const user = await UserService.findUserByClerkId(userId);
+      // const user = await userService.findUserByClerkId(userId);
       // if (!user) {
       //   return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
       // }
@@ -24,5 +24,9 @@ const getUserProfile = async (req, res) => {
       res.status(500).json({ error: '서버 오류가 발생했습니다.' });
     }
   };
+
+  const userController = {
+    getUserProfile
+  };
   
-  export { getUserProfile };
+  export default userController;

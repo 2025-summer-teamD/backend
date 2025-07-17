@@ -1,16 +1,21 @@
-import { Router } from 'express';
-import { getPersonaList, getCommunityPersonaDetails } from '../controllers/personaController.js';
-import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
-import { requireAuth } from '../middlewares/authMiddleware.js';
+import express from 'express';
+import controllers from '../controllers/_index.js';
+import middlewares from '../middlewares/_index.js';
+
+const { personaController } = controllers;
+const { personaValidator } = middlewares;
+
+const { getPersonaList, getCommunityPersonaDetails } = personaController;
+const { validateGetPersonas, validateIdParam } = personaValidator;
 
 const router = express.Router();
-
-router.get('/', validateGetPersonas, getPersonaList);
 
 /**
  * @swagger
  * /communities/characters:
  *   get:
+ *     tags:
+ *       - community
  *     summary: 커뮤니티 캐릭터 목록 조회
  *     description: 커뮤니티 캐릭터 목록을 조회합니다. 쿼리 파라미터로 키워드 검색과 정렬(인기순, 조회수순)이 가능합니다.
  *     parameters:
@@ -59,9 +64,7 @@ router.get('/', validateGetPersonas, getPersonaList);
  *                       type: integer
  */
 
-// 페르소나 목록 조회 라우트
-// GET /communities/characters
-router.get(
+router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
     '/characters', 
     validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
     getPersonaList       // 2. 컨트롤러 실행
@@ -72,6 +75,8 @@ router.get(
  * @swagger
  * /communities/characters/{character_id}:
  *   get:
+ *     tags: 
+ *       - community
  *     summary: 커뮤니티 캐릭터 상세 조회
  *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
  *     parameters:
@@ -126,7 +131,7 @@ router.get(
  *                 result:
  *                   type: string
  */
-// 페르소나 상세 조회 (GET /communities/characters/:character_id
+// 페르소나 상세 조회 (GET /communities/characters/:character_id)
 router.get(
     '/characters/:character_id', 
     validateIdParam,              // 1. ID가 유효한 숫자인지 확인
