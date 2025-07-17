@@ -24,6 +24,26 @@ export const createCustomPersona = async (req, res, next) => {
 };
 
 /**
+ * AI를 사용하여 페르소나를 생성하는 컨트롤러
+ */
+export const createAiPersona = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const initialData = req.body;
+
+    // 서비스 호출
+    const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
+    
+    res.status(201).json({
+      message: 'AI를 통해 페르소나를 성공적으로 생성했습니다.',
+      data: newPersona,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * 페르소나 목록을 조회하는 컨트롤러
  */
 export const getPersonaList = async (req, res, next) => {
