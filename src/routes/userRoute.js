@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { getUserProfile } from '../controllers/userController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
 import { getMyPersonaList } from '../controllers/personaController.js'; // persona 컨트롤러에서 가져옴
-import { requireAuth } from '../middlewares/authMiddleware.js';
 import { validateMyPersonaList } from '../middlewares/personaValidator.js';
 
 const router = Router();
@@ -14,7 +13,7 @@ router.get('/profile', requireAuth, getUserProfile);
 
 /**
   * @swagger
-  * /my/characters/list:
+  * /my/characters:
   *   get:
   *     summary: 내 캐릭터/찜한 캐릭터 목록 조회
   *     description: 내가 만든 캐릭터 또는 내가 찜한(하트 누른) 캐릭터 목록을 조회합니다.
@@ -33,7 +32,7 @@ router.get('/profile', requireAuth, getUserProfile);
   *             schema:
   *               type: object
   *               properties:
-  *                 characters:
+  *                 data:
   *                   type: array
   *                   items:
   *                     type: object
