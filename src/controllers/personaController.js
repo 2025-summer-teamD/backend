@@ -51,30 +51,24 @@ export const getPersonaList = async (req, res, next) => {
 };
 
 /**
- * 특정 ID의 페르소나 상세 정보를 조회하는 컨트롤러
+ * [공개] 커뮤니티 페르소나 상세 정보를 조회하는 컨트롤러
  */
-export const getPersonaDetails = async (req, res, next) => {
+export const getCommunityPersonaDetails = async (req, res, next) => {
   try {
-    // validateIdParam 미들웨어를 통과했으므로, req.params.character_id는 유효한 숫자 문자열
-    const characterId = parseInt(req.params.character_id, 10);
+    const personaId = parseInt(req.params.character_id, 10);
+    // 로그인 여부에 따라 '좋아요' 상태를 보여주기 위해 userId를 선택적으로 넘김
+    const currentUserId = req.auth ? req.auth.userId : null;
 
-    // 1. 서비스 호출
-    const persona = await PersonaService.getPersonaById(characterId);
-
-    // 2. 서비스 결과에 따른 분기 처리
-    if (!persona) {
-      // 서비스가 null을 반환하면, '찾을 수 없음' 응답
-      return res.status(404).json({
-        message: '해당 페르소나를 찾을 수 없습니다.',
-        data: null, // 일관성을 위해 data 필드를 null로 포함
-      });
-    }
-
-    // 3. 성공 응답
-    res.status(200).json({
-      message: '페르소나 상세 정보를 성공적으로 조회했습니다.',
-      data: persona,
+    const persona = await PersonaService.getPersonaDetails({
+      personaId,
+      currentUserId, // 소유권 검증 없이, '좋아요' 상태 계산만 위임
+      // ownerId는 전달하지 않음
     });
+
+    if (!persona) {
+      return res.status(404).json({ message: '해당 페르소나를 찾을 수 없습니다.' });
+    }
+    res.status(200).json({ message: '페르소나 정보를 조회했습니다.', data: persona });
   } catch (error) {
     next(error);
   }
@@ -99,6 +93,30 @@ export const getMyPersonaList = async (req, res, next) => {
         total_elements: personas.length,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [인증 필수] 나의 페르소나 상세 정보를 조회하는 컨트롤러
+ */
+export const getMyPersonaDetails = async (req, res, next) => {
+  try {
+    const personaId = parseInt(req.params.character_id, 10);
+    const { userId } = req.auth; // requireAuth 미들웨어 덕분에 항상 존재
+
+    const persona = await PersonaService.getPersonaDetails({
+      personaId,
+      ownerId: userId,       // ★★★ 소유권 검증을 위해 자신의 ID를 ownerId로 전달
+      currentUserId: userId, // '좋아요' 상태 계산을 위해 자신의 ID를 전달
+    });
+
+    if (!persona) {
+      // 내 것이 아니거나, 존재하지 않는 경우
+      return res.status(404).json({ message: '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.' });
+    }
+    res.status(200).json({ message: '나의 페르소나 정보를 조회했습니다.', data: persona });
   } catch (error) {
     next(error);
   }
