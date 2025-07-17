@@ -4,7 +4,7 @@ import personaRoutes from './routes/personaRoute.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import chatRouter from './routes/chat.js';
-import mainRouter from './routes/index.js';
+import mainRouter from './routes/_index.js';
 
 
 const app = express();

@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../middlewares/authMiddleware.js'; // 토큰 불러오기
+import { deleteLikedCharacter } from '../controllers/chatController.js';
 
 const router = express.Router();
 
@@ -138,5 +139,42 @@ router.post('/rooms/:room_id', requireAuth, async (req, res) => {
     timestamp: new Date(),
   });
 });
+
+/**
+ * @swagger
+ * /chat/liked/{characterId}:
+ *   delete:
+ *     summary: 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
+ *     description: 내가 찜한 캐릭터를 내 목록에서만 삭제합니다. 커뮤니티에는 영향이 없습니다.
+ *     tags:
+ *       - Chat
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: characterId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 삭제할 캐릭터의 persona id
+ *     responses:
+ *       200:
+ *         description: 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.
+ *                 data:
+ *                   type: object
+ *       401:
+ *         description: 인증 실패 또는 권한 없음
+ *       404:
+ *         description: 존재하지 않거나 이미 삭제된 찜 관계
+ */
+router.delete('/liked/:characterId', requireAuth, deleteLikedCharacter);
 
 export default router;
