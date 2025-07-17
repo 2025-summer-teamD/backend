@@ -127,7 +127,7 @@ router.get(
  *                 result:
  *                   type: string
  */
-// 페르소나 상세 조회 (GET /communities/characters/:character_id)
+// 페르소나 상세 조회 (GET /communities/characters/:character_id
 router.get(
     '/characters/:character_id', 
     validateIdParam,     // 1. ID가 유효한 숫자인지 확인
