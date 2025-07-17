@@ -3,7 +3,8 @@ import { getPersonaList, getCommunityPersonaDetails } from '../controllers/perso
 import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
 
-const router = Router();
+const router = express.Router();
+
 router.get('/', validateGetPersonas, getPersonaList);
 
 /**

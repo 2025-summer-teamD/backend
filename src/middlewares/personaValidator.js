@@ -76,3 +76,15 @@ export const validateMyPersonaList = (req, res, next) => {
 
   next();
 };
+
+// AI 기반 페르소나 생성 요청의 body를 검증하는 미들웨어
+export const validateAiCreatePersona = (req, res, next) => {
+  const { name, image_url, is_public } = req.body;
+
+  // AI가 생성할 필드(description, prompt 등)는 필수가 아님
+  if (!name || !image_url || typeof is_public !== 'boolean') {
+    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, image_url, is_public)' });
+  }
+
+  next();
+};

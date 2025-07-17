@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import { requireAuth } from '../middlewares/authMiddleware.js'; // 토큰 불러오기
+
 const router = express.Router();
-const { requireAuth } = require('../middlewares/authMiddleware'); // 토큰 불러오기
 
 // 임시로 채팅방 목록을 저장할 배열
 const chatRooms = []; // [{ room_id, character_id, user_id }]
@@ -138,4 +139,4 @@ router.post('/rooms/:room_id', requireAuth, async (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

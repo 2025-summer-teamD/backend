@@ -1,5 +1,6 @@
 // 현재는 메모리 내 배열을 사용하지만, 나중에 Prisma 같은 DB로 쉽게 교체 가능
 import { prisma } from '../config/prisma.js'; 
+import { generatePersonaDetailsWithGemini } from '../vertexai/gemini25.js';
 
 /**
  * 새로운 페르소나를 생성하고 데이터베이스에 저장합니다.
@@ -36,6 +37,52 @@ export const createPersona = async (personaData, userId) => {
       console.error('Error creating persona:', error);
       throw new Error('페르소나 생성 중 오류가 발생했습니다.');
     }
+};
+
+/**
+ * AI(Gemini)를 사용하여 페르소나를 생성합니다.
+ * @param {object} initialData - 사용자가 입력한 초기 데이터 { name, image_url, is_public, short_bio }
+ * @param {string} userId - 생성자 Clerk ID
+ * @returns {Promise<object>} 완전히 생성된 페르소나 객체
+ */
+export const createPersonaWithAI = async (initialData, userId) => {
+  const { name, image_url, is_public } = initialData;
+
+  // 1. Gemini에 보낼 프롬프트 생성 (JSON 형식으로 응답하도록 지시)
+  const promptForGemini = `
+    다음은 새로운 페르소나 캐릭터에 대한 정보입니다:
+    - 이름: ${name}
+
+    이 정보를 바탕으로, 아래 JSON 형식에 맞춰 캐릭터의 상세 설정을 한국어로 생성해주세요:
+    {
+      "description": "캐릭터에 대한 상세하고 매력적인 소개 (3-4문장)",
+      "prompt": {
+        "tone": "캐릭터의 대표적인 말투 (예: 차분하고 논리적인, 활기차고 친근한)",
+        "personality": "캐릭터의 핵심 성격 키워드 3가지 (쉼표로 구분)",
+        "tag": "캐릭터를 대표하는 해시태그 3가지 (쉼표로 구분, # 제외)"
+      }
+    }
+  `;
+
+  // 2. LLM 서비스 호출하여 상세 정보 생성
+  const aiGeneratedDetails = await generatePersonaDetailsWithGemini(promptForGemini);
+  
+  // 3. 사용자가 입력한 정보와 AI가 생성한 정보를 결합
+  const fullPersonaData = {
+    creatorId: userId,
+    name,
+    imageUrl: image_url,
+    isPublic: is_public,
+    description: aiGeneratedDetails.description, // AI가 생성
+    prompt: aiGeneratedDetails.prompt,          // AI가 생성
+  };
+
+  // 4. 완성된 데이터를 DB에 저장
+  const newPersona = await prisma.persona.create({
+    data: fullPersonaData,
+  });
+
+  return newPersona;
 };
 
 /**
