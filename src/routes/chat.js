@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { verifyToken } = require('../middlewares/authMiddleware'); // 토큰 불러오기
+const { requireAuth } = require('../middlewares/authMiddleware'); // 토큰 불러오기
 
 // 임시로 채팅방 목록을 저장할 배열
 const chatRooms = []; // [{ room_id, character_id, user_id }]
@@ -27,7 +27,7 @@ const chatRooms = []; // [{ room_id, character_id, user_id }]
  *       201:
  *         description: 채팅방 생성 성공
  */
-router.post('/rooms', verifyToken, async (req, res) => {
+router.post('/rooms', requireAuth, async (req, res) => {
   const { character_id } = req.body;
 
   if (!character_id) {
@@ -76,7 +76,7 @@ router.post('/rooms', verifyToken, async (req, res) => {
  *       404:
  *         description: 채팅방 없음
  */
-router.get('/rooms', verifyToken, (req, res) => {
+router.get('/rooms', requireAuth, (req, res) => {
   const { character_id } = req.query;
   const user_id = req.user.username;
   if (!character_id) {
@@ -120,7 +120,7 @@ router.get('/rooms', verifyToken, (req, res) => {
  *       201:
  *         description: 메시지 전송 성공
  */
-router.post('/rooms/:room_id', verifyToken, async (req, res) => {
+router.post('/rooms/:room_id', requireAuth, async (req, res) => {
   const { room_id } = req.params;
   const { message } = req.body;
 
