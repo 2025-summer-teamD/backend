@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { getPersonaList, getPersonaDetails } from '../controllers/personaController.js';
-import { requireAuth } from '../middlewares/authMiddleware.js';
 import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 import { getPersonaList, getPersonaDetails } from '../controllers/personaController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
