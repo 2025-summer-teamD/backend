@@ -1,7 +1,7 @@
-import express from 'express';
-import { createCustomPersona } from '../controllers/personaController.js';
-import { requireAuth } from '../middlewares/authMiddleware.js';
-import { validateCreatePersona } from '../middlewares/personaValidator.js';
+const express = require('express');
+const { createCustomPersona } = require('../controllers/personaController.js');
+const { requireAuth } = require('../middlewares/authMiddleware.js');
+const { validateCreatePersona } = require('../middlewares/personaValidator.js');
 
 const router = express.Router();
 
@@ -103,4 +103,4 @@ router.post(
     createCustomPersona      // 3. 모든 검사를 통과하면 컨트롤러 실행
   );
   
-export default router;
+module.exports = router;
