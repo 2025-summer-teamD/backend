@@ -1,36 +1,9 @@
-const express = require('express');
-const router = express.Router();
+import { Router } from 'express';
+import { getPersonaList } from '../controllers/personaController.js';
+import { validateGetPersonas } from '../middlewares/personaValidator.js';
 
-// 더미 캐릭터 데이터
-const characters = [
-  {
-    character_id: 1,
-    name: '인기 페르소나',
-    image_url: 'https://example.com/image1.png',
-    introduction: '소개입니다',
-    uses_count: 1502,
-    likes: 2023,
-    liked: false,
-  },
-  {
-    character_id: 2,
-    name: '차분한 페르소나',
-    image_url: 'https://example.com/image2.png',
-    introduction: '차분한 소개입니다',
-    uses_count: 800,
-    likes: 3453,
-    liked: false,
-  },
-  {
-    character_id: 3,
-    name: '밝은 페르소나',
-    image_url: 'https://example.com/image3.png',
-    introduction: '밝고 긍정적인 소개입니다',
-    uses_count: 1200,
-    likes: 1500,
-    liked: true,
-  },
-];
+const router = Router();
+
 
 /**
  * @swagger
@@ -84,32 +57,12 @@ const characters = [
  *                       type: integer
  */
 
-router.get('/list', (req, res) => {
-  let result = [...characters];
-  const { keyword, sort } = req.query;
+// 페르소나 목록 조회 라우트
+// GET /api/personas
+router.get(
+    '/communities/characters', 
+    validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
+    getPersonaList       // 2. 컨트롤러 실행
+);
 
-  // 키워드 검색
-  if (keyword) {
-    const lowerKeyword = keyword.toLowerCase();
-    result = result.filter(
-      c => c.name.toLowerCase().includes(lowerKeyword) ||
-           c.introduction.toLowerCase().includes(lowerKeyword)
-    );
-  }
-
-  // 정렬
-  if (sort === 'likes') {
-    result.sort((a, b) => b.likes - a.likes);
-  } else if (sort === 'uses_count') {
-    result.sort((a, b) => b.uses_count - a.uses_count);
-  }
-
-  res.status(200).json({
-    characters: result,
-    page_info: {
-      total_elements: result.length,
-    },
-  });
-});
-
-module.exports = router;
+export default router;

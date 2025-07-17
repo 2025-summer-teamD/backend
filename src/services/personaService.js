@@ -37,3 +37,47 @@ export const createPersona = async (personaData, userId) => {
       throw new Error('페르소나 생성 중 오류가 발생했습니다.');
     }
 };
+
+/**
+ * 필터링 및 정렬 조건에 따라 페르소나 목록을 조회합니다.
+ * @param {object} options - 조회 옵션 객체
+ * @param {string} [options.keyword] - 검색 키워드
+ * @param {string} [options.sort] - 정렬 기준 ('likes', 'uses_count', 'createdAt')
+ * @returns {Promise<{personas: Array<object>, total: number}>} 페르소나 목록과 총 개수
+ */
+export const getPersonas = async (options = {}) => {
+  const { keyword, sort } = options;
+
+  // 1. Prisma 쿼리 조건 객체 생성
+  const where = {};
+  if (keyword) {
+    // 키워드가 있으면 name 또는 description 필드에서 대소문자 구분 없이 검색
+    where.OR = [
+      { name: { contains: keyword, mode: 'insensitive' } },
+      { description: { contains: keyword, mode: 'insensitive' } }, // introduction 대신 description 사용
+    ];
+  }
+
+  // 2. Prisma 정렬 조건 객체 생성
+  const orderBy = {};
+  if (sort === 'likes') {
+    orderBy.likes = 'desc'; // 내림차순
+  } else if (sort === 'uses_count') {
+    orderBy.usesCount = 'desc'; // DB 필드명은 camelCase로
+  } else {
+    // 기본 정렬은 최신순
+    orderBy.createdAt = 'desc';
+  }
+
+  // 3. DB에서 데이터 조회
+  const personas = await prisma.persona.findMany({
+    where,   // 검색 조건 적용
+    orderBy, // 정렬 조건 적용
+    // TODO: 페이지네이션(Pagination) 로직 추가 (skip, take)
+  });
+
+  // 4. 전체 개수 조회 (페이지네이션을 위해)
+  const total = await prisma.persona.count({ where });
+
+  return { personas, total };
+};

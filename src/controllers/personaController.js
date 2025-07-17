@@ -22,3 +22,30 @@ export const createCustomPersona = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * 페르소나 목록을 조회하는 컨트롤러
+ */
+export const getPersonaList = async (req, res, next) => {
+  try {
+    // 1. 요청의 쿼리 파라미터를 서비스에 전달할 옵션 객체로 만듦
+    const options = {
+      keyword: req.query.keyword,
+      sort: req.query.sort,
+    };
+
+    // 2. 서비스 호출: 실제 조회, 필터링, 정렬은 서비스가 알아서 처리
+    const { personas, total } = await PersonaService.getPersonas(options);
+
+    // 3. 성공 응답 생성
+    res.status(200).json({
+      data: personas,
+      page_info: {
+        total_elements: total,
+        // TODO: total_pages, page, size 등 추가 가능
+      },
+    });
+  } catch (error) {
+    next(error); // 서비스 에러는 중앙 핸들러로
+  }
+};
