@@ -34,7 +34,6 @@ const swaggerOptions = {
     ],
   },
   
-  // apis: [__dirname + '/routes/*.js'],   여기까지 토큰 생성을 위해 추가함
 
   apis: ['./src/routes/**/*.js'], // JSDoc 주석에서 API 정보 추출
 
