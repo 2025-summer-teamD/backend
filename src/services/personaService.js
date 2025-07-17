@@ -81,3 +81,22 @@ export const getPersonas = async (options = {}) => {
 
   return { personas, total };
 };
+
+/**
+ * ID로 특정 페르소나의 상세 정보를 조회합니다.
+ * @param {number} id - 조회할 페르소나의 ID
+ * @returns {Promise<object|null>} 조회된 페르소나 객체 또는 찾지 못한 경우 null
+ */
+export const getPersonaById = async (id) => {
+  const persona = await prisma.persona.findUnique({
+    where: {
+      id: id, // DB 스키마의 id 필드와 매핑
+    },
+    // (선택) 관련 데이터를 함께 로드하고 싶을 때 사용
+    // include: {
+    //   creator: true, // 생성자 정보
+    // }
+  });
+
+  return persona; // 찾으면 객체, 못 찾으면 null 반환
+};
