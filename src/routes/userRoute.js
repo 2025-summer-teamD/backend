@@ -3,6 +3,8 @@ import { getUserProfile } from '../controllers/userController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
 import { getMyPersonaList, getMyPersonaDetails } from '../controllers/personaController.js'; // persona 컨트롤러에서 가져옴
 import { validateMyPersonaList, validateIdParam } from '../middlewares/personaValidator.js';
+import { getMyChats } from '../controllers/chatController.js';
+import { validatePagination } from '../middlewares/paginationValidator.js';
 
 const router = Router();
 
@@ -137,6 +139,91 @@ router.get('/my/characters/:character_id',
   getMyPersonaDetails
 );
 
-
+/**
+ * @swagger
+ * /my/chat-characters:
+ *   get:
+ *     summary: 대화한 캐릭터 목록 조회
+ *     description: 현재 사용자가 대화한 적이 있는 캐릭터들의 목록을 조회합니다.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: 페이지 번호
+ *       - in: query
+ *         name: size
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: 한 페이지당 개수
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       character_id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       image_url:
+ *                         type: string
+ *                       last_chat:
+ *                         type: string
+ *                       time:
+ *                         type: string
+ *                 page_info:
+ *                   type: object
+ *                   properties:
+ *                     current_page:
+ *                       type: integer
+ *                     total_pages:
+ *                       type: integer
+ *                     total_elements:
+ *                       type: integer
+ *       400:
+ *         description: 잘못된 요청 파라미터
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: 대화한 캐릭터가 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 result:
+ *                   type: string
+ *       500:
+ *         description: 서버 내부 오류
+ */
+// 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
+router.get(
+  '/my/chat-characters',
+  requireAuth,        // 1. 로그인 필수
+  validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
+  getMyChats          // 3. 컨트롤러 실행
+);
 
 export default router;
