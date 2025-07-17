@@ -8,8 +8,12 @@ export const validateCreatePersona = (req, res, next) => {
   }
   
   // URL format validation
-  const urlPattern = /^https?:\/\/.+/;
-  if (!urlPattern.test(image_url)) {
+  try {
+    const parsed = new URL(image_url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Invalid protocol');
+    }
+  } catch (err) {
     return res.status(400).json({ error: 'image_url은 유효한 URL 형식이어야 합니다.' });
   }
 

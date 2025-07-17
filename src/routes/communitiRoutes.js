@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * @swagger
- * /communities/characters/list:
+ * /communities/characters:
  *   get:
  *     summary: 커뮤니티 캐릭터 목록 조회
  *     description: 커뮤니티 캐릭터 목록을 조회합니다. 쿼리 파라미터로 키워드 검색과 정렬(인기순, 조회수순)이 가능합니다.
@@ -58,7 +58,7 @@ const router = Router();
  */
 
 // 페르소나 목록 조회 라우트
-// GET /api/personas
+// GET /communities/characters
 router.get(
     '/communities/characters', 
     validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
