@@ -1,9 +1,7 @@
 import { Router } from 'express';
-import { getPersonaList, getPersonaDetails } from '../controllers/personaController.js';
+import { getPersonaList, getCommunityPersonaDetails } from '../controllers/personaController.js';
 import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
-import { getPersonaList, getPersonaDetails } from '../controllers/personaController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
-import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 
 const router = Router();
 router.get('/', validateGetPersonas, getPersonaList);
@@ -71,7 +69,7 @@ router.get(
 
 /**
  * @swagger
- * /communities/characters/:character_id:
+ * /communities/characters/{character_id}:
  *   get:
  *     summary: 커뮤니티 캐릭터 상세 조회
  *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
@@ -130,8 +128,8 @@ router.get(
 // 페르소나 상세 조회 (GET /communities/characters/:character_id
 router.get(
     '/characters/:character_id', 
-    validateIdParam,     // 1. ID가 유효한 숫자인지 확인
-    getPersonaDetails    // 2. 컨트롤러 실행
+    validateIdParam,              // 1. ID가 유효한 숫자인지 확인
+    getCommunityPersonaDetails    // 2. 컨트롤러 실행
 );
   
 export default router;  
