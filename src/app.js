@@ -1,11 +1,13 @@
-const express = require('express');
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import personaRoutes from './routes/personaRoute.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJSDoc from 'swagger-jsdoc';
+import chatRouter from './routes/chat.js';
+import mainRouter from './routes/index.js';
+
 const app = express();
-const prisma = require('./config/prisma'); // Prisma 클라이언트 추가
-
-const personaRoutes = require('./routes/personaRoutes');
-
-const swaggerUi = require('swagger-ui-express');
-const swaggerJSDoc = require('swagger-jsdoc');
+const prisma = new PrismaClient(); // Prisma 클라이언트 추가
 
 // Swagger 설정
 const swaggerOptions = {
@@ -47,12 +49,13 @@ app.use(express.json());
 
 
 // chat 라우터
-const chatRouter = require('./routes/chat');
 app.use('/chat', chatRouter);
+
+// persona 라우터
+app.use('/personas', personaRoutes);
 
 // 기본 라우트
 
-const mainRouter = require('./routes'); // src/routes/index.js를 불러옴
 app.use('/', mainRouter); // 모든 라우트의 엔트리 포인트
 
 
@@ -61,6 +64,6 @@ app.get('/', (req, res) => {
 });
 
 
-module.exports = app;
+export default app;
 
 

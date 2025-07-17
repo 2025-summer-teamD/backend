@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { getPersonaList } from '../controllers/personaController.js';
-import { validateGetPersonas } from '../middlewares/personaValidator.js';
+import { getPersonaList, getPersonaDetails } from '../controllers/personaController.js';
+import { requireAuth } from '../middlewares/authMiddleware.js';
+import { validateGetPersonas,  validateIdParam } from '../middlewares/personaValidator.js';
 
 const router = Router();
 
@@ -66,3 +67,79 @@ router.get(
 );
 
 export default router;
+
+/**
+ * @swagger
+ * /communities/characters/{character_id}:
+ *   get:
+ *     summary: 커뮤니티 캐릭터 상세 조회
+ *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
+ *     parameters:
+ *       - in: path
+ *         name: character_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 캐릭터 ID
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 character_id:
+ *                   type: integer
+ *                 user_id:
+ *                   type: integer
+ *                 name:
+ *                   type: string
+ *                 image_url:
+ *                   type: string
+ *                 introduction:
+ *                   type: string
+ *                 prompt:
+ *                   type: object
+ *                   properties:
+ *                     tone:
+ *                       type: string
+ *                     personality:
+ *                       type: string
+ *                     tag:
+ *                       type: string
+ *                 uses_count:
+ *                   type: integer
+ *                 likes:
+ *                   type: integer
+ *                 liked:
+ *                   type: boolean
+ *       404:
+ *         description: 캐릭터를 찾을 수 없음
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 result:
+ *                   type: string
+ */
+router.get('/:character_id', (req, res) => {
+    const characterId = parseInt(req.params.character_id, 10);
+    const character = characters.find((c) => c.character_id === characterId);
+  
+    if (!character) {
+      return res.status(404).json({
+        message: '해당 페르소나를 찾을 수 없습니다.',
+        result: null,
+      });
+    }
+  
+    res.status(200).json(character);
+  });
+  
+  
+  module.exports = router;
+  
