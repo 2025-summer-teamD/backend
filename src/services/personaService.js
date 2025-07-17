@@ -266,3 +266,69 @@ export const getMyPersonas = async (userId, type = 'created') => {
     });
   }
 };
+
+/**
+ * 페르소나 수정 (본인만 가능)
+ * @param {number} personaId - 수정할 페르소나 ID
+ * @param {string} userId - 요청자 Clerk ID
+ * @param {object} updateData - { introduction, personality, tone, tag } 중 일부
+ * @returns {Promise<object>} 수정된 페르소나 객체
+ */
+export const updatePersona = async (personaId, userId, updateData) => {
+  // 1. 본인 소유 페르소나인지 확인
+  const persona = await prisma.persona.findUnique({
+    where: { id: personaId },
+  });
+  if (!persona || persona.creatorId !== userId || persona.isDeleted) {
+    throw new Error('수정 권한이 없거나 존재하지 않는 페르소나입니다.');
+  }
+
+  // 2. 업데이트할 필드 준비
+  const updateFields = {};
+  if (updateData.introduction !== undefined) {
+    updateFields.description = updateData.introduction;
+  }
+  if (
+    updateData.personality !== undefined ||
+    updateData.tone !== undefined ||
+    updateData.tag !== undefined
+  ) {
+    // 기존 prompt를 불러와서 병합
+    const prevPrompt = persona.prompt || {};
+    updateFields.prompt = {
+      ...prevPrompt,
+      ...(updateData.personality !== undefined ? { personality: updateData.personality } : {}),
+      ...(updateData.tone !== undefined ? { tone: updateData.tone } : {}),
+      ...(updateData.tag !== undefined ? { tag: updateData.tag } : {}),
+    };
+  }
+
+  // 3. DB 업데이트
+  const updated = await prisma.persona.update({
+    where: { id: personaId },
+    data: updateFields,
+  });
+  return updated;
+};
+
+/**
+ * 페르소나 소프트 삭제 (본인만 가능)
+ * @param {number} personaId - 삭제할 페르소나 ID
+ * @param {string} userId - 요청자 Clerk ID
+ * @returns {Promise<object>} 삭제된 페르소나 객체
+ */
+export const deletePersona = async (personaId, userId) => {
+  // 1. 본인 소유 페르소나인지 확인
+  const persona = await prisma.persona.findUnique({
+    where: { id: personaId },
+  });
+  if (!persona || persona.creatorId !== userId || persona.isDeleted) {
+    throw new Error('삭제 권한이 없거나 존재하지 않는 페르소나입니다.');
+  }
+  // 2. isDeleted true로 변경
+  const deleted = await prisma.persona.update({
+    where: { id: personaId },
+    data: { isDeleted: true },
+  });
+  return deleted;
+};

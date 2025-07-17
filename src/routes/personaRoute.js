@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCustomPersona } from '../controllers/personaController.js';
+import { createCustomPersona, updatePersona, deletePersona } from '../controllers/personaController.js';
 import { requireAuth } from '../middlewares/authMiddleware.js';
 import { validateCreatePersona } from '../middlewares/personaValidator.js';
 
@@ -178,6 +178,107 @@ router.post(
   requireAuth,
   validateAiCreatePersona,
   createAiPersona
+);
+
+/**
+ * @swagger
+ * /personas/characters/{id}:
+ *   patch:
+ *     summary: 페르소나 정보 수정 (본인만 가능)
+ *     description: introduction, personality, tone, tag 중 일부만 부분 수정할 수 있습니다. 본인 소유 페르소나만 수정 가능.
+ *     tags:
+ *       - Personas
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 수정할 페르소나의 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               introduction:
+ *                 type: string
+ *                 example: "새로운 소개 텍스트"
+ *               personality:
+ *                 type: string
+ *                 example: "툴툴대고 화가 많음"
+ *               tone:
+ *                 type: string
+ *                 example: "아빠같은 말투"
+ *               tag:
+ *                 type: string
+ *                 example: "화남,툴툴댐"
+ *     responses:
+ *       200:
+ *         description: 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 페르소나가 성공적으로 수정되었습니다.
+ *                 data:
+ *                   $ref: '#/components/schemas/Persona'
+ *       401:
+ *         description: 인증 실패 또는 권한 없음
+ *       404:
+ *         description: 존재하지 않거나 권한 없는 페르소나
+ */
+router.patch(
+  '/characters/:id',
+  requireAuth,
+  updatePersona
+);
+
+/**
+ * @swagger
+ * /personas/characters/{id}:
+ *   delete:
+ *     summary: 페르소나 소프트 삭제 (본인만 가능)
+ *     description: 본인 소유 페르소나만 삭제 가능. 실제로는 isDeleted만 true로 변경됩니다.
+ *     tags:
+ *       - Personas
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 삭제할 페르소나의 ID
+ *     responses:
+ *       200:
+ *         description: 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 페르소나가 성공적으로 삭제되었습니다.
+ *                 data:
+ *                   $ref: '#/components/schemas/Persona'
+ *       401:
+ *         description: 인증 실패 또는 권한 없음
+ *       404:
+ *         description: 존재하지 않거나 권한 없는 페르소나
+ */
+router.delete(
+  '/characters/:id',
+  requireAuth,
+  deletePersona
 );
 
 export default router;
