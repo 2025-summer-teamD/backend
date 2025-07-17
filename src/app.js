@@ -43,8 +43,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // 미들웨어
 app.use(express.json());
 
-app.use('/personas', personaRoutes);
-
 // 기본 라우트
 
 
