@@ -72,3 +72,29 @@ export const getMyChatList = async (userId, pagination) => {
 
   return { chatList, totalElements, totalPages };
 };
+
+/**
+ * 내가 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
+ * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
+ * @param {number} characterId - 찜한 캐릭터의 persona id
+ * @returns {Promise<object>} 삭제된 ChatRoom 객체
+ */
+export const deleteLikedCharacter = async (userId, characterId) => {
+  // 1. ChatRoom에서 해당 관계 찾기
+  const chatRoom = await prisma.chatRoom.findFirst({
+    where: {
+      clerkId: userId,
+      characterId: characterId,
+      isDeleted: false,
+    },
+  });
+  if (!chatRoom) {
+    throw new Error('해당 캐릭터와의 찜(좋아요) 관계가 없거나 이미 삭제되었습니다.');
+  }
+  // 2. isDeleted true로 변경
+  const deleted = await prisma.chatRoom.update({
+    where: { id: chatRoom.id },
+    data: { isDeleted: true },
+  });
+  return deleted;
+};

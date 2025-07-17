@@ -141,3 +141,33 @@ export const getMyPersonaDetails = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * [PATCH] 페르소나 수정 (본인만 가능)
+ */
+export const updatePersona = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const personaId = parseInt(req.params.id, 10);
+    const { introduction, personality, tone, tag } = req.body;
+    const updateData = { introduction, personality, tone, tag };
+    const updated = await PersonaService.updatePersona(personaId, userId, updateData);
+    res.status(200).json({ message: '페르소나가 성공적으로 수정되었습니다.', data: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [DELETE] 페르소나 소프트 삭제 (본인만 가능)
+ */
+export const deletePersona = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const personaId = parseInt(req.params.id, 10);
+    const deleted = await PersonaService.deletePersona(personaId, userId);
+    res.status(200).json({ message: '페르소나가 성공적으로 삭제되었습니다.', data: deleted });
+  } catch (error) {
+    next(error);
+  }
+};

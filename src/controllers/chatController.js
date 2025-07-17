@@ -38,3 +38,17 @@ export const getMyChats = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * 내가 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
+ */
+export const deleteLikedCharacter = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const characterId = parseInt(req.params.characterId, 10);
+    const deleted = await ChatService.deleteLikedCharacter(userId, characterId);
+    res.status(200).json({ message: '찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.', data: deleted });
+  } catch (error) {
+    next(error);
+  }
+};
