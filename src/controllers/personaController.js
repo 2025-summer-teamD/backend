@@ -3,8 +3,9 @@ import PersonaService from '../services/personaService.js';
 
 
 // INSERT INTO users ("clerkId", "createdAt", "isDeleted")
-//  VALUES ('user_2ztzjWWEERoGOIhxMspINR4qhGS', NOW(), false) ON CONFLICT ("clerkId") DO NOTHING;
+//  VALUES ('dvb_2zs0L9gT06uGpbdHSqTl5UgrL0p', NOW(), false) ON CONFLICT ("clerkId") DO NOTHING;
 // 이거 넣어야 테스트 가능
+
 
 /**
  * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
