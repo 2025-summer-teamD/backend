@@ -112,7 +112,7 @@ const getPersonas = async (options = {}) => {
   const { keyword, sort } = options;
 
   // 1. Prisma 쿼리 조건 객체 생성
-  const where = {};
+  const where = {isPublic: true};
   if (keyword) {
     // 키워드가 있으면 name 또는 introduction 필드에서 대소문자 구분 없이 검색
     where.OR = [
