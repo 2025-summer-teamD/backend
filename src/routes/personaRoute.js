@@ -1,6 +1,7 @@
 import express from 'express';
 import controllers from '../controllers/_index.js';
 import middlewares from '../middlewares/_index.js';
+import ensureUserInDB from '../middlewares/ensureUserInDB.js';
 
 const { personaController } = controllers;
 const { personaValidator, authMiddleware } = middlewares;
@@ -107,8 +108,9 @@ router.post(
   '/custom',
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,             // 1. 로그인 했는지 확인
-  validateCreatePersona,   // 2. 요청 데이터가 유효한지 확인
-  createCustomPersona      // 3. 모든 검사를 통과하면 컨트롤러 실행
+  ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
+  validateCreatePersona,   // 3. 요청 데이터가 유효한지 확인
+  createCustomPersona      // 4. 모든 검사를 통과하면 컨트롤러 실행
 );
 
 
@@ -181,9 +183,10 @@ router.post(
 router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/characters/existing)
   '/existing',
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,           // 1. 로그인 필수
-  validateAiCreatePersona, // 2. 요청 데이터 유효성 검사
-  createAiPersona // 3. 컨트롤러 실행
+  requireAuth,         // 1. 로그인 필수
+  ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
+  validateAiCreatePersona, // 3. 요청 데이터 유효성 검사
+  createAiPersona // 4. 컨트롤러 실행
 );
 
 export default router;
