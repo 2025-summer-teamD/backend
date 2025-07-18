@@ -9,7 +9,7 @@ const clerkAuthMiddleware = ClerkExpressWithAuth();
 const requireAuth = (req, res, next) => {
   // 개발 환경에서 테스트용 인증 우회 (강제 설정)
   if (process.env.NODE_ENV === 'development') {
-    req.auth = { userId: 'user_2ztzjWWEERoGOIhxMspINR4qhGS' };
+    req.auth = { userId: 'dvb_2zs0L9gT06uGpbdHSqTl5UgrL0p' };
     console.log('🔧 개발 환경: 인증 우회됨 (테스트용) - userId:', req.auth.userId);
   }
   
