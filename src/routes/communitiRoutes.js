@@ -65,7 +65,7 @@ const router = express.Router();
  */
 
 router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
-    '/characters', 
+    '/characters',
     validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
     getPersonaList       // 2. 컨트롤러 실행
 );
@@ -75,7 +75,7 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
  * @swagger
  * /communities/characters/{character_id}:
  *   get:
- *     tags: 
+ *     tags:
  *       - community
  *     summary: 커뮤니티 캐릭터 상세 조회
  *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
@@ -133,9 +133,10 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
  */
 // 페르소나 상세 조회 (GET /communities/characters/:character_id)
 router.get(
-    '/characters/:character_id', 
+    '/characters/:character_id',
+    
     validateIdParam,              // 1. ID가 유효한 숫자인지 확인
     getCommunityPersonaDetails    // 2. 컨트롤러 실행
 );
-  
-export default router;  
+
+export default router;
