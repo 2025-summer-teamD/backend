@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma.js';
+import { generateText } from '../vertexai/gemini25.js';
 
 /**
  * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
@@ -12,7 +13,7 @@ const getMyChatList = async (userId, pagination) => {
   // 1. 내가 참여하고 삭제되지 않은 채팅방의 총 개수를 먼저 구한다.
   const totalElements = await prisma.chatRoom.count({
     where: {
-      clerkId: userId,
+      creatorId: userId,
       isDeleted: false,
     },
   });
@@ -24,7 +25,7 @@ const getMyChatList = async (userId, pagination) => {
   // 2. 실제 데이터 조회: 관계된 데이터를 한 번의 쿼리로 가져온다.
   const chatRooms = await prisma.chatRoom.findMany({
     where: {
-      clerkId: userId,
+      creatorId: userId,
       isDeleted: false,
     },
     // 최신 채팅이 위로 오도록 정렬 (LastMessage의 생성 시간 기준)
@@ -99,9 +100,56 @@ const deleteLikedCharacter = async (userId, characterId) => {
   return deleted;
 };
 
+
+
+
+
+
+
+
+/**
+ * AI 캐릭터의 응답을 생성합니다. (DB 연동 없음)
+ * 이 함수는 페르소나 정보와 대화 기록을 직접 받아 순수하게 AI 응답만 생성합니다.
+ * @param {string} userMessage - 사용자가 보낸 메시지
+ * @param {object} personaInfo - 페르소나 정보 { name, personality, tone }
+ * @param {string} chatHistory - 이전 대화 기록 (문자열)
+ * @returns {Promise<string>} AI가 생성한 응답 메시지
+ */
+const generateAiChatResponse = async (
+  userMessage,
+  personaInfo,
+  chatHistory,
+) => {
+  // 1. Gemini AI에 보낼 프롬프트 구성
+  const prompt = `
+당신은 "${personaInfo.name}"이라는 이름의 AI 캐릭터입니다. 아래 설정에 맞춰서 사용자와 대화해주세요.
+- 당신의 성격: ${personaInfo.personality}
+- 당신의 말투: ${personaInfo.tone}
+
+---
+[최근 대화 기록]
+${chatHistory}
+---
+
+사용자: ${userMessage}
+${personaInfo.name}:`;
+
+  // 2. Gemini AI를 호출하여 응답 생성
+  const aiApiResponse = await generateText(prompt.trim());
+  const aiResponseText =
+    aiApiResponse.predictions[0]?.content ||
+    '죄송해요, 지금은 답변을 드릴 수 없어요.';
+
+  // 3. 생성된 AI 응답 텍스트 반환
+  return aiResponseText;
+};
+
 const chatService = {
   getMyChatList,
-  deleteLikedCharacter
+  deleteLikedCharacter,
+  generateAiChatResponse,
 };
 
 export default chatService;
+
+
