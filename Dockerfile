@@ -16,7 +16,6 @@ COPY src ./src
 COPY prisma ./prisma
 RUN npx prisma generate
 
-RUN npx prisma generate
 
 # 앱 실행 (필요에 따라 수정)
 CMD ["npm", "start"]
