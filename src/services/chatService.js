@@ -12,7 +12,7 @@ const getMyChatList = async (userId, pagination) => {
   // 1. 내가 참여하고 삭제되지 않은 채팅방의 총 개수를 먼저 구한다.
   const totalElements = await prisma.chatRoom.count({
     where: {
-      creatorId: userId,
+      clerkId: userId,
       isDeleted: false,
     },
   });
@@ -24,7 +24,7 @@ const getMyChatList = async (userId, pagination) => {
   // 2. 실제 데이터 조회: 관계된 데이터를 한 번의 쿼리로 가져온다.
   const chatRooms = await prisma.chatRoom.findMany({
     where: {
-      creatorId: userId,
+      clerkId: userId,
       isDeleted: false,
     },
     // 최신 채팅이 위로 오도록 정렬 (LastMessage의 생성 시간 기준)

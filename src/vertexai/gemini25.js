@@ -1,21 +1,7 @@
-import pkg from '@google-cloud/aiplatform';
-const { PredictionServiceClient } = pkg.v1;
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const predictionServiceClient = new PredictionServiceClient({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  apiEndpoint: `${process.env.GOOGLE_CLOUD_REGION || 'us-central1'}-aiplatform.googleapis.com`,
-});
-
-// 실제 endpoint는 프로젝트/위치에 맞게 수정 필요
-const GEMINI_ENDPOINT = 'projects/' + process.env.GOOGLE_CLOUD_PROJECT + '/locations/' + (process.env.GOOGLE_CLOUD_REGION || 'us-central1') + '/publishers/google/models/gemini-2.5-pro';
-
-async function generateText(prompt) {
-  const [response] = await predictionServiceClient.predict({
-    endpoint: GEMINI_ENDPOINT,
-    instances: [{ content: prompt }],
-  });
-  return response;
-}
+// Google AI SDK 초기화
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 /**
  * Gemini 모델에 단일 프롬프트를 보내고, JSON 형식의 응답을 받습니다.
@@ -24,23 +10,25 @@ async function generateText(prompt) {
  */
 export const generatePersonaDetailsWithGemini = async (promptText) => {
   try {
-    const request = {
-      contents: [{ role: 'user', parts: [{ text: promptText }] }],
-      generationConfig: {
-        responseMimeType: 'application/json', // ★★★ JSON 모드 활성화
-      },
-    };
+    // Gemini Pro 모델 사용
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
 
-    const result = await generativeModel.generateContent(request);
-    const response = result.response;
-    const jsonString = response.candidates[0].content.parts[0].text;
+    const result = await model.generateContent(promptText);
+    const response = await result.response;
+    const text = response.text();
 
-    return JSON.parse(jsonString); // JSON 문자열을 객체로 파싱하여 반환
+    // JSON 응답 파싱
+    return JSON.parse(text);
 
   } catch (error) {
-    console.error('Vertex AI Gemini Generation Error:', error);
+    console.error('Gemini API Error:', error);
     throw new Error('Gemini API를 통해 페르소나 상세 정보를 생성하는 데 실패했습니다.');
   }
 };
 
-export { generateText };
+export const generateText = async (prompt) => {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text();
+};

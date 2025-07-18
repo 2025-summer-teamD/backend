@@ -19,6 +19,20 @@ const swaggerOptions = {
         url: '/api',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
   },
   apis: ['./src/routes/**/*.js'], // JSDoc 주석에서 API 정보 추출
 };
