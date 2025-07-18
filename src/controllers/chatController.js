@@ -147,8 +147,35 @@ const streamChatByRoom = async (req, res, next) => {
   });
 };
 
+/**
+ * 내가 참여한 채팅방 목록을 조회합니다.
+ */
+const getMyChats = async (req, res, next) => {
+  try {
+    const userId = req.clerkUserId; // Clerk 인증에서 받은 사용자 ID
+    const pagination = req.pagination; // 페이지네이션 미들웨어에서 준비된 값
+
+    const result = await chatService.getMyChatList(userId, pagination);
+
+    res.status(200).json({
+      success: true,
+      data: result.chatList,
+      pagination: {
+        page: pagination.page,
+        size: pagination.size,
+        totalElements: result.totalElements,
+        totalPages: result.totalPages
+      }
+    });
+  } catch (error) {
+    console.error('내 채팅 목록 조회 에러:', error);
+    next(error);
+  }
+};
+
 export const chatController = {
   streamChatByRoom,
+  getMyChats,
 };
 
 export default chatController;

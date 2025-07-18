@@ -208,14 +208,14 @@ router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/
 
 
 
-//이따 살려야됨
-// router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
-//   '/chat-characters',
-//   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-//   requireAuth,        // 1. 로그인 필수
-//   validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
-//   getMyChats          // 3. 컨트롤러 실행
-// );
+
+router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
+'/chat-characters',
+clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+requireAuth,        // 1. 로그인 필수
+validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
+getMyChats          // 3. 컨트롤러 실행
+);
 
 /**
  * @swagger
