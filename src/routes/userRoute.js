@@ -8,7 +8,7 @@ const { authMiddleware, personaValidator, paginationValidator } = middlewares;
 const { getUserProfile } = userController;
 const { getMyPersonaList, getMyPersonaDetails, updatePersona, deletePersona } = personaController;
 const { getMyChats } = chatController;
-const { requireAuth } = authMiddleware;
+const { clerkAuthMiddleware, requireAuth } = authMiddleware;
 const { validateMyPersonaList, validateIdParam } = personaValidator;
 const { validatePagination } = paginationValidator;
 
@@ -23,7 +23,7 @@ router.get('/profile', requireAuth, getUserProfile);
   * @swagger
   * /my/characters:
   *   get:
-  *     tags: 
+  *     tags:
   *       - my character
   *     summary: 내 캐릭터/찜한 캐릭터 목록 조회
   *     description: 내가 만든 캐릭터 또는 내가 찜한(하트 누른) 캐릭터 목록을 조회합니다.
@@ -71,6 +71,7 @@ router.get('/profile', requireAuth, getUserProfile);
   */
 router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type=liked)
   '/characters',
+  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,            // 1. 로그인 필수
   validateMyPersonaList,  // 2. 쿼리 파라미터 유효성 검사
   getMyPersonaList        // 3. 컨트롤러 실행
@@ -80,7 +81,7 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  * @swagger
  * /my/characters/{character_id}:
  *   get:
- *     tags: 
+ *     tags:
  *       - my character
  *     summary: 내 케릭터 상세 조회
  *     description: character_id로 내 케릭터의 상세 정보를 조회합니다.
@@ -142,16 +143,17 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  */
 router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/:character_id)
   '/characters/:character_id',
-  requireAuth, 
-  validateIdParam, 
-  getMyPersonaDetails
+  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  requireAuth, // 1. 로그인 필수
+  validateIdParam, // 2. ID가 유효한 숫자인지 확인
+  getMyPersonaDetails // 3. 컨트롤러 실행
 );
 
 /**
  * @swagger
  * /my/chat-characters:
  *   get:
- *     tags: 
+ *     tags:
  *       - my character
  *     summary: 내가 대화한 캐릭터 목록 조회
  *     security:
@@ -205,6 +207,7 @@ router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/
  */
 router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
   '/chat-characters',
+  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,        // 1. 로그인 필수
   validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
   getMyChats          // 3. 컨트롤러 실행
@@ -266,8 +269,9 @@ router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1
  */
 router.patch(
   '/characters/:id',
-  requireAuth,
-  updatePersona
+  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  requireAuth,         // 1. 로그인 필수
+  updatePersona       // 2. 컨트롤러 실행
 );
 
 /**
@@ -307,8 +311,9 @@ router.patch(
  */
 router.delete(
   '/characters/:id',
-  requireAuth,
-  deletePersona
+  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  requireAuth,         // 1. 로그인 필수
+  deletePersona       // 2. 컨트롤러 실행
 );
 
 

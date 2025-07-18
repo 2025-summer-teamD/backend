@@ -1,5 +1,5 @@
 // 현재는 메모리 내 배열을 사용하지만, 나중에 Prisma 같은 DB로 쉽게 교체 가능
-import { prisma } from '../config/prisma.js'; 
+import { prisma } from '../config/prisma.js';
 import { gemini25 } from '../vertexai/_index.js';
 
 const { generatePersonaDetailsWithGemini } = gemini25;
@@ -32,7 +32,7 @@ const createPersona = async (personaData, userId) => {
     const newPersona = await prisma.persona.create({
       data: sanitizedData
     });
-    
+
     return newPersona;
     } catch (error) {
       // Log the error for debugging
@@ -82,7 +82,7 @@ const createPersonaWithAI = async (initialData, userId) => {
       }
     };
   }
-  
+
   // 3. 사용자가 입력한 정보와 AI가 생성한 정보를 결합
   const fullPersonaData = {
     clerkId: userId,
@@ -161,12 +161,12 @@ const getPersonaDetails = async (options) => {
   const whereCondition = {
     id: personaId,
   };
-  
+
   // 'ownerId'가 제공되면, 소유권 검증 조건을 추가
   if (ownerId) {
     whereCondition.clerkId = ownerId;
   }
-  
+
   // 'isPublic'이 true인 커뮤니티 페르소나만 조회하도록 조건을 추가할 수도 있음
   // if (!ownerId) {
   //   whereCondition.isPublic = true;
@@ -176,7 +176,7 @@ const getPersonaDetails = async (options) => {
     where: whereCondition,
   });
 
-  if (!persona) {
+  if (!persona || persona.isDeleted) {
     return null;
   }
 
@@ -216,7 +216,7 @@ const getPersonaDetails = async (options) => {
 const getMyPersonas = async (userId, type = 'created') => {
   if (type === 'liked') {
     // --- 내가 좋아요 한 페르소나 조회 로직 ---
-    
+
     // 1. 내가 좋아요 한 ChatRoom을 먼저 찾는다.
     const likedChatRooms = await prisma.chatRoom.findMany({
       where: {
@@ -266,7 +266,7 @@ const getMyPersonas = async (userId, type = 'created') => {
     return myCreatedPersonas.map(p => {
       // 나와의 채팅방은 유일하거나 없어야 한다.
       const myRoom = p.chatRooms.length > 0 ? p.chatRooms[0] : null;
-      
+
       return {
         character_id: p.id,
         name: p.name,
