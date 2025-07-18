@@ -13,14 +13,14 @@ import PersonaService from '../services/personaService.js';
 export const createCustomPersona = async (req, res, next) => {
   try {
     // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
-    const { userId } = req.auth; 
-    
+    const { userId } = req.auth;
+
     // 2. 서비스 호출: 실제 생성 작업은 서비스에 위임
     //    요청 body 전체를 서비스에 전달
     const newPersona = await PersonaService.createPersona(req.body, userId);
 
     // 3. 성공 응답 생성
-    res.status(201).json({ 
+    res.status(201).json({
       message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
     });
@@ -40,7 +40,7 @@ export const createAiPersona = async (req, res, next) => {
 
     // 서비스 호출
     const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
-    
+
     res.status(201).json({
       message: 'AI를 통해 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
@@ -110,7 +110,6 @@ export const getMyPersonaList = async (req, res, next) => {
     // requireAuth 미들웨어가 userId를 보장
     const { userId } = req.auth;
     const { type } = req.query; // validator가 유효성 보장
-
     // 서비스 호출: 모든 복잡한 로직은 서비스가 처리
     const personas = await PersonaService.getMyPersonas(userId, type);
 
