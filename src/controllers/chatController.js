@@ -1,61 +1,71 @@
-import services from '../services/_index.js';
-const { chatService } = services;
-/**
- * 나의 채팅 목록을 조회하는 컨트롤러
- */
-const getMyChats = async (req, res, next) => {
-  try {
-    // 미들웨어가 인증과 페이지네이션 정보를 준비해 줌
-    const { userId } = req.auth;
-    const pagination = req.pagination;
+import chatService from '../services/chatService.js';
+import { prisma } from '../config/prisma.js';
 
-    // 서비스 호출
-    const { chatList, totalElements, totalPages } = await chatService.getMyChatList(userId, pagination);
-    
-    // 서비스 결과가 비어있는 경우에 대한 처리 (선택적)
-    if (chatList.length === 0 && pagination.page === 1) {
-        return res.status(200).json({ 
-            message: "채팅한 캐릭터가 없습니다.",
-            data: [],
-            page_info: {
-                current_page: 1,
-                total_pages: 0,
-                total_elements: 0,
-            }
-        });
+const streamChatByRoom = async (req, res, next) => {
+  try {
+    const { room_id } = req.params;
+    const { message, sender, timestamp } = req.body;
+
+    // 입력 검증
+    if (!message || !sender || !timestamp) {
+      return res.status(400).json({ 
+        error: 'message, sender, timestamp 필드가 모두 필요합니다.' 
+      });
     }
 
-    // 성공 응답 구성
-    res.status(200).json({
-      data: chatList,
-      page_info: {
-        current_page: pagination.page,
-        total_pages: totalPages,
-        total_elements: totalElements,
-      },
+    // --- 데이터베이스에서 정보 조회 ---
+    const room = await prisma.chatRoom.findUnique({
+      where: { id: parseInt(room_id, 10) },
+      include: { persona: true },
     });
+
+    if (!room) {
+      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    }
+    const personaInfo = room.persona;
+    
+    // TODO: 실제 대화 기록을 DB에서 가져오는 로직 추가
+    const chatHistory = '...';
+
+    // --- SSE 헤더 설정 ---
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // --- AI 응답 생성 (전체 문장을 한번에 받음) ---
+    //실시간 스트리밍 방식 x => ai가 문장을 다 만들어 낸 후 보냄.
+    // generateText 함수가 전체 응답을 생성할 때까지 기다립니다.
+    const fullResponseText = await chatService.generateAiChatResponse(
+      message,  // POST body에서 받은 message 사용
+      personaInfo,
+      chatHistory
+    );
+
+    // --- 생성된 전체 응답을 SSE로 전송 ---
+    res.write(`data: ${JSON.stringify({ content: fullResponseText })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+
   } catch (error) {
-    next(error);
+    // 에러 처리
+    console.error('SSE Controller Error:', error);
+    if (!res.headersSent) {
+      next(error);
+    } else {
+      res.end();
+    }
   }
+
+  // 클라이언트 연결 종료 이벤트 처리
+  req.on('close', () => {
+    console.log('클라이언트가 연결을 종료했습니다.');
+    res.end();
+  });
 };
 
-/**
- * 내가 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
- */
-const deleteLikedCharacter = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    const characterId = parseInt(req.params.characterId, 10);
-    const deleted = await chatService.deleteLikedCharacter(userId, characterId);
-    res.status(200).json({ message: '찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.', data: deleted });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const chatController = {
-  getMyChats,
-  deleteLikedCharacter,
+export const chatController = {
+  streamChatByRoom,
 };
 
 export default chatController;
