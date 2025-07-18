@@ -13,25 +13,72 @@ const streamChatByRoom = async (req, res, next) => {
       });
     }
 
-    // --- 데이터베이스에서 정보 조회 ---
-    const room = await prisma.chatRoom.findUnique({
-      where: { id: parseInt(room_id, 10) },
-      include: { persona: true },
+    // 실제 채팅방 정보를 데이터베이스에서 조회
+    const chatRoom = await prisma.chatRoom.findUnique({
+      where: { 
+        id: parseInt(room_id, 10),
+        isDeleted: false
+      },
+      include: {
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            introduction: true,
+            prompt: true
+          }
+        },
+        ChatLogs: {
+          where: { isDeleted: false },
+          orderBy: { time: 'desc' },
+          take: 10, // 최근 10개 대화 기록
+          select: {
+            text: true,
+            speaker: true,
+            time: true
+          }
+        }
+      }
     });
 
-    if (!room) {
-      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    if (!chatRoom) {
+      return res.status(404).json({ 
+        error: `채팅방 ID ${room_id}를 찾을 수 없습니다.` 
+      });
     }
-    const personaInfo = room.persona;
-    
-    // TODO: 실제 대화 기록을 DB에서 가져오는 로직 추가
-    const chatHistory = '...';
+
+    const personaInfo = {
+      id: chatRoom.persona.id,
+      name: chatRoom.persona.name,
+      personality: chatRoom.persona.introduction || '친근하고 도움이 되는 성격',
+      tone: '친근하고 자연스러운 말투',
+      prompt: chatRoom.persona.prompt
+    };
+
+    // 실제 대화 기록을 문자열로 변환
+    let chatHistory = '';
+    if (chatRoom.ChatLogs.length > 0) {
+      chatHistory = chatRoom.ChatLogs
+        .reverse() // 오래된 순서로 정렬
+        .map(log => `${log.speaker === 'user' ? '사용자' : personaInfo.name}: ${log.text}`)
+        .join('\n');
+    } else {
+      chatHistory = '아직 대화 기록이 없습니다.';
+    }
+
+    console.log(`실제 채팅방 ${room_id} 정보 조회 완료:`, {
+      personaName: personaInfo.name,
+      chatHistoryLength: chatRoom.ChatLogs.length
+    });
 
     // --- SSE 헤더 설정 ---
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
+
+    console.log('SSE 헤더 설정 완료');
+    console.log('AI 응답 생성 시작...');
 
     // --- AI 응답 생성 (전체 문장을 한번에 받음) ---
     //실시간 스트리밍 방식 x => ai가 문장을 다 만들어 낸 후 보냄.
@@ -42,9 +89,45 @@ const streamChatByRoom = async (req, res, next) => {
       chatHistory
     );
 
+    console.log('AI 응답 생성 완료:', fullResponseText);
+
+    // --- 사용자 메시지와 AI 응답을 데이터베이스에 저장 ---
+    try {
+      // 사용자 메시지 저장
+      await prisma.chatLog.create({
+        data: {
+          chatroomId: parseInt(room_id, 10),
+          text: message,
+          type: 'text',
+          speaker: 'user',
+          time: new Date(timestamp)
+        }
+      });
+
+      // AI 응답 저장
+      await prisma.chatLog.create({
+        data: {
+          chatroomId: parseInt(room_id, 10),
+          text: fullResponseText,
+          type: 'text',
+          speaker: 'ai',
+          time: new Date()
+        }
+      });
+
+      console.log('대화 기록 데이터베이스 저장 완료');
+    } catch (dbError) {
+      console.error('데이터베이스 저장 실패:', dbError);
+      // 저장 실패해도 SSE 응답은 계속 진행
+    }
+
     // --- 생성된 전체 응답을 SSE로 전송 ---
     res.write(`data: ${JSON.stringify({ content: fullResponseText })}\n\n`);
+    console.log('첫 번째 데이터 전송 완료');
+    
     res.write('data: [DONE]\n\n');
+    console.log('종료 신호 전송 완료');
+    
     res.end();
 
   } catch (error) {
