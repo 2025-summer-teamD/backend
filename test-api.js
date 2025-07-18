@@ -11,7 +11,7 @@ const testPersona = {
     tone: "친근하고 따뜻한",
     personality: "친절한, 이해심 많은, 긍정적인",
     tag: "친구, 상담, 위로"
-  },
+  },  
   description: "테스트용 캐릭터입니다."
 };
 
