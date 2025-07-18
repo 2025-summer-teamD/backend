@@ -1,61 +1,181 @@
-import services from '../services/_index.js';
-const { chatService } = services;
+import chatService from '../services/chatService.js';
+import { prisma } from '../config/prisma.js';
+
+const streamChatByRoom = async (req, res, next) => {
+  try {
+    const { room_id } = req.params;
+    const { message, sender, timestamp } = req.body;
+
+    // 입력 검증
+    if (!message || !sender || !timestamp) {
+      return res.status(400).json({ 
+        error: 'message, sender, timestamp 필드가 모두 필요합니다.' 
+      });
+    }
+
+    // 실제 채팅방 정보를 데이터베이스에서 조회
+    const chatRoom = await prisma.chatRoom.findUnique({
+      where: { 
+        id: parseInt(room_id, 10),
+        isDeleted: false
+      },
+      include: {
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            introduction: true,
+            prompt: true
+          }
+        },
+        ChatLogs: {
+          where: { isDeleted: false },
+          orderBy: { time: 'desc' },
+          take: 10, // 최근 10개 대화 기록
+          select: {
+            text: true,
+            speaker: true,
+            time: true
+          }
+        }
+      }
+    });
+
+    if (!chatRoom) {
+      return res.status(404).json({ 
+        error: `채팅방 ID ${room_id}를 찾을 수 없습니다.` 
+      });
+    }
+
+    const personaInfo = {
+      id: chatRoom.persona.id,
+      name: chatRoom.persona.name,
+      personality: chatRoom.persona.introduction || '친근하고 도움이 되는 성격',
+      tone: '친근하고 자연스러운 말투',
+      prompt: chatRoom.persona.prompt
+    };
+
+    // 실제 대화 기록을 문자열로 변환
+    let chatHistory = '';
+    if (chatRoom.ChatLogs.length > 0) {
+      chatHistory = chatRoom.ChatLogs
+        .reverse() // 오래된 순서로 정렬
+        .map(log => `${log.speaker === 'user' ? '사용자' : personaInfo.name}: ${log.text}`)
+        .join('\n');
+    } else {
+      chatHistory = '아직 대화 기록이 없습니다.';
+    }
+
+    console.log(`실제 채팅방 ${room_id} 정보 조회 완료:`, {
+      personaName: personaInfo.name,
+      chatHistoryLength: chatRoom.ChatLogs.length
+    });
+
+    // --- SSE 헤더 설정 ---
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    console.log('SSE 헤더 설정 완료');
+    console.log('AI 응답 생성 시작...');
+
+    // --- AI 응답 생성 (전체 문장을 한번에 받음) ---
+    //실시간 스트리밍 방식 x => ai가 문장을 다 만들어 낸 후 보냄.
+    // generateText 함수가 전체 응답을 생성할 때까지 기다립니다.
+    const fullResponseText = await chatService.generateAiChatResponse(
+      message,  // POST body에서 받은 message 사용
+      personaInfo,
+      chatHistory
+    );
+
+    console.log('AI 응답 생성 완료:', fullResponseText);
+
+    // --- 사용자 메시지와 AI 응답을 데이터베이스에 저장 ---
+    try {
+      // 사용자 메시지 저장
+      await prisma.chatLog.create({
+        data: {
+          chatroomId: parseInt(room_id, 10),
+          text: message,
+          type: 'text',
+          speaker: 'user',
+          time: new Date(timestamp)
+        }
+      });
+
+      // AI 응답 저장
+      await prisma.chatLog.create({
+        data: {
+          chatroomId: parseInt(room_id, 10),
+          text: fullResponseText,
+          type: 'text',
+          speaker: 'ai',
+          time: new Date()
+        }
+      });
+
+      console.log('대화 기록 데이터베이스 저장 완료');
+    } catch (dbError) {
+      console.error('데이터베이스 저장 실패:', dbError);
+      // 저장 실패해도 SSE 응답은 계속 진행
+    }
+
+    // --- 생성된 전체 응답을 SSE로 전송 ---
+    res.write(`data: ${JSON.stringify({ content: fullResponseText })}\n\n`);
+    console.log('첫 번째 데이터 전송 완료');
+    
+    res.write('data: [DONE]\n\n');
+    console.log('종료 신호 전송 완료');
+    
+    res.end();
+
+  } catch (error) {
+    // 에러 처리
+    console.error('SSE Controller Error:', error);
+    if (!res.headersSent) {
+      next(error);
+    } else {
+      res.end();
+    }
+  }
+
+  // 클라이언트 연결 종료 이벤트 처리
+  req.on('close', () => {
+    console.log('클라이언트가 연결을 종료했습니다.');
+    res.end();
+  });
+};
+
 /**
- * 나의 채팅 목록을 조회하는 컨트롤러
+ * 내가 참여한 채팅방 목록을 조회합니다.
  */
 const getMyChats = async (req, res, next) => {
   try {
-    // 미들웨어가 인증과 페이지네이션 정보를 준비해 줌
-    const { userId } = req.auth;
-    const pagination = req.pagination;
+    const userId = req.clerkUserId; // Clerk 인증에서 받은 사용자 ID
+    const pagination = req.pagination; // 페이지네이션 미들웨어에서 준비된 값
 
-    // 서비스 호출
-    const { chatList, totalElements, totalPages } = await chatService.getMyChatList(userId, pagination);
-    
-    // 서비스 결과가 비어있는 경우에 대한 처리 (선택적)
-    if (chatList.length === 0 && pagination.page === 1) {
-        return res.status(200).json({ 
-            message: "채팅한 캐릭터가 없습니다.",
-            data: [],
-            page_info: {
-                current_page: 1,
-                total_pages: 0,
-                total_elements: 0,
-            }
-        });
-    }
+    const result = await chatService.getMyChatList(userId, pagination);
 
-    // 성공 응답 구성
     res.status(200).json({
-      data: chatList,
-      page_info: {
-        current_page: pagination.page,
-        total_pages: totalPages,
-        total_elements: totalElements,
-      },
+      success: true,
+      data: result.chatList,
+      pagination: {
+        page: pagination.page,
+        size: pagination.size,
+        totalElements: result.totalElements,
+        totalPages: result.totalPages
+      }
     });
   } catch (error) {
+    console.error('내 채팅 목록 조회 에러:', error);
     next(error);
   }
 };
 
-/**
- * 내가 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
- */
-const deleteLikedCharacter = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    const characterId = parseInt(req.params.characterId, 10);
-    const deleted = await chatService.deleteLikedCharacter(userId, characterId);
-    res.status(200).json({ message: '찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.', data: deleted });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const chatController = {
+export const chatController = {
+  streamChatByRoom,
   getMyChats,
-  deleteLikedCharacter,
 };
 
 export default chatController;

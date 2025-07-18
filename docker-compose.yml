@@ -4,10 +4,13 @@ services:
     container_name: express_app
     ports:
       - 3001:3001
+    volumes:
+      - ./google-credentials:/app/google-credentials:ro
     env_file:
       - .env
     environment:
       NODE_ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
     depends_on:
       db:
         condition: service_healthy
