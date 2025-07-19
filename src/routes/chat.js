@@ -1,14 +1,13 @@
-// import express from 'express';
-// import authMiddleware from '../middlewares/_index.js'; // 토큰 불러오기
-// import chatController from '../controllers/_index.js';
+//import authMiddleware from '../middlewares/_index.js'; // 토큰 불러오기
+//import chatController from '../controllers/_index.js';
 
-// const { requireAuth } = authMiddleware;
-// const { deleteLikedCharacter } = chatController;
+//const { requireAuth } = authMiddleware;
+//const { deleteLikedCharacter } = chatController;
 
-// const router = express.Router();
+//const router = express.Router();
 
-// // 임시로 채팅방 목록을 저장할 배열
-// const chatRooms = []; // [{ room_id, character_id, user_id }]
+// 임시로 채팅방 목록을 저장할 배열
+//const chatRooms = []; // [{ room_id, character_id, user_id }]
 
 // // ✅ 새로운 캐릭터와 채팅방 생성
 // /**
@@ -52,132 +51,42 @@
 //   });
 // });
 
-// /**
-//  * @swagger
-//  * /chat/rooms:
-//  *   get:
-//  *     summary: 대화한 캐릭터의 채팅방 입장
-//  *     security:
-//  *       - bearerAuth: []
-//  *     parameters:
-//  *       - in: query
-//  *         name: character_id
-//  *         required: true
-//  *         schema:
-//  *           type: string
-//  *         description: 캐릭터 ID
-//  *     responses:
-//  *       200:
-//  *         description: 채팅방 정보 반환
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 room_id:
-//  *                   type: string
-//  *                 character_id:
-//  *                   type: string
-//  *       404:
-//  *         description: 채팅방 없음
-//  */
-// router.get('/rooms', requireAuth, (req, res) => {
-//   const { character_id } = req.query;
-//   const user_id = req.user.username;
-//   if (!character_id) {
-//     return res.status(400).json({ error: 'character_id 쿼리 파라미터가 필요합니다.' });
-//   }
-//   const room = chatRooms.find(
-//     (room) => room.character_id === character_id && room.user_id === user_id
-//   );
-//   if (!room) {
-//     return res.status(404).json({ error: '채팅방이 존재하지 않습니다.' });
-//   }
-//   res.status(200).json(room);
-// });
 
-// // ✅ 기존 채팅방에 메시지 전송
-// /**
-//  * @swagger
-//  * /chat/rooms/{room_id}:
-//  *   post:
-//  *     summary: 특정 채팅방에 메시지 전송
-//  *     security:
-//  *       - bearerAuth: []
-//  *     parameters:
-//  *       - in: path
-//  *         name: room_id
-//  *         required: true
-//  *         schema:
-//  *           type: string
-//  *         description: 채팅방 ID
-//  *     requestBody:
-//  *       required: true
-//  *       content:
-//  *         application/json:
-//  *           schema:
-//  *             type: object
-//  *             properties:
-//  *               message:
-//  *                 type: string
-//  *                 example: 안녕하세요!
-//  *     responses:
-//  *       201:
-//  *         description: 메시지 전송 성공
-//  */
-// router.post('/rooms/:room_id', requireAuth, async (req, res) => {
-//   const { room_id } = req.params;
-//   const { message } = req.body;
+/**
+ * @swagger
+ * /chat/liked/{characterId}:
+ *   delete:
+ *     summary: 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
+ *     description: 내가 찜한 캐릭터를 내 목록에서만 삭제합니다. 커뮤니티에는 영향이 없습니다.
+ *     tags:
+ *       - Chat
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: characterId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 삭제할 캐릭터의 persona id
+ *     responses:
+ *       200:
+ *         description: 삭제 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.
+ *                 data:
+ *                   type: object
+ *       401:
+ *         description: 인증 실패 또는 권한 없음
+ *       404:
+ *         description: 존재하지 않거나 이미 삭제된 찜 관계
+ */
+//router.delete('/liked/:characterId', requireAuth, deleteLikedCharacter);
 
-//   if (!message) {
-//     return res.status(400).json({ error: '메시지를 입력해주세요.' });
-//   }
-
-//   console.log(`room ${room_id} 에 메시지: ${message}`);
-
-//   res.status(201).json({
-//     room_id,
-//     message,
-//     sender: req.user?.username || 'minjeong',
-//     timestamp: new Date(),
-//   });
-// });
-
-// /**
-//  * @swagger
-//  * /chat/liked/{characterId}:
-//  *   delete:
-//  *     summary: 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
-//  *     description: 내가 찜한 캐릭터를 내 목록에서만 삭제합니다. 커뮤니티에는 영향이 없습니다.
-//  *     tags:
-//  *       - Chat
-//  *     security:
-//  *       - bearerAuth: []
-//  *     parameters:
-//  *       - in: path
-//  *         name: characterId
-//  *         required: true
-//  *         schema:
-//  *           type: integer
-//  *         description: 삭제할 캐릭터의 persona id
-//  *     responses:
-//  *       200:
-//  *         description: 삭제 성공
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 message:
-//  *                   type: string
-//  *                   example: 찜한 캐릭터가 내 목록에서 성공적으로 삭제되었습니다.
-//  *                 data:
-//  *                   type: object
-//  *       401:
-//  *         description: 인증 실패 또는 권한 없음
-//  *       404:
-//  *         description: 존재하지 않거나 이미 삭제된 찜 관계
-//  */
-// router.delete('/liked/:characterId', requireAuth, deleteLikedCharacter);
-
-// export default router;
+//export default router;
