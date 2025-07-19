@@ -106,10 +106,11 @@ const createPersonaWithAI = async (initialData, userId) => {
  * @param {object} options - 조회 옵션 객체
  * @param {string} [options.keyword] - 검색 키워드
  * @param {string} [options.sort] - 정렬 기준 ('likes', 'uses_count', 'createdAt')
+ * @param {string} [options.currentUserId] - 현재 사용자 ID (좋아요 상태 확인용)
  * @returns {Promise<{personas: Array<object>, total: number}>} 페르소나 목록과 총 개수
  */
 const getPersonas = async (options = {}) => {
-  const { keyword, sort } = options;
+  const { keyword, sort, currentUserId } = options;
 
   // 1. Prisma 쿼리 조건 객체 생성
   const where = {isPublic: true};
@@ -125,7 +126,7 @@ const getPersonas = async (options = {}) => {
   const orderBy = {};
   if (sort === 'likes') {
     orderBy.likesCount = 'desc'; // DB 필드명은 likesCount
-  } else if (sort === 'uses_count') {
+  } else if (sort === 'view_count' || sort === 'uses_count') {
     orderBy.usesCount = 'desc'; // DB 필드명은 camelCase로
   } else {
     // 기본 정렬은 최신순
@@ -142,7 +143,34 @@ const getPersonas = async (options = {}) => {
   // 4. 전체 개수 조회 (페이지네이션을 위해)
   const total = await prisma.persona.count({ where });
 
-  return { personas, total };
+  // 5. 프론트엔드에서 기대하는 형식으로 변환
+  const formattedPersonas = await Promise.all(personas.map(async (persona) => {
+    // 현재 사용자의 좋아요 상태 확인
+    let liked = false;
+    if (currentUserId) {
+      const chatRoom = await prisma.chatRoom.findFirst({
+        where: {
+          clerkId: currentUserId,
+          characterId: persona.id,
+          likes: true,
+        },
+      });
+      liked = !!chatRoom;
+    }
+
+    return {
+      character_id: persona.id,
+      name: persona.name,
+      image_url: persona.imageUrl,
+      introduction: persona.introduction,
+      uses_count: persona.usesCount,
+      likes: persona.likesCount,
+      is_public: persona.isPublic,
+      liked: liked,
+    };
+  }));
+
+  return { personas: formattedPersonas, total };
 };
 
 /**
@@ -347,6 +375,97 @@ const deletePersona = async (personaId, userId) => {
   return deleted;
 };
 
+/**
+ * 페르소나 좋아요 토글
+ * @param {number} personaId - 페르소나 ID
+ * @param {string} userId - 사용자 Clerk ID
+ * @returns {Promise<object>} { isLiked, likesCount }
+ */
+const toggleLike = async (personaId, userId) => {
+  // 1. 페르소나 존재 확인
+  const persona = await prisma.persona.findUnique({
+    where: { id: personaId, isDeleted: false },
+  });
+  
+  if (!persona) {
+    throw new Error('존재하지 않는 페르소나입니다.');
+  }
+
+  // 2. 기존 ChatRoom 확인 또는 생성
+  let chatRoom = await prisma.chatRoom.findFirst({
+    where: {
+      clerkId: userId,
+      characterId: personaId,
+    },
+  });
+
+  if (!chatRoom) {
+    // ChatRoom이 없으면 생성
+    chatRoom = await prisma.chatRoom.create({
+      data: {
+        clerkId: userId,
+        characterId: personaId,
+        likes: true,
+        friendship: 0,
+      },
+    });
+  } else {
+    // ChatRoom이 있으면 좋아요 상태 토글
+    chatRoom = await prisma.chatRoom.update({
+      where: { id: chatRoom.id },
+      data: { likes: !chatRoom.likes },
+    });
+  }
+
+  // 3. 페르소나의 총 좋아요 수 업데이트
+  const totalLikes = await prisma.chatRoom.count({
+    where: {
+      characterId: personaId,
+      likes: true,
+    },
+  });
+
+  await prisma.persona.update({
+    where: { id: personaId },
+    data: { likesCount: totalLikes },
+  });
+
+  return {
+    isLiked: chatRoom.likes,
+    likesCount: totalLikes,
+  };
+};
+
+/**
+ * 페르소나 조회수 증가
+ * @param {number} personaId - 페르소나 ID
+ * @returns {Promise<object>} { viewCount }
+ */
+const incrementViewCount = async (personaId) => {
+  // 1. 페르소나 존재 확인
+  const persona = await prisma.persona.findUnique({
+    where: { id: personaId, isDeleted: false },
+  });
+  
+  if (!persona) {
+    throw new Error('존재하지 않는 페르소나입니다.');
+  }
+
+  // 2. 조회수 증가
+  const updated = await prisma.persona.update({
+    where: { id: personaId },
+    data: {
+      usesCount: {
+        increment: 1,
+      },
+    },
+  });
+
+  return {
+    viewCount: updated.usesCount,
+  };
+};
+
 const personaService = {
   deletePersona,
   updatePersona,
@@ -355,6 +474,8 @@ const personaService = {
   getPersonas,
   createPersonaWithAI,
   createPersona,
+  toggleLike,
+  incrementViewCount,
 };
 
 export default personaService;

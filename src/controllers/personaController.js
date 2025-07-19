@@ -59,6 +59,7 @@ export const getPersonaList = async (req, res, next) => {
     const options = {
       keyword: req.query.keyword,
       sort: req.query.sort,
+      currentUserId: req.auth ? req.auth.userId : null, // 현재 사용자 ID 추가
     };
 
     // 2. 서비스 호출: 실제 조회, 필터링, 정렬은 서비스가 알아서 처리
@@ -186,6 +187,53 @@ export const deletePersona = async (req, res, next) => {
   }
 };
 
+/**
+ * [POST] 페르소나 좋아요 토글
+ */
+export const toggleLike = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const personaId = parseInt(req.params.character_id, 10);
+    
+    const result = await PersonaService.toggleLike(personaId, userId);
+    
+    res.status(200).json({
+      message: result.isLiked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.',
+      data: {
+        isLiked: result.isLiked,
+        likesCount: result.likesCount
+      }
+    });
+  } catch (error) {
+    if (error.message.includes('존재하지 않는 페르소나입니다')) {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
+ * [POST] 페르소나 조회수 증가
+ */
+export const incrementViewCount = async (req, res, next) => {
+  try {
+    const personaId = parseInt(req.params.character_id, 10);
+    
+    const result = await PersonaService.incrementViewCount(personaId);
+    
+    res.status(200).json({
+      data: {
+        viewCount: result.viewCount
+      }
+    });
+  } catch (error) {
+    if (error.message.includes('존재하지 않는 페르소나입니다')) {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+
 const personaController = {
   createCustomPersona,
   createAiPersona,
@@ -195,6 +243,8 @@ const personaController = {
   getMyPersonaDetails,
   updatePersona,
   deletePersona,
+  toggleLike,
+  incrementViewCount,
 };
 
 export default personaController;
