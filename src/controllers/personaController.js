@@ -12,9 +12,9 @@
  */
 
 import PersonaService from '../services/personaService.js';
-import { sendSuccess, sendError, sendNotFound, sendBadRequest } from '../utils/responseHandler.js';
-import { logUserActivity, logError } from '../utils/logger.js';
-import { asyncHandler } from '../middlewares/errorHandler.js';
+import responseHandler from '../utils/responseHandler.js';
+import logger from '../utils/logger.js';
+import errorHandler from '../middlewares/errorHandler.js';
 
 /**
  * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
@@ -23,7 +23,7 @@ import { asyncHandler } from '../middlewares/errorHandler.js';
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const createCustomPersona = asyncHandler(async (req, res) => {
+const createCustomPersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   
   // 이미지 업로드 처리
@@ -42,12 +42,12 @@ export const createCustomPersona = asyncHandler(async (req, res) => {
   const newPersona = await PersonaService.createPersona(personaData, userId);
 
   // 사용자 활동 로깅
-  logUserActivity('CREATE_PERSONA', userId, {
+  logger.logUserActivity('CREATE_PERSONA', userId, {
     personaId: newPersona.character_id,
     personaName: newPersona.name
   });
 
-  return sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
+  return responseHandler.sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
 });
 
 /**
@@ -57,7 +57,7 @@ export const createCustomPersona = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const createAiPersona = asyncHandler(async (req, res) => {
+const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   
   // 이미지 업로드 처리
@@ -76,12 +76,12 @@ export const createAiPersona = asyncHandler(async (req, res) => {
   const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
 
   // 사용자 활동 로깅
-  logUserActivity('CREATE_AI_PERSONA', userId, {
+  logger.logUserActivity('CREATE_AI_PERSONA', userId, {
     personaId: newPersona.character_id,
     personaName: newPersona.name
   });
 
-  return sendSuccess(res, 201, 'AI를 통해 페르소나를 성공적으로 생성했습니다.', newPersona);
+  return responseHandler.sendSuccess(res, 201, 'AI를 통해 페르소나를 성공적으로 생성했습니다.', newPersona);
 });
 
 /**
@@ -91,7 +91,7 @@ export const createAiPersona = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const getPersonaList = asyncHandler(async (req, res) => {
+const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   // 요청의 쿼리 파라미터를 서비스에 전달할 옵션 객체로 만듦
   const options = {
     keyword: req.query.keyword,
@@ -102,7 +102,7 @@ export const getPersonaList = asyncHandler(async (req, res) => {
   // 서비스 호출
   const { personas, total } = await PersonaService.getPersonas(options);
 
-  return sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
+  return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
     total_elements: total
   });
 });
@@ -114,7 +114,7 @@ export const getPersonaList = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const getCommunityPersonaDetails = asyncHandler(async (req, res) => {
+const getCommunityPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.character_id, 10);
   const currentUserId = req.auth ? req.auth.userId : null;
 
@@ -124,10 +124,10 @@ export const getCommunityPersonaDetails = asyncHandler(async (req, res) => {
   });
 
   if (!persona) {
-    return sendNotFound(res, '해당 페르소나를 찾을 수 없습니다.');
+    return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없습니다.');
   }
 
-  return sendSuccess(res, 200, '페르소나 정보를 조회했습니다.', persona);
+  return responseHandler.sendSuccess(res, 200, '페르소나 정보를 조회했습니다.', persona);
 });
 
 /**
@@ -137,13 +137,13 @@ export const getCommunityPersonaDetails = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const getMyPersonaList = asyncHandler(async (req, res) => {
+const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const { type } = req.query;
 
   const personas = await PersonaService.getMyPersonas(userId, type);
 
-  return sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
+  return responseHandler.sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
     total_elements: personas.length
   });
 });
@@ -155,7 +155,7 @@ export const getMyPersonaList = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const getMyPersonaDetails = asyncHandler(async (req, res) => {
+const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.character_id, 10);
   const { userId } = req.auth;
 
@@ -166,10 +166,10 @@ export const getMyPersonaDetails = asyncHandler(async (req, res) => {
   });
 
   if (!persona) {
-    return sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
+    return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
   }
 
-  return sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
+  return responseHandler.sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
 });
 
 /**
@@ -179,7 +179,7 @@ export const getMyPersonaDetails = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const updatePersona = asyncHandler(async (req, res) => {
+const updatePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.character_id, 10);
   const { introduction, personality, tone, tag } = req.body;
@@ -188,12 +188,12 @@ export const updatePersona = asyncHandler(async (req, res) => {
   const updated = await PersonaService.updatePersona(personaId, userId, updateData);
 
   // 사용자 활동 로깅
-  logUserActivity('UPDATE_PERSONA', userId, {
+  logger.logUserActivity('UPDATE_PERSONA', userId, {
     personaId,
     updateFields: Object.keys(updateData)
   });
 
-  return sendSuccess(res, 200, '페르소나가 성공적으로 수정되었습니다.', updated);
+  return responseHandler.sendSuccess(res, 200, '페르소나가 성공적으로 수정되었습니다.', updated);
 });
 
 /**
@@ -203,18 +203,18 @@ export const updatePersona = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const deletePersona = asyncHandler(async (req, res) => {
+const deletePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.character_id, 10);
   
   await PersonaService.deletePersona(personaId, userId);
 
   // 사용자 활동 로깅
-  logUserActivity('DELETE_PERSONA', userId, {
+  logger.logUserActivity('DELETE_PERSONA', userId, {
     personaId
   });
 
-  return sendSuccess(res, 200, '페르소나가 성공적으로 삭제되었습니다.');
+  return responseHandler.sendSuccess(res, 200, '페르소나가 성공적으로 삭제되었습니다.');
 });
 
 /**
@@ -224,19 +224,19 @@ export const deletePersona = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const toggleLike = asyncHandler(async (req, res) => {
+const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.character_id, 10);
   
   const result = await PersonaService.toggleLike(personaId, userId);
 
   // 사용자 활동 로깅
-  logUserActivity('TOGGLE_LIKE', userId, {
+  logger.logUserActivity('TOGGLE_LIKE', userId, {
     personaId,
     action: result.liked ? 'LIKE' : 'UNLIKE'
   });
 
-  return sendSuccess(res, 200, result.liked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.', result);
+  return responseHandler.sendSuccess(res, 200, result.liked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.', result);
 });
 
 /**
@@ -246,10 +246,23 @@ export const toggleLike = asyncHandler(async (req, res) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const incrementViewCount = asyncHandler(async (req, res) => {
+const incrementViewCount = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.character_id, 10);
   
   await PersonaService.incrementViewCount(personaId);
 
-  return sendSuccess(res, 200, '조회수가 증가되었습니다.');
+  return responseHandler.sendSuccess(res, 200, '조회수가 증가되었습니다.');
 });
+
+export default {
+  createCustomPersona,
+  createAiPersona,
+  getPersonaList,
+  getCommunityPersonaDetails,
+  getMyPersonaList,
+  getMyPersonaDetails,
+  updatePersona,
+  deletePersona,
+  toggleLike,
+  incrementViewCount
+};

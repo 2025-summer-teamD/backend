@@ -11,8 +11,8 @@
  */
 
 import { ClerkExpressWithAuth } from '@clerk/clerk-sdk-node';
-import { sendUnauthorized } from '../utils/responseHandler.js';
-import { logUserActivity } from '../utils/logger.js';
+import responseHandler from '../utils/responseHandler.js';
+import logger from '../utils/logger.js';
 
 // Clerk 인증 미들웨어를 생성합니다.
 // 이 미들웨어는 토큰을 검증하고 성공 시 req.auth 객체를 채웁니다.
@@ -27,16 +27,16 @@ const clerkAuthMiddleware = ClerkExpressWithAuth();
  */
 const requireAuth = (req, res, next) => {
   if (!req.auth) {
-    logUserActivity('AUTH_FAILED', null, {
+    logger.logUserActivity('AUTH_FAILED', null, {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
       url: req.originalUrl
     });
-    return sendUnauthorized(res, '인증이 필요합니다.');
+    return responseHandler.sendUnauthorized(res, '인증이 필요합니다.');
   }
   
   // 인증 성공 로깅
-  logUserActivity('AUTH_SUCCESS', req.auth.userId, {
+  logger.logUserActivity('AUTH_SUCCESS', req.auth.userId, {
     ip: req.ip,
     url: req.originalUrl
   });
@@ -66,21 +66,21 @@ const optionalAuth = (req, res, next) => {
  */
 const requireAdmin = (req, res, next) => {
   if (!req.auth) {
-    return sendUnauthorized(res, '인증이 필요합니다.');
+    return responseHandler.sendUnauthorized(res, '인증이 필요합니다.');
   }
   
   // 관리자 권한 확인 (예시 - 실제 구현에 맞게 수정 필요)
   const isAdmin = req.auth.userId && req.auth.userId.includes('admin');
   
   if (!isAdmin) {
-    logUserActivity('ADMIN_ACCESS_DENIED', req.auth.userId, {
+    logger.logUserActivity('ADMIN_ACCESS_DENIED', req.auth.userId, {
       ip: req.ip,
       url: req.originalUrl
     });
-    return sendUnauthorized(res, '관리자 권한이 필요합니다.');
+    return responseHandler.sendUnauthorized(res, '관리자 권한이 필요합니다.');
   }
   
-  logUserActivity('ADMIN_ACCESS', req.auth.userId, {
+  logger.logUserActivity('ADMIN_ACCESS', req.auth.userId, {
     ip: req.ip,
     url: req.originalUrl
   });
@@ -88,7 +88,7 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-export {
+export default {
   clerkAuthMiddleware,
   requireAuth,
   optionalAuth,

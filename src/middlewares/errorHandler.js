@@ -11,7 +11,7 @@
  * - 보안을 위해 민감한 에러 정보 숨김
  */
 
-import { sendInternalError } from '../utils/responseHandler.js';
+import responseHandler from '../utils/responseHandler.js';
 
 /**
  * 전역 에러 핸들러
@@ -20,7 +20,7 @@ import { sendInternalError } from '../utils/responseHandler.js';
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, next) => {
   // 에러 로깅
   console.error('Error:', {
     message: err.message,
@@ -98,7 +98,7 @@ export const errorHandler = (err, req, res, next) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const notFoundHandler = (req, res, next) => {
+const notFoundHandler = (req, res, next) => {
   const error = new Error(`경로를 찾을 수 없습니다: ${req.originalUrl}`);
   error.status = 404;
   next(error);
@@ -109,8 +109,14 @@ export const notFoundHandler = (req, res, next) => {
  * @param {function} fn - 비동기 함수
  * @returns {function} Express 미들웨어 함수
  */
-export const asyncHandler = (fn) => {
+const asyncHandler = (fn) => {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
+};
+
+export default {
+  errorHandler,
+  notFoundHandler,
+  asyncHandler
 };
