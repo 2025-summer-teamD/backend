@@ -135,10 +135,7 @@ ${chatHistory}
 ${personaInfo.name}:`;
 
   // 2. Gemini AI를 호출하여 응답 생성
-  const aiApiResponse = await generateText(prompt.trim());
-  const aiResponseText =
-    aiApiResponse.predictions[0]?.content ||
-    '죄송해요, 지금은 답변을 드릴 수 없어요.';
+  const aiResponseText = await generateText(prompt.trim()) || '죄송해요, 지금은 답변을 드릴 수 없어요.';
 
   // 3. 생성된 AI 응답 텍스트 반환
   return aiResponseText;
