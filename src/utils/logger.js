@@ -63,7 +63,7 @@ const log = (level, message, data = {}) => {
  * @param {Error} error - 에러 객체
  * @param {object} context - 추가 컨텍스트
  */
-export const logError = (message, error = null, context = {}) => {
+const logError = (message, error = null, context = {}) => {
   log('ERROR', message, {
     error: error?.message,
     stack: error?.stack,
@@ -76,7 +76,7 @@ export const logError = (message, error = null, context = {}) => {
  * @param {string} message - 경고 메시지
  * @param {object} data - 추가 데이터
  */
-export const logWarn = (message, data = {}) => {
+const logWarn = (message, data = {}) => {
   log('WARN', message, data);
 };
 
@@ -85,7 +85,7 @@ export const logWarn = (message, data = {}) => {
  * @param {string} message - 정보 메시지
  * @param {object} data - 추가 데이터
  */
-export const logInfo = (message, data = {}) => {
+const logInfo = (message, data = {}) => {
   log('INFO', message, data);
 };
 
@@ -94,7 +94,7 @@ export const logInfo = (message, data = {}) => {
  * @param {string} message - 디버그 메시지
  * @param {object} data - 추가 데이터
  */
-export const logDebug = (message, data = {}) => {
+const logDebug = (message, data = {}) => {
   log('DEBUG', message, data);
 };
 
@@ -104,7 +104,7 @@ export const logDebug = (message, data = {}) => {
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-export const logRequest = (req, res, next) => {
+const logRequest = (req, res, next) => {
   const startTime = Date.now();
   
   // 응답 완료 후 로깅
@@ -132,7 +132,7 @@ export const logRequest = (req, res, next) => {
  * @param {object} data - 쿼리 데이터
  * @param {number} duration - 실행 시간 (ms)
  */
-export const logDatabaseQuery = (operation, table, data = {}, duration = 0) => {
+const logDatabaseQuery = (operation, table, data = {}, duration = 0) => {
   logDebug('Database Query', {
     operation,
     table,
@@ -147,7 +147,7 @@ export const logDatabaseQuery = (operation, table, data = {}, duration = 0) => {
  * @param {number} duration - 실행 시간 (ms)
  * @param {object} context - 추가 컨텍스트
  */
-export const logPerformance = (operation, duration, context = {}) => {
+const logPerformance = (operation, duration, context = {}) => {
   const level = duration > 1000 ? 'WARN' : 'DEBUG';
   log(level, 'Performance', {
     operation,
@@ -162,10 +162,21 @@ export const logPerformance = (operation, duration, context = {}) => {
  * @param {string} userId - 사용자 ID
  * @param {object} data - 추가 데이터
  */
-export const logUserActivity = (action, userId, data = {}) => {
+const logUserActivity = (action, userId, data = {}) => {
   logInfo('User Activity', {
     action,
     userId,
     ...data
   });
+};
+
+export default {
+  logError,
+  logWarn,
+  logInfo,
+  logDebug,
+  logRequest,
+  logDatabaseQuery,
+  logPerformance,
+  logUserActivity
 }; 

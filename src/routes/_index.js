@@ -15,6 +15,7 @@ const router = express.Router();
 
 // 페르소나 관련 라우트
 router.use('/personas', personaRoute);
+router.use('/characters', personaRoute);
 
 // 채팅 관련 라우트
 router.use('/chat', chatRoutes);
@@ -24,6 +25,7 @@ router.use('/uploads', uploadRoute);
 
 // 사용자 관련 라우트
 router.use('/users', userRoute);
+router.use('/my', userRoute);
 
 // 커뮤니티 관련 라우트
 router.use('/communities', communitiRoutes);

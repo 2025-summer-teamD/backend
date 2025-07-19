@@ -29,4 +29,6 @@ async function generateVideo(prompt) {
   }
 }
 
-export { generateVideo };
+export default {
+  generateVideo
+};
