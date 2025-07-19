@@ -44,13 +44,38 @@ export const validateStringLength = (value, minLength = 1, maxLength = 1000) => 
 };
 
 /**
- * 이메일 형식 검증
+ * 이메일 형식 검증 (ReDoS 방지)
  * @param {string} email - 검증할 이메일
  * @returns {boolean} 검증 결과
  */
 export const validateEmail = (email) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  // 기본적인 형식 검증 (ReDoS 방지를 위해 단순화)
+  if (typeof email !== 'string' || email.length > 254) {
+    return false;
+  }
+  
+  // @ 기호가 정확히 하나만 있는지 확인
+  const atIndex = email.indexOf('@');
+  if (atIndex === -1 || atIndex === 0 || atIndex === email.length - 1) {
+    return false;
+  }
+  
+  // @ 앞뒤로 문자가 있는지 확인
+  const localPart = email.substring(0, atIndex);
+  const domainPart = email.substring(atIndex + 1);
+  
+  if (localPart.length === 0 || domainPart.length === 0) {
+    return false;
+  }
+  
+  // 도메인에 점이 있는지 확인
+  if (domainPart.indexOf('.') === -1) {
+    return false;
+  }
+  
+  // 간단한 문자 검증 (특수문자 제한)
+  const validChars = /^[a-zA-Z0-9._%+-]+$/;
+  return validChars.test(localPart) && validChars.test(domainPart);
 };
 
 /**
