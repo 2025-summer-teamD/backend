@@ -15,6 +15,12 @@ export const createCustomPersona = async (req, res, next) => {
     // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
     const { userId } = req.auth;
 
+    console.log('createCustomPersona - 받은 데이터:', {
+      userId,
+      body: req.body,
+      creator_name: req.body.creator_name
+    });
+
     // 2. 이미지 업로드 처리
     let imageUrl = req.body.image_url || '';
     
@@ -181,9 +187,17 @@ export const getMyPersonaDetails = async (req, res, next) => {
 export const updatePersona = async (req, res, next) => {
   try {
     const { userId } = req.auth;
-    const personaId = parseInt(req.params.id, 10);
+    const personaId = parseInt(req.params.character_id, 10);
     const { introduction, personality, tone, tag } = req.body;
     const updateData = { introduction, personality, tone, tag };
+    
+    console.log('updatePersona 컨트롤러 호출:', {
+      userId,
+      personaId,
+      reqBody: req.body,
+      updateData
+    });
+    
     const updated = await PersonaService.updatePersona(personaId, userId, updateData);
     res.status(200).json({ message: '페르소나가 성공적으로 수정되었습니다.', data: updated });
   } catch (error) {
@@ -201,7 +215,7 @@ export const updatePersona = async (req, res, next) => {
 export const deletePersona = async (req, res, next) => {
   try {
     const { userId } = req.auth;
-    const personaId = parseInt(req.params.id, 10);
+    const personaId = parseInt(req.params.character_id, 10);
     const deleted = await PersonaService.deletePersona(personaId, userId);
     res.status(200).json({ message: '페르소나가 성공적으로 삭제되었습니다.', data: deleted });
   } catch (error) {
