@@ -2,6 +2,7 @@ import express from 'express';
 import controllers from '../controllers/_index.js';
 import middlewares from '../middlewares/_index.js';
 import ensureUserInDB from '../middlewares/ensureUserInDB.js';
+import upload from '../middlewares/uploadMiddleware.js';
 
 const { personaController } = controllers;
 const { personaValidator, authMiddleware } = middlewares;
@@ -109,8 +110,9 @@ router.post(
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,             // 1. 로그인 했는지 확인
   ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
-  validateCreatePersona,   // 3. 요청 데이터가 유효한지 확인
-  createCustomPersona      // 4. 모든 검사를 통과하면 컨트롤러 실행
+  upload.single('image'), // 3. 이미지 업로드 처리
+  validateCreatePersona,   // 4. 요청 데이터가 유효한지 확인
+  createCustomPersona      // 5. 모든 검사를 통과하면 컨트롤러 실행
 );
 
 
@@ -185,8 +187,9 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,         // 1. 로그인 필수
   ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
-  validateAiCreatePersona, // 3. 요청 데이터 유효성 검사
-  createAiPersona // 4. 컨트롤러 실행
+  upload.single('image'), // 3. 이미지 업로드 처리
+  validateAiCreatePersona, // 4. 요청 데이터 유효성 검사
+  createAiPersona // 5. 컨트롤러 실행
 );
 
 /**
@@ -275,63 +278,6 @@ router.post(
   incrementViewCount
 );
 
-/**
- * @swagger
- * /characters/upload-image:
- *   post:
- *     summary: 이미지 업로드
- *     description: 캐릭터 생성 시 사용할 이미지를 업로드합니다.
- *     tags:
- *       - upload
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - image
- *             properties:
- *               image:
- *                 type: string
- *                 format: binary
- *                 description: 업로드할 이미지 파일
- *     responses:
- *       200:
- *         description: 업로드 성공
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: 이미지가 성공적으로 업로드되었습니다.
- *                 imageUrl:
- *                   type: string
- *                   example: https://example.com/uploads/image.jpg
- */
-router.post(
-  '/upload-image',
-  clerkAuthMiddleware,
-  requireAuth,
-  ensureUserInDB,
-  (req, res) => {
-    try {
-      // 임시로 고정된 이미지 URL 반환 (실제로는 파일 업로드 처리)
-      const imageUrl = 'https://via.placeholder.com/300x400/4F46E5/FFFFFF?text=Character+Image';
-      
-      res.status(200).json({
-        message: '이미지가 성공적으로 업로드되었습니다.',
-        imageUrl: imageUrl
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: '이미지 업로드에 실패했습니다.',
-        error: error.message
-      });
-    }
-  }
-);
+
 
 export default router;
