@@ -152,7 +152,7 @@ const streamChatByRoom = async (req, res, next) => {
  */
 const getMyChats = async (req, res, next) => {
   try {
-    const userId = req.clerkUserId; // Clerk 인증에서 받은 사용자 ID
+    const userId = req.auth.userId; // Clerk 인증에서 받은 사용자 ID
     const pagination = req.pagination; // 페이지네이션 미들웨어에서 준비된 값
 
     const result = await chatService.getMyChatList(userId, pagination);

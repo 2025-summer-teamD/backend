@@ -37,3 +37,4 @@ docker-compose.pid
 # Google Cloud credentials
 /google-credentials/
 
+uploads/
