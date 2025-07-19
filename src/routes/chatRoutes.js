@@ -59,6 +59,62 @@ const router = express.Router();
  *       '500':
  *         description: 서버 오류
  */
+
+//ai 채팅 스트리밍 
 router.post('/rooms/:room_id', chatController.streamChatByRoom);
+
+
+
+
+//채팅방 입장
+
+/**
+ * @swagger
+ * /chat/rooms:
+ *   get:
+ *     summary: 대화한 캐릭터의 채팅방 입장
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: character_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 캐릭터 ID
+ *     responses:
+ *       200:
+ *         description: 입장 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 room_id:
+ *                   type: string
+ *                   example: "chat-7891"
+ *                 user_id:
+ *                   type: integer
+ *                   example: 15
+ *                 persona_id:
+ *                   type: integer
+ *                   example: 101
+ *                 created_at:
+ *                   type: string
+ *                   example: "2025-07-01T14:10:00Z"
+ *                 count:
+ *                   type: integer
+ *                   example: 47
+ *                 friendship:
+ *                   type: integer
+ *                   example: 82
+ *                 exp:
+ *                   type: integer
+ *                   example: 430
+ *       401:
+ *         description: 입장 실패
+ */
+
+router.get('/rooms', chatController.enterChatRoom);
 
 export default router; 

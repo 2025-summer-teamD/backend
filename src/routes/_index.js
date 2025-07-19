@@ -1,5 +1,4 @@
 import express from 'express';
-// import chatRouter from './chat.js';
 import communitiRouter from './communitiRoutes.js';
 import personaRouter from './personaRoute.js';
 import userRouter from './userRoute.js';
