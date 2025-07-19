@@ -22,6 +22,10 @@ enum ChatLogSpeaker {
 
 model User {
   clerkId   String   @id
+  name      String?  @db.VarChar(100)
+  email     String?  @db.VarChar(255)
+  firstName String?  @db.VarChar(100)
+  lastName  String?  @db.VarChar(100)
   createdAt DateTime @default(now())
   updatedAt DateTime?
   isDeleted Boolean  @default(false)
@@ -35,6 +39,7 @@ model Persona {
   id           Int      @id @default(autoincrement())
   clerkId     String
   user         User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+  creatorName  String?  @db.VarChar(100)  // 크리에이터 이름
   name         String   @db.VarChar(100)
   imageUrl    String   @db.VarChar(1024)
   isPublic    Boolean  @default(true)

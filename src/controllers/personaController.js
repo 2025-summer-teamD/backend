@@ -15,11 +15,24 @@ export const createCustomPersona = async (req, res, next) => {
     // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
     const { userId } = req.auth;
 
-    // 2. 서비스 호출: 실제 생성 작업은 서비스에 위임
-    //    요청 body 전체를 서비스에 전달
-    const newPersona = await PersonaService.createPersona(req.body, userId);
+    // 2. 이미지 업로드 처리
+    let imageUrl = req.body.image_url || '';
+    
+    // 만약 이미지 파일이 업로드되었다면
+    if (req.file) {
+      imageUrl = `/api/uploads/${req.file.filename}`;
+    }
 
-    // 3. 성공 응답 생성
+    // 3. 페르소나 데이터 준비 (이미지 URL 포함)
+    const personaData = {
+      ...req.body,
+      image_url: imageUrl
+    };
+
+    // 4. 서비스 호출: 실제 생성 작업은 서비스에 위임
+    const newPersona = await PersonaService.createPersona(personaData, userId);
+
+    // 5. 성공 응답 생성
     res.status(201).json({
       message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
@@ -36,7 +49,20 @@ export const createCustomPersona = async (req, res, next) => {
 export const createAiPersona = async (req, res, next) => {
   try {
     const { userId } = req.auth;
-    const initialData = req.body;
+    
+    // 이미지 업로드 처리
+    let imageUrl = req.body.image_url || '';
+    
+    // 만약 이미지 파일이 업로드되었다면
+    if (req.file) {
+      imageUrl = `/api/uploads/${req.file.filename}`;
+    }
+
+    // 페르소나 데이터 준비 (이미지 URL 포함)
+    const initialData = {
+      ...req.body,
+      image_url: imageUrl
+    };
 
     // 서비스 호출
     const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
@@ -59,6 +85,7 @@ export const getPersonaList = async (req, res, next) => {
     const options = {
       keyword: req.query.keyword,
       sort: req.query.sort,
+      currentUserId: req.auth ? req.auth.userId : null, // 현재 사용자 ID 추가
     };
 
     // 2. 서비스 호출: 실제 조회, 필터링, 정렬은 서비스가 알아서 처리
@@ -186,6 +213,57 @@ export const deletePersona = async (req, res, next) => {
   }
 };
 
+/**
+ * [POST] 페르소나 좋아요 토글
+ */
+export const toggleLike = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const personaId = parseInt(req.params.character_id, 10);
+    
+    const result = await PersonaService.toggleLike(personaId, userId);
+    
+    res.status(200).json({
+      message: result.isLiked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.',
+      data: {
+        isLiked: result.isLiked,
+        likesCount: result.likesCount
+      }
+    });
+  } catch (error) {
+    if (error.message.includes('존재하지 않는 페르소나입니다')) {
+      return res.status(404).json({ message: error.message });
+    }
+    if (error.message.includes('자신이 만든 페르소나는 좋아요할 수 없습니다')) {
+      return res.status(400).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
+ * [POST] 페르소나 조회수 증가
+ */
+export const incrementViewCount = async (req, res, next) => {
+  try {
+    const personaId = parseInt(req.params.character_id, 10);
+    
+    const result = await PersonaService.incrementViewCount(personaId);
+    
+    res.status(200).json({
+      message: '조회수가 증가되었습니다.',
+      data: {
+        viewCount: result.viewCount
+      }
+    });
+  } catch (error) {
+    if (error.message.includes('존재하지 않는 페르소나입니다')) {
+      return res.status(404).json({ message: error.message });
+    }
+    next(error);
+  }
+};
+
 const personaController = {
   createCustomPersona,
   createAiPersona,
@@ -195,6 +273,8 @@ const personaController = {
   getMyPersonaDetails,
   updatePersona,
   deletePersona,
+  toggleLike,
+  incrementViewCount,
 };
 
 export default personaController;

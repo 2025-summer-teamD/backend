@@ -7,14 +7,20 @@ const validateCreatePersona = (req, res, next) => {
     return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, image_url, is_public, prompt, description)' });
   }
   
-  // URL format validation
-  try {
-    const parsed = new URL(image_url);
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error('Invalid protocol');
+  // URL format validation - 상대 경로도 허용
+  if (image_url.startsWith('/')) {
+    // 상대 경로는 허용 (예: /api/uploads/default-character.svg)
+    // 추가 검증 없이 통과
+  } else {
+    // 절대 URL인 경우에만 URL 형식 검증
+    try {
+      const parsed = new URL(image_url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error('Invalid protocol');
+      }
+    } catch (err) {
+      return res.status(400).json({ error: 'image_url은 유효한 URL 형식이어야 합니다.' });
     }
-  } catch (err) {
-    return res.status(400).json({ error: 'image_url은 유효한 URL 형식이어야 합니다.' });
   }
 
   // 2. prompt 객체 내부 타입 검사
