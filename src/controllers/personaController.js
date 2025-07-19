@@ -1,294 +1,255 @@
+/**
+ * 페르소나 컨트롤러
+ * 
+ * 사용 위치:
+ * - personaRoute.js에서 라우터 연결
+ * 
+ * 기능:
+ * - 페르소나 CRUD 작업 처리
+ * - 사용자 인증 및 권한 검증
+ * - 파일 업로드 처리
+ * - 표준화된 응답 생성
+ */
+
 import PersonaService from '../services/personaService.js';
-
-
-
-// INSERT INTO users ("clerkId", "createdAt", "isDeleted")
-//  VALUES ('dvb_2zs0L9gT06uGpbdHSqTl5UgrL0p', NOW(), false) ON CONFLICT ("clerkId") DO NOTHING;
-// 이거 넣어야 테스트 가능
-
+import { sendSuccess, sendError, sendNotFound, sendBadRequest } from '../utils/responseHandler.js';
+import { logUserActivity, logError } from '../utils/logger.js';
+import { asyncHandler } from '../middlewares/errorHandler.js';
 
 /**
  * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const createCustomPersona = async (req, res, next) => {
-  try {
-    // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
-    const { userId } = req.auth;
-
-    console.log('createCustomPersona - 받은 데이터:', {
-      userId,
-      body: req.body,
-      creator_name: req.body.creator_name
-    });
-
-    // 2. 이미지 업로드 처리
-    let imageUrl = req.body.image_url || '';
-    
-    // 만약 이미지 파일이 업로드되었다면
-    if (req.file) {
-      imageUrl = `/api/uploads/${req.file.filename}`;
-    }
-
-    // 3. 페르소나 데이터 준비 (이미지 URL 포함)
-    const personaData = {
-      ...req.body,
-      image_url: imageUrl
-    };
-
-    // 4. 서비스 호출: 실제 생성 작업은 서비스에 위임
-    const newPersona = await PersonaService.createPersona(personaData, userId);
-
-    // 5. 성공 응답 생성
-    res.status(201).json({
-      message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
-      data: newPersona,
-    });
-  } catch (error) {
-    // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
-    next(error);
+export const createCustomPersona = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  
+  // 이미지 업로드 처리
+  let imageUrl = req.body.image_url || '';
+  if (req.file) {
+    imageUrl = `/api/uploads/${req.file.filename}`;
   }
-};
+
+  // 페르소나 데이터 준비
+  const personaData = {
+    ...req.body,
+    image_url: imageUrl
+  };
+
+  // 서비스 호출
+  const newPersona = await PersonaService.createPersona(personaData, userId);
+
+  // 사용자 활동 로깅
+  logUserActivity('CREATE_PERSONA', userId, {
+    personaId: newPersona.character_id,
+    personaName: newPersona.name
+  });
+
+  return sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
+});
 
 /**
  * AI를 사용하여 페르소나를 생성하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const createAiPersona = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    
-    // 이미지 업로드 처리
-    let imageUrl = req.body.image_url || '';
-    
-    // 만약 이미지 파일이 업로드되었다면
-    if (req.file) {
-      imageUrl = `/api/uploads/${req.file.filename}`;
-    }
-
-    // 페르소나 데이터 준비 (이미지 URL 포함)
-    const initialData = {
-      ...req.body,
-      image_url: imageUrl
-    };
-
-    // 서비스 호출
-    const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
-
-    res.status(201).json({
-      message: 'AI를 통해 페르소나를 성공적으로 생성했습니다.',
-      data: newPersona,
-    });
-  } catch (error) {
-    next(error);
+export const createAiPersona = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  
+  // 이미지 업로드 처리
+  let imageUrl = req.body.image_url || '';
+  if (req.file) {
+    imageUrl = `/api/uploads/${req.file.filename}`;
   }
-};
+
+  // 페르소나 데이터 준비
+  const initialData = {
+    ...req.body,
+    image_url: imageUrl
+  };
+
+  // 서비스 호출
+  const newPersona = await PersonaService.createPersonaWithAI(initialData, userId);
+
+  // 사용자 활동 로깅
+  logUserActivity('CREATE_AI_PERSONA', userId, {
+    personaId: newPersona.character_id,
+    personaName: newPersona.name
+  });
+
+  return sendSuccess(res, 201, 'AI를 통해 페르소나를 성공적으로 생성했습니다.', newPersona);
+});
 
 /**
  * 커뮤니티 페르소나 목록을 조회하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const getPersonaList = async (req, res, next) => {
-  try {
-    // 1. 요청의 쿼리 파라미터를 서비스에 전달할 옵션 객체로 만듦
-    const options = {
-      keyword: req.query.keyword,
-      sort: req.query.sort,
-      currentUserId: req.auth ? req.auth.userId : null, // 현재 사용자 ID 추가
-    };
+export const getPersonaList = asyncHandler(async (req, res) => {
+  // 요청의 쿼리 파라미터를 서비스에 전달할 옵션 객체로 만듦
+  const options = {
+    keyword: req.query.keyword,
+    sort: req.query.sort,
+    currentUserId: req.auth ? req.auth.userId : null,
+  };
 
-    // 2. 서비스 호출: 실제 조회, 필터링, 정렬은 서비스가 알아서 처리
-    const { personas, total } = await PersonaService.getPersonas(options);
+  // 서비스 호출
+  const { personas, total } = await PersonaService.getPersonas(options);
 
-    // 3. 성공 응답 생성
-    res.status(200).json({
-      data: personas,
-      page_info: {
-        total_elements: total,
-        // TODO: total_pages, page, size 등 추가 가능
-      },
-    });
-  } catch (error) {
-    next(error); // 서비스 에러는 중앙 핸들러로
-  }
-};
+  return sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
+    total_elements: total
+  });
+});
 
 /**
  * [공개] 커뮤니티 페르소나 상세 정보를 조회하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const getCommunityPersonaDetails = async (req, res, next) => {
-  try {
-    const personaId = parseInt(req.params.character_id, 10);
-    // 로그인 여부에 따라 '좋아요' 상태를 보여주기 위해 userId를 선택적으로 넘김
-    const currentUserId = req.auth ? req.auth.userId : null;
+export const getCommunityPersonaDetails = asyncHandler(async (req, res) => {
+  const personaId = parseInt(req.params.character_id, 10);
+  const currentUserId = req.auth ? req.auth.userId : null;
 
-    const persona = await PersonaService.getPersonaDetails({
-      personaId,
-      currentUserId, // 소유권 검증 없이, '좋아요' 상태 계산만 위임
-      // ownerId는 전달하지 않음
-    });
+  const persona = await PersonaService.getPersonaDetails({
+    personaId,
+    currentUserId,
+  });
 
-    if (!persona) {
-      return res.status(404).json({ message: '해당 페르소나를 찾을 수 없습니다.' });
-    }
-    res.status(200).json({ message: '페르소나 정보를 조회했습니다.', data: persona });
-  } catch (error) {
-    next(error);
+  if (!persona) {
+    return sendNotFound(res, '해당 페르소나를 찾을 수 없습니다.');
   }
-};
 
+  return sendSuccess(res, 200, '페르소나 정보를 조회했습니다.', persona);
+});
 
 /**
  * 나의 페르소나 목록(만든 것/좋아요 한 것)을 조회하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const getMyPersonaList = async (req, res, next) => {
-  try {
-    // requireAuth 미들웨어가 userId를 보장
-    const { userId } = req.auth;
-    const { type } = req.query; // validator가 유효성 보장
-    // 서비스 호출: 모든 복잡한 로직은 서비스가 처리
-    const personas = await PersonaService.getMyPersonas(userId, type);
+export const getMyPersonaList = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  const { type } = req.query;
 
-    res.status(200).json({
-      data: personas,
-      page_info: {
-        total_elements: personas.length,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+  const personas = await PersonaService.getMyPersonas(userId, type);
+
+  return sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
+    total_elements: personas.length
+  });
+});
 
 /**
  * [인증 필수] 나의 페르소나 상세 정보를 조회하는 컨트롤러
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const getMyPersonaDetails = async (req, res, next) => {
-  try {
-    const personaId = parseInt(req.params.character_id, 10);
-    const { userId } = req.auth; // requireAuth 미들웨어 덕분에 항상 존재
+export const getMyPersonaDetails = asyncHandler(async (req, res) => {
+  const personaId = parseInt(req.params.character_id, 10);
+  const { userId } = req.auth;
 
-    const persona = await PersonaService.getPersonaDetails({
-      personaId,
-      ownerId: userId,       // ★★★ 소유권 검증을 위해 자신의 ID를 ownerId로 전달
-      currentUserId: userId, // '좋아요' 상태 계산을 위해 자신의 ID를 전달
-    });
+  const persona = await PersonaService.getPersonaDetails({
+    personaId,
+    ownerId: userId,
+    currentUserId: userId,
+  });
 
-    if (!persona) {
-      // 내 것이 아니거나, 존재하지 않는 경우
-      return res.status(404).json({ message: '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.' });
-    }
-    res.status(200).json({ message: '나의 페르소나 정보를 조회했습니다.', data: persona });
-  } catch (error) {
-    next(error);
+  if (!persona) {
+    return sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
   }
-};
+
+  return sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
+});
 
 /**
  * [PATCH] 페르소나 수정 (본인만 가능)
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const updatePersona = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    const personaId = parseInt(req.params.character_id, 10);
-    const { introduction, personality, tone, tag } = req.body;
-    const updateData = { introduction, personality, tone, tag };
-    
-    console.log('updatePersona 컨트롤러 호출:', {
-      userId,
-      personaId,
-      reqBody: req.body,
-      updateData
-    });
-    
-    const updated = await PersonaService.updatePersona(personaId, userId, updateData);
-    res.status(200).json({ message: '페르소나가 성공적으로 수정되었습니다.', data: updated });
-  } catch (error) {
-    // 서비스에서 발생한 에러를 적절한 HTTP 상태 코드로 변환
-    if (error.message.includes('수정 권한이 없거나 존재하지 않는 페르소나입니다')) {
-      return res.status(404).json({ message: error.message });
-    }
-    next(error);
-  }
-};
+export const updatePersona = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  const personaId = parseInt(req.params.character_id, 10);
+  const { introduction, personality, tone, tag } = req.body;
+  const updateData = { introduction, personality, tone, tag };
+  
+  const updated = await PersonaService.updatePersona(personaId, userId, updateData);
+
+  // 사용자 활동 로깅
+  logUserActivity('UPDATE_PERSONA', userId, {
+    personaId,
+    updateFields: Object.keys(updateData)
+  });
+
+  return sendSuccess(res, 200, '페르소나가 성공적으로 수정되었습니다.', updated);
+});
 
 /**
  * [DELETE] 페르소나 소프트 삭제 (본인만 가능)
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const deletePersona = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    const personaId = parseInt(req.params.character_id, 10);
-    const deleted = await PersonaService.deletePersona(personaId, userId);
-    res.status(200).json({ message: '페르소나가 성공적으로 삭제되었습니다.', data: deleted });
-  } catch (error) {
-    // 서비스에서 발생한 에러를 적절한 HTTP 상태 코드로 변환
-    if (error.message.includes('삭제 권한이 없거나 존재하지 않는 페르소나입니다')) {
-      return res.status(404).json({ message: error.message });
-    }
-    next(error);
-  }
-};
+export const deletePersona = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  const personaId = parseInt(req.params.character_id, 10);
+  
+  await PersonaService.deletePersona(personaId, userId);
+
+  // 사용자 활동 로깅
+  logUserActivity('DELETE_PERSONA', userId, {
+    personaId
+  });
+
+  return sendSuccess(res, 200, '페르소나가 성공적으로 삭제되었습니다.');
+});
 
 /**
- * [POST] 페르소나 좋아요 토글
+ * 페르소나 좋아요 토글
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const toggleLike = async (req, res, next) => {
-  try {
-    const { userId } = req.auth;
-    const personaId = parseInt(req.params.character_id, 10);
-    
-    const result = await PersonaService.toggleLike(personaId, userId);
-    
-    res.status(200).json({
-      message: result.isLiked ? '좋아요를 추가했습니다.' : '좋아요를 취소했습니다.',
-      data: {
-        isLiked: result.isLiked,
-        likesCount: result.likesCount
-      }
-    });
-  } catch (error) {
-    if (error.message.includes('존재하지 않는 페르소나입니다')) {
-      return res.status(404).json({ message: error.message });
-    }
-    if (error.message.includes('자신이 만든 페르소나는 좋아요할 수 없습니다')) {
-      return res.status(400).json({ message: error.message });
-    }
-    next(error);
-  }
-};
+export const toggleLike = asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  const personaId = parseInt(req.params.character_id, 10);
+  
+  const result = await PersonaService.toggleLike(personaId, userId);
+
+  // 사용자 활동 로깅
+  logUserActivity('TOGGLE_LIKE', userId, {
+    personaId,
+    action: result.liked ? 'LIKE' : 'UNLIKE'
+  });
+
+  return sendSuccess(res, 200, result.liked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.', result);
+});
 
 /**
- * [POST] 페르소나 조회수 증가
+ * 조회수 증가
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-export const incrementViewCount = async (req, res, next) => {
-  try {
-    const personaId = parseInt(req.params.character_id, 10);
-    
-    const result = await PersonaService.incrementViewCount(personaId);
-    
-    res.status(200).json({
-      message: '조회수가 증가되었습니다.',
-      data: {
-        viewCount: result.viewCount
-      }
-    });
-  } catch (error) {
-    if (error.message.includes('존재하지 않는 페르소나입니다')) {
-      return res.status(404).json({ message: error.message });
-    }
-    next(error);
-  }
-};
+export const incrementViewCount = asyncHandler(async (req, res) => {
+  const personaId = parseInt(req.params.character_id, 10);
+  
+  await PersonaService.incrementViewCount(personaId);
 
-const personaController = {
-  createCustomPersona,
-  createAiPersona,
-  getPersonaList,
-  getCommunityPersonaDetails,
-  getMyPersonaList,
-  getMyPersonaDetails,
-  updatePersona,
-  deletePersona,
-  toggleLike,
-  incrementViewCount,
-};
-
-export default personaController;
+  return sendSuccess(res, 200, '조회수가 증가되었습니다.');
+});

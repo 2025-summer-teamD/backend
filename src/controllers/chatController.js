@@ -1,6 +1,29 @@
+/**
+ * 채팅 컨트롤러
+ * 
+ * 사용 위치:
+ * - chatRoutes.js에서 라우터 연결
+ * 
+ * 기능:
+ * - 채팅방 관리
+ * - AI 채팅 응답 생성
+ * - SSE 스트리밍 처리
+ * - 채팅 기록 저장
+ */
+
 import chatService from '../services/chatService.js';
 import { prisma } from '../config/prisma.js';
+import { sendSuccess, sendError, sendNotFound, sendBadRequest } from '../utils/responseHandler.js';
+import { logUserActivity, logError } from '../utils/logger.js';
+import { asyncHandler } from '../middlewares/errorHandler.js';
 
+/**
+ * 스트리밍 채팅 응답 생성
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
 const streamChatByRoom = async (req, res, next) => {
   try {
     const { room_id } = req.params;
@@ -8,9 +31,7 @@ const streamChatByRoom = async (req, res, next) => {
 
     // 입력 검증
     if (!message || !sender || !timestamp) {
-      return res.status(400).json({ 
-        error: 'message, sender, timestamp 필드가 모두 필요합니다.' 
-      });
+      return sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
     }
 
     // 실제 채팅방 정보를 데이터베이스에서 조회
@@ -42,9 +63,7 @@ const streamChatByRoom = async (req, res, next) => {
     });
 
     if (!chatRoom) {
-      return res.status(404).json({ 
-        error: `채팅방 ID ${room_id}를 찾을 수 없습니다.` 
-      });
+      return sendNotFound(res, `채팅방 ID ${room_id}를 찾을 수 없습니다.`);
     }
 
     const personaInfo = {
@@ -66,9 +85,10 @@ const streamChatByRoom = async (req, res, next) => {
       chatHistory = '아직 대화 기록이 없습니다.';
     }
 
-    console.log(`실제 채팅방 ${room_id} 정보 조회 완료:`, {
+    logUserActivity('CHAT_MESSAGE', sender, {
+      roomId: room_id,
       personaName: personaInfo.name,
-      chatHistoryLength: chatRoom.ChatLogs.length
+      messageLength: message.length
     });
 
     // --- SSE 헤더 설정 ---
@@ -77,19 +97,12 @@ const streamChatByRoom = async (req, res, next) => {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    console.log('SSE 헤더 설정 완료');
-    console.log('AI 응답 생성 시작...');
-
-    // --- AI 응답 생성 (전체 문장을 한번에 받음) ---
-    //실시간 스트리밍 방식 x => ai가 문장을 다 만들어 낸 후 보냄.
-    // generateText 함수가 전체 응답을 생성할 때까지 기다립니다.
+    // --- AI 응답 생성 ---
     const fullResponseText = await chatService.generateAiChatResponse(
-      message,  // POST body에서 받은 message 사용
+      message,
       personaInfo,
       chatHistory
     );
-
-    console.log('AI 응답 생성 완료:', fullResponseText);
 
     // --- 사용자 메시지와 AI 응답을 데이터베이스에 저장 ---
     try {
@@ -114,25 +127,18 @@ const streamChatByRoom = async (req, res, next) => {
           time: new Date()
         }
       });
-
-      console.log('대화 기록 데이터베이스 저장 완료');
     } catch (dbError) {
-      console.error('데이터베이스 저장 실패:', dbError);
+      logError('채팅 기록 저장 실패', dbError, { roomId: room_id });
       // 저장 실패해도 SSE 응답은 계속 진행
     }
 
     // --- 생성된 전체 응답을 SSE로 전송 ---
     res.write(`data: ${JSON.stringify({ content: fullResponseText })}\n\n`);
-    console.log('첫 번째 데이터 전송 완료');
-    
     res.write('data: [DONE]\n\n');
-    console.log('종료 신호 전송 완료');
-    
     res.end();
 
   } catch (error) {
-    // 에러 처리
-    console.error('SSE Controller Error:', error);
+    logError('스트리밍 채팅 에러', error, { roomId: req.params.room_id });
     if (!res.headersSent) {
       next(error);
     } else {
@@ -142,104 +148,134 @@ const streamChatByRoom = async (req, res, next) => {
 
   // 클라이언트 연결 종료 이벤트 처리
   req.on('close', () => {
-    console.log('클라이언트가 연결을 종료했습니다.');
+    logUserActivity('CHAT_DISCONNECT', req.auth?.userId, { roomId: req.params.room_id });
     res.end();
   });
 };
 
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
  */
-const getMyChats = async (req, res, next) => {
-  try {
-    const userId = req.auth.userId; // Clerk 인증에서 받은 사용자 ID
-    const pagination = req.pagination; // 페이지네이션 미들웨어에서 준비된 값
+const getMyChats = asyncHandler(async (req, res) => {
+  const userId = req.auth.userId;
+  const pagination = req.pagination;
 
-    const result = await chatService.getMyChatList(userId, pagination);
+  const result = await chatService.getMyChatList(userId, pagination);
 
-    res.status(200).json({
-      success: true,
-      data: result.chatList,
-      pagination: {
-        page: pagination.page,
-        size: pagination.size,
-        totalElements: result.totalElements,
-        totalPages: result.totalPages
-      }
-    });
-  } catch (error) {
-    console.error('내 채팅 목록 조회 에러:', error);
-    next(error);
+  return sendSuccess(res, 200, '채팅방 목록을 성공적으로 조회했습니다.', result.chatList, {
+    page: pagination.page,
+    size: pagination.size,
+    totalElements: result.totalElements,
+    totalPages: result.totalPages
+  });
+});
+
+/**
+ * 채팅방 입장
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const enterChatRoom = asyncHandler(async (req, res) => {
+  const { character_id } = req.query;
+  
+  if (!character_id) {
+    return sendBadRequest(res, 'character_id 쿼리 파라미터가 필요합니다.');
   }
-};
 
+  const parsedCharacterId = parseInt(character_id);
+  if (isNaN(parsedCharacterId)) {
+    return sendBadRequest(res, 'character_id는 숫자여야 합니다.');
+  }
 
-//채팅방 입장
-const enterChatRoom = async (req, res) => {
-  try {
-    const { character_id } = req.query;
-    
-    console.log('요청된 쿼리 파라미터:', req.query);
-    console.log('character_id 값:', character_id);
-    console.log('character_id 타입:', typeof character_id);
-    
-    if (!character_id) {
-      return res.status(400).json({ error: 'character_id 쿼리 파라미터가 필요합니다.' });
-    }
-
-    const parsedCharacterId = parseInt(character_id);
-    console.log('파싱된 characterId:', parsedCharacterId);
-    console.log('파싱 결과 유효성:', !isNaN(parsedCharacterId));
-
-    if (isNaN(parsedCharacterId)) {
-      return res.status(400).json({ error: 'character_id는 숫자여야 합니다.' });
-    }
-
-    // 데이터베이스에서 채팅방 조회 (character_id로만 조회)
-    const chatRoom = await prisma.chatRoom.findFirst({
-      where: {
-        characterId: parsedCharacterId,
-        isDeleted: false
-      },
-      include: {
-        persona: true,
-        _count: {
-          select: {
-            ChatLogs: {
-              where: { isDeleted: false }
-            }
-          }
+  // 데이터베이스에서 채팅방 조회
+  const chatRoom = await prisma.chatRoom.findFirst({
+    where: {
+      characterId: parsedCharacterId,
+      isDeleted: false
+    },
+    include: {
+      persona: {
+        select: {
+          id: true,
+          name: true,
+          introduction: true,
+          image_url: true
         }
       }
-    });
-
-    if (!chatRoom) {
-      return res.status(401).json({ error: '채팅방이 없습니다.' });
     }
+  });
 
-    // 응답 데이터 구성
-    const response = {
-      room_id: `chat-${chatRoom.id}`,
-      user_id: chatRoom.clerkId,
-      persona_id: chatRoom.characterId,
-      created_at: chatRoom.createdAt.toISOString(),
-      count: chatRoom._count.ChatLogs,
-      friendship: chatRoom.friendship,
-      exp: chatRoom.exp
-    };
-
-    res.status(200).json(response);
-
-  } catch (error) {
-    console.error('채팅방 입장 에러:', error);
-    res.status(401).json({ error: '입장 실패' });
+  if (!chatRoom) {
+    return sendNotFound(res, '해당 캐릭터의 채팅방을 찾을 수 없습니다.');
   }
-};
 
-export const chatController = {
+  logUserActivity('ENTER_CHAT_ROOM', req.auth?.userId, {
+    roomId: chatRoom.id,
+    characterId: parsedCharacterId,
+    characterName: chatRoom.persona.name
+  });
+
+  return sendSuccess(res, 200, '채팅방에 입장했습니다.', {
+    room_id: chatRoom.id,
+    character: chatRoom.persona
+  });
+});
+
+/**
+ * 새로운 채팅방 생성
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const createChatRoom = asyncHandler(async (req, res) => {
+  const { character_id } = req.body;
+  const userId = req.auth.userId;
+
+  if (!character_id) {
+    return sendBadRequest(res, 'character_id가 필요합니다.');
+  }
+
+  const result = await chatService.createChatRoom(character_id, userId);
+
+  logUserActivity('CREATE_CHAT_ROOM', userId, {
+    roomId: result.id,
+    characterId: character_id
+  });
+
+  return sendSuccess(res, 201, '채팅방이 성공적으로 생성되었습니다.', result);
+});
+
+/**
+ * 채팅방 삭제
+ * 
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const deleteChatRoom = asyncHandler(async (req, res) => {
+  const { room_id } = req.params;
+  const userId = req.auth.userId;
+
+  await chatService.deleteChatRoom(room_id, userId);
+
+  logUserActivity('DELETE_CHAT_ROOM', userId, {
+    roomId: room_id
+  });
+
+  return sendSuccess(res, 200, '채팅방이 성공적으로 삭제되었습니다.');
+});
+
+export {
   streamChatByRoom,
   getMyChats,
   enterChatRoom,
+  createChatRoom,
+  deleteChatRoom
 };
-
-export default chatController;
