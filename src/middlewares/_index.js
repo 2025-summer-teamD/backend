@@ -4,9 +4,18 @@
  * 모든 미들웨어 함수들을 중앙에서 관리하고 내보냅니다.
  */
 
-export * from './authMiddleware.js';
-export * from './errorHandler.js';
-export * from './personaValidator.js';
-export * from './uploadMiddleware.js';
-export * from './ensureUserInDB.js';
-export * from './paginationValidator.js';
+import authMiddleware from './authMiddleware.js';
+import errorHandler from './errorHandler.js';
+import personaValidator from './personaValidator.js';
+import uploadMiddleware from './uploadMiddleware.js';
+import ensureUserInDB from './ensureUserInDB.js';
+import paginationValidator from './paginationValidator.js';
+
+export default {
+  authMiddleware,
+  errorHandler,
+  personaValidator,
+  uploadMiddleware,
+  ensureUserInDB,
+  paginationValidator
+};
