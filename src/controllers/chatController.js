@@ -173,9 +173,73 @@ const getMyChats = async (req, res, next) => {
   }
 };
 
+
+//채팅방 입장
+const enterChatRoom = async (req, res) => {
+  try {
+    const { character_id } = req.query;
+    
+    console.log('요청된 쿼리 파라미터:', req.query);
+    console.log('character_id 값:', character_id);
+    console.log('character_id 타입:', typeof character_id);
+    
+    if (!character_id) {
+      return res.status(400).json({ error: 'character_id 쿼리 파라미터가 필요합니다.' });
+    }
+
+    const parsedCharacterId = parseInt(character_id);
+    console.log('파싱된 characterId:', parsedCharacterId);
+    console.log('파싱 결과 유효성:', !isNaN(parsedCharacterId));
+
+    if (isNaN(parsedCharacterId)) {
+      return res.status(400).json({ error: 'character_id는 숫자여야 합니다.' });
+    }
+
+    // 데이터베이스에서 채팅방 조회 (character_id로만 조회)
+    const chatRoom = await prisma.chatRoom.findFirst({
+      where: {
+        characterId: parsedCharacterId,
+        isDeleted: false
+      },
+      include: {
+        persona: true,
+        _count: {
+          select: {
+            ChatLogs: {
+              where: { isDeleted: false }
+            }
+          }
+        }
+      }
+    });
+
+    if (!chatRoom) {
+      return res.status(401).json({ error: '채팅방이 없습니다.' });
+    }
+
+    // 응답 데이터 구성
+    const response = {
+      room_id: `chat-${chatRoom.id}`,
+      user_id: chatRoom.clerkId,
+      persona_id: chatRoom.characterId,
+      created_at: chatRoom.createdAt.toISOString(),
+      count: chatRoom._count.ChatLogs,
+      friendship: chatRoom.friendship,
+      exp: chatRoom.exp
+    };
+
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error('채팅방 입장 에러:', error);
+    res.status(401).json({ error: '입장 실패' });
+  }
+};
+
 export const chatController = {
   streamChatByRoom,
   getMyChats,
+  enterChatRoom,
 };
 
 export default chatController;
