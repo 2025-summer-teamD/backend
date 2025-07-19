@@ -6,14 +6,14 @@ import ensureUserInDB from '../middlewares/ensureUserInDB.js';
 const { personaController } = controllers;
 const { personaValidator, authMiddleware } = middlewares;
 
-const { createCustomPersona, createAiPersona } = personaController;
+const { createCustomPersona, createAiPersona, toggleLike, incrementViewCount } = personaController;
 const { clerkAuthMiddleware, requireAuth } = authMiddleware;
 const { validateCreatePersona, validateAiCreatePersona } = personaValidator;
 
 const router = express.Router();
 
 
-/**
+/** 
  * @swagger
  * /characters/custom:
  *   post:
@@ -187,6 +187,151 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
   ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
   validateAiCreatePersona, // 3. 요청 데이터 유효성 검사
   createAiPersona // 4. 컨트롤러 실행
+);
+
+/**
+ * @swagger
+ * /characters/{character_id}/like:
+ *   post:
+ *     summary: 페르소나 좋아요 토글
+ *     description: 특정 페르소나에 대한 좋아요를 추가하거나 취소합니다.
+ *     tags:
+ *       - like
+ *     parameters:
+ *       - in: path
+ *         name: character_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 페르소나 ID
+ *     responses:
+ *       200:
+ *         description: 좋아요 토글 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 좋아요를 추가했습니다.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     isLiked:
+ *                       type: boolean
+ *                       example: true
+ *                     likesCount:
+ *                       type: integer
+ *                       example: 5
+ *       404:
+ *         description: 페르소나를 찾을 수 없음
+ */
+router.post(
+  '/:character_id/like',
+  clerkAuthMiddleware,
+  requireAuth,
+  ensureUserInDB,
+  toggleLike
+);
+
+/**
+ * @swagger
+ * /characters/{character_id}/view:
+ *   post:
+ *     summary: 페르소나 조회수 증가
+ *     description: 특정 페르소나의 조회수를 1 증가시킵니다.
+ *     tags:
+ *       - view
+ *     parameters:
+ *       - in: path
+ *         name: character_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 페르소나 ID
+ *     responses:
+ *       200:
+ *         description: 조회수 증가 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 조회수가 증가되었습니다.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     viewCount:
+ *                       type: integer
+ *                       example: 10
+ *       404:
+ *         description: 페르소나를 찾을 수 없음
+ */
+router.post(
+  '/:character_id/view',
+  incrementViewCount
+);
+
+/**
+ * @swagger
+ * /characters/upload-image:
+ *   post:
+ *     summary: 이미지 업로드
+ *     description: 캐릭터 생성 시 사용할 이미지를 업로드합니다.
+ *     tags:
+ *       - upload
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - image
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: 업로드할 이미지 파일
+ *     responses:
+ *       200:
+ *         description: 업로드 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 이미지가 성공적으로 업로드되었습니다.
+ *                 imageUrl:
+ *                   type: string
+ *                   example: https://example.com/uploads/image.jpg
+ */
+router.post(
+  '/upload-image',
+  clerkAuthMiddleware,
+  requireAuth,
+  ensureUserInDB,
+  (req, res) => {
+    try {
+      // 임시로 고정된 이미지 URL 반환 (실제로는 파일 업로드 처리)
+      const imageUrl = 'https://via.placeholder.com/300x400/4F46E5/FFFFFF?text=Character+Image';
+      
+      res.status(200).json({
+        message: '이미지가 성공적으로 업로드되었습니다.',
+        imageUrl: imageUrl
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: '이미지 업로드에 실패했습니다.',
+        error: error.message
+      });
+    }
+  }
 );
 
 export default router;
