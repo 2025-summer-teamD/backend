@@ -14,6 +14,8 @@ export const createCustomPersona = async (req, res, next) => {
   try {
     // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
     const { userId } = req.auth;
+    // multer 미들웨어가 이미지 파일을 req.file에 담아줌
+    const file = req.file; // multer 미들웨어가 파일을 req.file에 담아줌
 
     // 2. 이미지 업로드 처리
     let imageUrl = req.body.image_url || '';
