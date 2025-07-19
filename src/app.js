@@ -17,8 +17,8 @@ import { fileURLToPath } from 'url';
 import mainRouter from './routes/_index.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
-import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
-import { logRequest } from './utils/logger.js';
+import errorHandler from './middlewares/errorHandler.js';
+import logger from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +38,7 @@ app.use(cors({
 }));
 
 // 요청 로깅 미들웨어
-app.use(logRequest);
+app.use(logger.logRequest);
 
 // 업로드된 이미지를 정적 파일로 서빙
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -91,10 +91,10 @@ app.get('/', (req, res) => {
 app.use('/api', mainRouter);
 
 // 404 에러 핸들러 (라우터 이후에 배치)
-app.use(notFoundHandler);
+app.use(errorHandler.notFoundHandler);
 
 // 전역 에러 핸들러 (마지막에 배치)
-app.use(errorHandler);
+app.use(errorHandler.errorHandler);
 
 export default app;
 

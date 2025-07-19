@@ -19,7 +19,7 @@
  * @param {any} data - 응답 데이터
  * @param {object} pageInfo - 페이지네이션 정보 (선택사항)
  */
-export const sendSuccess = (res, statusCode = 200, message, data = null, pageInfo = null) => {
+const sendSuccess = (res, statusCode = 200, message, data = null, pageInfo = null) => {
   const response = {
     success: true,
     message,
@@ -37,7 +37,7 @@ export const sendSuccess = (res, statusCode = 200, message, data = null, pageInf
  * @param {string} message - 에러 메시지
  * @param {any} error - 에러 객체 (선택사항)
  */
-export const sendError = (res, statusCode = 500, message, error = null) => {
+const sendError = (res, statusCode = 500, message, error = null) => {
   const response = {
     success: false,
     message,
@@ -52,7 +52,7 @@ export const sendError = (res, statusCode = 500, message, error = null) => {
  * @param {object} res - Express response 객체
  * @param {string} message - 에러 메시지 (기본값: "리소스를 찾을 수 없습니다.")
  */
-export const sendNotFound = (res, message = "리소스를 찾을 수 없습니다.") => {
+const sendNotFound = (res, message = "리소스를 찾을 수 없습니다.") => {
   return sendError(res, 404, message);
 };
 
@@ -61,7 +61,7 @@ export const sendNotFound = (res, message = "리소스를 찾을 수 없습니�
  * @param {object} res - Express response 객체
  * @param {string} message - 에러 메시지 (기본값: "잘못된 요청입니다.")
  */
-export const sendBadRequest = (res, message = "잘못된 요청입니다.") => {
+const sendBadRequest = (res, message = "잘못된 요청입니다.") => {
   return sendError(res, 400, message);
 };
 
@@ -70,7 +70,7 @@ export const sendBadRequest = (res, message = "잘못된 요청입니다.") => {
  * @param {object} res - Express response 객체
  * @param {string} message - 에러 메시지 (기본값: "인증이 필요합니다.")
  */
-export const sendUnauthorized = (res, message = "인증이 필요합니다.") => {
+const sendUnauthorized = (res, message = "인증이 필요합니다.") => {
   return sendError(res, 401, message);
 };
 
@@ -79,7 +79,7 @@ export const sendUnauthorized = (res, message = "인증이 필요합니다.") =>
  * @param {object} res - Express response 객체
  * @param {string} message - 에러 메시지 (기본값: "접근 권한이 없습니다.")
  */
-export const sendForbidden = (res, message = "접근 권한이 없습니다.") => {
+const sendForbidden = (res, message = "접근 권한이 없습니다.") => {
   return sendError(res, 403, message);
 };
 
@@ -88,6 +88,16 @@ export const sendForbidden = (res, message = "접근 권한이 없습니다.") =
  * @param {object} res - Express response 객체
  * @param {string} message - 에러 메시지 (기본값: "서버 내부 오류가 발생했습니다.")
  */
-export const sendInternalError = (res, message = "서버 내부 오류가 발생했습니다.") => {
+const sendInternalError = (res, message = "서버 내부 오류가 발생했습니다.") => {
   return sendError(res, 500, message);
+};
+
+export default {
+  sendSuccess,
+  sendError,
+  sendNotFound,
+  sendBadRequest,
+  sendUnauthorized,
+  sendForbidden,
+  sendInternalError
 }; 

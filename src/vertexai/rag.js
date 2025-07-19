@@ -31,4 +31,6 @@ async function runRag(embedding) {
   }
 }
 
-export { runRag }; 
+export default {
+  runRag
+}; 
