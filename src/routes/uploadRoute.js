@@ -1,12 +1,13 @@
 import express from 'express';
 import uploadController from '../controllers/uploadController.js';
-import upload from '../middlewares/uploadMiddleware.js';
+import { upload } from '../middlewares/uploadMiddleware.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
 /**
  * @swagger
- * /api/upload/single:
+ * /upload/single:
  *   post:
  *     summary: 단일 이미지 업로드
  *     tags: [Upload]
@@ -55,7 +56,7 @@ router.post('/single', upload.single('image'), uploadController.uploadSingleImag
 
 /**
  * @swagger
- * /api/upload/multiple:
+ * /upload/multiple:
  *   post:
  *     summary: 여러 이미지 업로드
  *     tags: [Upload]
@@ -108,7 +109,7 @@ router.post('/multiple', upload.array('images', 10), uploadController.uploadMult
 
 /**
  * @swagger
- * /api/upload/{filename}:
+ * /upload/{filename}:
  *   delete:
  *     summary: 이미지 삭제
  *     tags: [Upload]
@@ -129,11 +130,11 @@ router.post('/multiple', upload.array('images', 10), uploadController.uploadMult
  *       500:
  *         description: 서버 오류
  */
-router.delete('/:filename', uploadController.deleteImage);
+router.delete('/:filename', authMiddleware, uploadController.deleteImage);
 
 /**
  * @swagger
- * /api/uploads/{filename}:
+ * /uploads/{filename}:
  *   get:
  *     summary: 업로드된 이미지 조회
  *     tags: [Upload]
@@ -152,6 +153,6 @@ router.delete('/:filename', uploadController.deleteImage);
  *       500:
  *         description: 서버 오류
  */
-router.get('/uploads/:filename', uploadController.serveImage);
+router.get('/:filename', uploadController.serveImage);
 
-export default router; 
+export default router;

@@ -1,46 +1,43 @@
+// src/middlewares/uploadMiddleware.js
+
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { uploadImageToGCS } from '../services/gcsService.js';
+import { Storage } from '@google-cloud/storage';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// 업로드 디렉토리 설정
-const uploadDir = path.join(__dirname, '../../uploads');
-
-// 스토리지 설정
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // 파일명 중복 방지를 위해 타임스탬프 추가
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+// ✅ 환경 변수 유효성 검사 추가
+const requiredEnvVars = ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS', 'GCS_BUCKET_NAME'];
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    throw new Error(`Missing required environment variable: ${varName}`);
   }
 });
 
-// 파일 필터링
-const fileFilter = (req, file, cb) => {
-  // 허용할 이미지 타입
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+// ✅ GCS 클라이언트 초기화
+const storage = new Storage({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
 
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(new Error('이미지 파일만 업로드 가능합니다. (jpeg, jpg, png, gif, webp)'));
-  }
-};
+const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
-// multer 설정
+// ✅ 메모리에 파일 저장
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      cb(null, true);
+    } else {
+      cb(new Error('이미지 파일만 업로드 가능합니다. (jpeg, jpg, png, gif, webp)'));
+    }
+  },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB 제한
-  }
+    fileSize: 5 * 1024 * 1024, // 5MB 제한
+  },
 });
 
-export default upload; 
+export { upload, uploadImageToGCS as uploadToGCS, bucket };

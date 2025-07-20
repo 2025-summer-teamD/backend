@@ -14,7 +14,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import mainRouter from './routes/_index.js';
+import mainRouter from './routes/_index.js'; // mainRouter 경로 확인
 import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import errorHandler from './middlewares/errorHandler.js';
@@ -37,11 +37,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+
 // 요청 로깅 미들웨어
 app.use(logger.logRequest);
 
 // 업로드된 이미지를 정적 파일로 서빙
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 // Swagger 설정
 const swaggerOptions = {
@@ -54,6 +56,7 @@ const swaggerOptions = {
     },
     servers: [
       {
+
         url: '/api',
         description: '개발 서버'
       },
@@ -86,6 +89,8 @@ app.get('/', (req, res) => {
       docs: '/api-docs'
     });
 });
+  
+//app.use(express.json());
 
 // API 라우터
 app.use('/api', mainRouter);
@@ -96,6 +101,8 @@ app.use(errorHandler.notFoundHandler);
 // 전역 에러 핸들러 (마지막에 배치)
 app.use(errorHandler.errorHandler);
 
+// mainRouter는 '/api' 접두사로 마운트됩니다.
+// 따라서 uploadRouter의 '/uploads/:filename' 경로는 최종적으로 '/api/uploads/:filename'이 됩니다.
+app.use('/api', mainRouter);
+
 export default app;
-
-

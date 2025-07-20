@@ -1,3 +1,5 @@
+// src/services/geminiService.js
+
 import { VertexAI } from '@google-cloud/vertexai';
 
 const vertexAi = new VertexAI({
@@ -52,6 +54,7 @@ const generatePersonaDetailsWithGemini = async (promptText) => {
     throw new Error('Gemini API를 통해 페르소나 상세 정보를 생성하는 데 실패했습니다.');
   }
 };
+
 
 export default {
   generateText,

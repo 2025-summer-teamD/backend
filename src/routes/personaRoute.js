@@ -2,7 +2,7 @@ import express from 'express';
 import controllers from '../controllers/_index.js';
 import middlewares from '../middlewares/_index.js';
 import ensureUserInDB from '../middlewares/ensureUserInDB.js';
-import upload from '../middlewares/uploadMiddleware.js';
+import { upload } from '../middlewares/uploadMiddleware.js';
 
 const { personaController } = controllers;
 const { personaValidator, authMiddleware } = middlewares;
