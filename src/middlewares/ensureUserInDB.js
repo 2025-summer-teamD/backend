@@ -1,4 +1,4 @@
-import { prisma } from '../config/prisma.js';
+import prismaConfig from '../config/prisma.js';
 
 // Clerk 인증 미들웨어 다음에 실행
 const ensureUserInDB = async (req, res, next) => {
@@ -17,7 +17,7 @@ const ensureUserInDB = async (req, res, next) => {
       isDeleted: false,
     };
 
-    await prisma.user.upsert({
+    await prismaConfig.prisma.user.upsert({
       where: { clerkId: userId },
       update: {
         // 기존 사용자 정보 업데이트 (Clerk 정보가 변경되었을 수 있음)

@@ -16,7 +16,7 @@ const generativeModel = vertexAi.getGenerativeModel({
  * @param {string} promptText - Gemini에 보낼 프롬프트
  * @returns {Promise<string>} 생성된 텍스트
  */
-export const generateText = async (promptText) => {
+const generateText = async (promptText) => {
   try {
     const request = {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
@@ -36,7 +36,7 @@ export const generateText = async (promptText) => {
  * @param {string} promptText - Gemini에 보낼 프롬프트
  * @returns {Promise<object>} 파싱된 JSON 객체
  */
-export const generatePersonaDetailsWithGemini = async (promptText) => {
+const generatePersonaDetailsWithGemini = async (promptText) => {
   try {
     const request = {
       contents: [{ role: 'user', parts: [{ text: promptText }] }],
@@ -53,4 +53,10 @@ export const generatePersonaDetailsWithGemini = async (promptText) => {
     console.error('Vertex AI Gemini Generation Error:', error);
     throw new Error('Gemini API를 통해 페르소나 상세 정보를 생성하는 데 실패했습니다.');
   }
+};
+
+
+export default {
+  generateText,
+  generatePersonaDetailsWithGemini
 };

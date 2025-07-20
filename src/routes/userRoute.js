@@ -219,7 +219,7 @@ getMyChats          // 3. 컨트롤러 실행
 
 /**
  * @swagger
- * /my/characters/{id}:
+ * /my/characters/{character_id}:
  *   patch:
  *     summary: 페르소나 정보 수정 (본인만 가능)
  *     description: introduction, personality, tone, tag 중 일부만 부분 수정할 수 있습니다. 본인 소유 페르소나만 수정 가능.
@@ -229,7 +229,7 @@ getMyChats          // 3. 컨트롤러 실행
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: character_id
  *         required: true
  *         schema:
  *           type: integer
@@ -272,7 +272,7 @@ getMyChats          // 3. 컨트롤러 실행
  *         description: 존재하지 않거나 권한 없는 페르소나
  */
 router.patch(
-  '/characters/:id',
+  '/characters/:character_id',
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,         // 1. 로그인 필수
   updatePersona       // 2. 컨트롤러 실행
@@ -280,7 +280,7 @@ router.patch(
 
 /**
  * @swagger
- * /my/characters/{id}:
+ * /my/characters/{character_id}:
  *   delete:
  *     summary: 페르소나 소프트 삭제 (본인만 가능)
  *     description: 본인 소유 페르소나만 삭제 가능. 실제로는 isDeleted만 true로 변경됩니다.
@@ -290,7 +290,7 @@ router.patch(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: character_id
  *         required: true
  *         schema:
  *           type: integer
@@ -314,7 +314,7 @@ router.patch(
  *         description: 존재하지 않거나 권한 없는 페르소나
  */
 router.delete(
-  '/characters/:id',
+  '/characters/:character_id',
   clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   requireAuth,         // 1. 로그인 필수
   deletePersona       // 2. 컨트롤러 실행
