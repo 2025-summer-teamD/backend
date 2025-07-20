@@ -1,8 +1,6 @@
 // src/middlewares/uploadMiddleware.js
-
 import multer from 'multer';
 import path from 'path';
-import { uploadImageToGCS } from '../services/gcsService.js';
 import { Storage } from '@google-cloud/storage';
 
 // ✅ 환경 변수 유효성 검사 추가
@@ -40,4 +38,11 @@ const upload = multer({
   },
 });
 
-export { upload, uploadImageToGCS as uploadToGCS, bucket };
+
+const uploadMiddleware = {
+  requiredEnvVars,
+  bucket,
+  storage,
+  upload
+};
+export default uploadMiddleware;

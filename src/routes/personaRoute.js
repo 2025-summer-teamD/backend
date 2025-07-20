@@ -1,15 +1,10 @@
 import express from 'express';
-import controllers from '../controllers/_index.js';
-import middlewares from '../middlewares/_index.js';
+// 개별 import 방식으로 변경
+import personaController from '../controllers/personaController.js';
+import personaValidator from '../middlewares/personaValidator.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
+import uploadMiddleware from '../middlewares/uploadMiddleware.js';
 import ensureUserInDB from '../middlewares/ensureUserInDB.js';
-import { upload } from '../middlewares/uploadMiddleware.js';
-
-const { personaController } = controllers;
-const { personaValidator, authMiddleware } = middlewares;
-
-const { createCustomPersona, createAiPersona, toggleLike, incrementViewCount } = personaController;
-const { clerkAuthMiddleware, requireAuth } = authMiddleware;
-const { validateCreatePersona, validateAiCreatePersona } = personaValidator;
 
 const router = express.Router();
 
@@ -107,12 +102,12 @@ const router = express.Router();
  */
 router.post(
   '/custom',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,             // 1. 로그인 했는지 확인
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth,             // 1. 로그인 했는지 확인
   ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
-  upload.single('image'), // 3. 이미지 업로드 처리
-  validateCreatePersona,   // 4. 요청 데이터가 유효한지 확인
-  createCustomPersona      // 5. 모든 검사를 통과하면 컨트롤러 실행
+  uploadMiddleware.upload.single('image'), // 3. 이미지 업로드 처리
+  personaValidator.validateCreatePersona,   // 4. 요청 데이터가 유효한지 확인
+  personaController.createCustomPersona      // 5. 모든 검사를 통과하면 컨트롤러 실행
 );
 
 
@@ -184,12 +179,12 @@ router.post(
  */
 router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/characters/existing)
   '/existing',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,         // 1. 로그인 필수
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth,         // 1. 로그인 필수
   ensureUserInDB,      // 2. users 테이블에 clerkId 자동 등록
-  upload.single('image'), // 3. 이미지 업로드 처리
-  validateAiCreatePersona, // 4. 요청 데이터 유효성 검사
-  createAiPersona // 5. 컨트롤러 실행
+  uploadMiddleware.upload.single('image'), // 3. 이미지 업로드 처리
+  personaValidator.validateAiCreatePersona, // 4. 요청 데이터 유효성 검사
+  personaController.createAiPersona // 5. 컨트롤러 실행
 );
 
 /**
@@ -232,10 +227,10 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
  */
 router.post(
   '/:character_id/like',
-  clerkAuthMiddleware,
-  requireAuth,
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
   ensureUserInDB,
-  toggleLike
+  personaController.toggleLike
 );
 
 /**
@@ -275,10 +270,10 @@ router.post(
  */
 router.post(
   '/:character_id/view',
-  clerkAuthMiddleware,
-  requireAuth,
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
   ensureUserInDB,
-  incrementViewCount
+  personaController.incrementViewCount
 );
 
 
