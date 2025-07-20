@@ -1,22 +1,27 @@
-// src/services/gcs.service.js
+// src/services/gcsService.js
+
 import { Storage } from '@google-cloud/storage';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-// 서비스 계정 키 파일 경로 설정
-// __dirname은 ES 모듈에서 사용할 수 없으므로 아래와 같이 경로를 만듭니다.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const keyFilePath = path.join(__dirname, '../../google-credentials/your-service-account-key.json');
+// ✅ 환경변수 유효성 검사
+const requiredEnvVars = [
+  'GOOGLE_PROJECT_ID',
+  'GCS_BUCKET_NAME',
+  'GOOGLE_APPLICATION_CREDENTIALS',
+];
 
-// GCS 클라이언트 초기화
-const storage = new Storage({
-  keyFilename: keyFilePath,
-  projectId: process.env.GOOGLE_PROJECT_ID,
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    throw new Error(`Missing required environment variable: ${varName}`);
+  }
 });
 
-const bucketName = process.env.GCS_BUCKET_NAME; // 버킷 이름도 환경변수로 관리
-const bucket = storage.bucket(bucketName);
+// ✅ GCS 클라이언트 초기화
+const storage = new Storage({
+  projectId: process.env.GOOGLE_PROJECT_ID,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
+
+const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
 /**
  * 메모리에 있는 파일을 GCS에 업로드합니다.
@@ -26,18 +31,22 @@ const bucket = storage.bucket(bucketName);
 export const uploadImageToGCS = (file) => {
   return new Promise((resolve, reject) => {
     if (!file) {
-      reject(new Error('업로드할 파일이 없습니다.'));
-      return;
+      return reject(new Error('업로드할 파일이 없습니다.'));
     }
 
-    // 파일 이름을 유니크하게 만듭니다 (덮어쓰기 방지)
-    const gcsFileName = `${Date.now()}-${file.originalname}`;
+    // ✅ 충돌 방지를 위한 고유 파일 이름 생성
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    const gcsFileName = `${timestamp}-${random}-${file.originalname}`;
+
     const blob = bucket.file(gcsFileName);
 
-    // GCS에 파일을 쓰는 스트림 생성
     const blobStream = blob.createWriteStream({
       resumable: false,
       gzip: true,
+      metadata: {
+        contentType: file.mimetype,
+      },
     });
 
     blobStream.on('error', (err) => {
@@ -45,13 +54,12 @@ export const uploadImageToGCS = (file) => {
     });
 
     blobStream.on('finish', () => {
-      // 업로드가 완료되면 공개 URL을 생성하여 반환
       const publicUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
       resolve(publicUrl);
     });
 
-    // 파일 버퍼를 스트림에 씁니다.
     blobStream.end(file.buffer);
   });
 };
 
+export { bucket };
