@@ -1,11 +1,9 @@
-import chatController  from './chatController.js';
+import chatController from './chatController.js';
 import personaController from './personaController.js';
 import userController from './userController.js';
 
-const controllers = {
+export default {
   chatController,
   personaController,
-  userController,
+  userController
 };
-
-export default controllers;

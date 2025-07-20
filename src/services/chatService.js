@@ -1,5 +1,5 @@
-import { prisma } from '../config/prisma.js';
-import { generateText } from '../vertexai/gemini25.js';
+import prismaConfig from '../config/prisma.js';
+import gemini25 from '../vertexai/gemini25.js';
 
 /**
  * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
@@ -11,7 +11,7 @@ const getMyChatList = async (userId, pagination) => {
   const { skip, take, page, size } = pagination;
 
   // 1. 내가 참여하고 삭제되지 않은 채팅방의 총 개수를 먼저 구한다.
-  const totalElements = await prisma.chatRoom.count({
+  const totalElements = await prismaConfig.prisma.chatRoom.count({
     where: {
       clerkId: userId,
       isDeleted: false,
@@ -23,7 +23,7 @@ const getMyChatList = async (userId, pagination) => {
   }
   
   // 2. 실제 데이터 조회: 관계된 데이터를 한 번의 쿼리로 가져온다.
-  const chatRooms = await prisma.chatRoom.findMany({
+  const chatRooms = await prismaConfig.prisma.chatRoom.findMany({
     where: {
       clerkId: userId,
       isDeleted: false,
@@ -44,14 +44,14 @@ const getMyChatList = async (userId, pagination) => {
         },
       },
       // ChatRoom에 연결된 모든 ChatLog 중 '마지막 1개'만 가져오기
-      chatLogs: {
+      ChatLogs: {
         orderBy: {
-          createdAt: 'desc',
+          time: 'desc',
         },
         take: 1, 
         select: {
           text: true,
-          createdAt: true,
+          time: true,
         },
       },
     },
@@ -59,13 +59,13 @@ const getMyChatList = async (userId, pagination) => {
 
   // 3. DB에서 가져온 데이터를 최종 API 응답 형태로 가공
   const chatList = chatRooms.map(room => {
-    const lastChat = room.chatLogs.length > 0 ? room.chatLogs[0] : null;
+    const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
     return {
       character_id: room.persona.id,
       name: room.persona.name,
       image_url: room.persona.imageUrl,
       last_chat: lastChat ? lastChat.text : null,
-      time: lastChat ? lastChat.createdAt.toISOString() : null, // 실제 시간 데이터 사용
+      time: lastChat ? lastChat.time.toISOString() : null, // 실제 시간 데이터 사용
     };
   });
 
@@ -82,7 +82,7 @@ const getMyChatList = async (userId, pagination) => {
  */
 const deleteLikedCharacter = async (userId, characterId) => {
   // 1. ChatRoom에서 해당 관계 찾기
-  const chatRoom = await prisma.chatRoom.findFirst({
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       clerkId: userId,
       characterId: characterId,
@@ -93,7 +93,7 @@ const deleteLikedCharacter = async (userId, characterId) => {
     throw new Error('해당 캐릭터와의 찜(좋아요) 관계가 없거나 이미 삭제되었습니다.');
   }
   // 2. isDeleted true로 변경
-  const deleted = await prisma.chatRoom.update({
+  const deleted = await prismaConfig.prisma.chatRoom.update({
     where: { id: chatRoom.id },
     data: { isDeleted: true },
   });
@@ -135,7 +135,7 @@ ${chatHistory}
 ${personaInfo.name}:`;
 
   // 2. Gemini AI를 호출하여 응답 생성
-  const aiResponseText = await generateText(prompt.trim()) || '죄송해요, 지금은 답변을 드릴 수 없어요.';
+  const aiResponseText = await gemini25.generateText(prompt.trim()) || '죄송해요, 지금은 답변을 드릴 수 없어요.';
 
   // 3. 생성된 AI 응답 텍스트 반환
   return aiResponseText;

@@ -5,4 +5,7 @@ function getProjectId() {
 function getRegion() {
   return process.env.GOOGLE_CLOUD_REGION || 'us-central1';
 }
-export { getProjectId, getRegion }; 
+export default {
+  getProjectId,
+  getRegion
+}; 

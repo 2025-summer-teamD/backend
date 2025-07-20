@@ -275,6 +275,9 @@ router.post(
  */
 router.post(
   '/:character_id/view',
+  clerkAuthMiddleware,
+  requireAuth,
+  ensureUserInDB,
   incrementViewCount
 );
 
