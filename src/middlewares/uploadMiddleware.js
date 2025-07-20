@@ -3,8 +3,25 @@
 import multer from 'multer';
 import path from 'path';
 import { uploadImageToGCS } from '../services/gcsService.js';
+import { Storage } from '@google-cloud/storage';
 
-// 1. 메모리에 파일 저장
+// ✅ 환경 변수 유효성 검사 추가
+const requiredEnvVars = ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS', 'GCS_BUCKET_NAME'];
+requiredEnvVars.forEach(varName => {
+  if (!process.env[varName]) {
+    throw new Error(`Missing required environment variable: ${varName}`);
+  }
+});
+
+// ✅ GCS 클라이언트 초기화
+const storage = new Storage({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
+
+const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
+
+// ✅ 메모리에 파일 저장
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -23,4 +40,4 @@ const upload = multer({
   },
 });
 
-export { upload, uploadImageToGCS as uploadToGCS };
+export { upload, uploadImageToGCS as uploadToGCS, bucket };
