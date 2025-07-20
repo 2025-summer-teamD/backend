@@ -74,7 +74,7 @@ const createCustomPersona = async (req, res, next) => {
   });
 
   return responseHandler.sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
-});
+};
 
 /**
  * AI를 사용하여 페르소나를 생성하는 컨트롤러

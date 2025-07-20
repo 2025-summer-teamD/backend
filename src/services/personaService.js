@@ -1,8 +1,7 @@
 // 현재는 메모리 내 배열을 사용하지만, 나중에 Prisma 같은 DB로 쉽게 교체 가능
 import prismaConfig from '../config/prisma.js';
-import vertexai from '../vertexai/_index.js';
-
-const { generatePersonaDetailsWithGemini } = vertexai.gemini25;
+// 개별 import 방식으로 변경
+import gemini25 from '../vertexai/gemini25.js';
 
 /**
  * 새로운 페르소나를 생성하고 데이터베이스에 저장합니다.
@@ -81,7 +80,7 @@ const createPersonaWithAI = async (initialData, userId) => {
   // 2. LLM 서비스 호출하여 상세 정보 생성
   let aiGeneratedDetails;
   try {
-    aiGeneratedDetails = await generatePersonaDetailsWithGemini(promptForGemini);
+          aiGeneratedDetails = await gemini25.generatePersonaDetailsWithGemini(promptForGemini);
   } catch (error) {
     console.log('AI 생성 실패, 기본값 사용:', error.message);
     // AI 생성 실패 시 기본값 사용
