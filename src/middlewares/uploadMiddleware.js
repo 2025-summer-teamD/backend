@@ -5,8 +5,12 @@ import path from 'path';
 import { uploadImageToGCS } from '../services/gcsService.js';
 import { Storage } from '@google-cloud/storage';
 
-// ✅ 환경 변수 유효성 검사 추가
-const requiredEnvVars = ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS', 'GCS_BUCKET_NAME'];
+// ✅ 환경 변수 유효성 검사
+const requiredEnvVars = [
+  'GOOGLE_CLOUD_PROJECT',
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'GCS_BUCKET_NAME',
+];
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
     throw new Error(`Missing required environment variable: ${varName}`);
@@ -41,3 +45,10 @@ const upload = multer({
 });
 
 export { upload, uploadImageToGCS as uploadToGCS, bucket };
+
+// ✅ default export 추가
+export default {
+  upload,
+  uploadToGCS: uploadImageToGCS,
+  bucket,
+};

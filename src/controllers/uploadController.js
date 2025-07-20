@@ -1,3 +1,5 @@
+// src/controllers/uploadController.js
+
 import { uploadToGCS, bucket } from '../middlewares/uploadMiddleware.js';
 
 /**
@@ -71,12 +73,6 @@ export const deleteImage = async (req, res, next) => {
     if (!exists) {
       return res.status(404).json({ message: '해당 이미지를 찾을 수 없습니다.' });
     }
-
-    // 🔐 사용자 인증이 적용되어 있다면 아래와 같이 소유자 확인 로직 추가 가능
-    // const metadata = await file.getMetadata();
-    // if (metadata[0]?.metadata?.userId !== req.user.id) {
-    //   return res.status(403).json({ message: '이미지 삭제 권한이 없습니다.' });
-    // }
 
     await file.delete();
 
