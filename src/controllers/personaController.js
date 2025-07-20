@@ -23,14 +23,40 @@ import errorHandler from '../middlewares/errorHandler.js';
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
-const createCustomPersona = errorHandler.asyncHandler(async (req, res) => {
-  const { userId } = req.auth;
-  
-  // 이미지 업로드 처리
-  let imageUrl = req.body.image_url || '';
-  if (req.file) {
-    imageUrl = `/api/uploads/${req.file.filename}`;
-  }
+const createCustomPersona = async (req, res, next) => {
+  try {
+    // 1. 누가 요청했는지 확인 (requireAuth 미들웨어 덕분에 가능)
+    const { userId } = req.auth;
+    // multer 미들웨어가 이미지 파일을 req.file에 담아줌
+    const file = req.file; // multer 미들웨어가 파일을 req.file에 담아줌
+
+    // 2. 이미지 업로드 처리
+    let imageUrl = req.body.image_url || '';
+    
+    // 만약 이미지 파일이 업로드되었다면
+    if (req.file) {
+      imageUrl = `/api/uploads/${req.file.filename}`;
+    }
+
+    // 3. 페르소나 데이터 준비 (이미지 URL 포함)
+    const personaData = {
+      ...req.body,
+      image_url: imageUrl
+    };
+
+    // 4. 서비스 호출: 실제 생성 작업은 서비스에 위임
+    const newPersona = await PersonaService.createPersona(personaData, userId);
+
+    // 5. 성공 응답 생성
+    res.status(201).json({
+      message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
+      data: newPersona,
+    });
+  } catch (error) {
+    // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
+    next(error);
+
+  };
 
   // 페르소나 데이터 준비
   const personaData = {
