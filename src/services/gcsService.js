@@ -36,7 +36,7 @@ export const uploadImageToGCS = (file) => {
 
     // ✅ 충돌 방지를 위한 고유 파일 이름 생성
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
+    const random = Math.random().toString(36).substring(2, 8); // 충분히 충돌 방지 가능
     const gcsFileName = `${timestamp}-${random}-${file.originalname}`;
 
     const blob = bucket.file(gcsFileName);
@@ -62,4 +62,5 @@ export const uploadImageToGCS = (file) => {
   });
 };
 
+// ✅ bucket도 export 해서 다른 모듈에서 재사용 가능하게 함
 export { bucket };
