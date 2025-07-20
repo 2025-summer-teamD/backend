@@ -1,5 +1,4 @@
-import dotenv from 'dotenv'
-dotenv.config()
+// src/services/geminiService.js
 
 import { VertexAI } from '@google-cloud/vertexai';
 
