@@ -1,3 +1,5 @@
+// src/controllers/uploadController.js
+
 import { uploadToGCS, bucket } from '../middlewares/uploadMiddleware.js';
 
 /**
@@ -18,8 +20,8 @@ export const uploadSingleImage = async (req, res, next) => {
         originalName: req.file.originalname,
         size: req.file.size,
         url: publicUrl,
-        mimetype: req.file.mimetype
-      }
+        mimetype: req.file.mimetype,
+      },
     });
   } catch (error) {
     next(error);
@@ -43,12 +45,12 @@ export const uploadMultipleImages = async (req, res, next) => {
       originalName: file.originalname,
       size: file.size,
       url: publicUrls[index],
-      mimetype: file.mimetype
+      mimetype: file.mimetype,
     }));
 
     res.status(200).json({
       message: `${uploadedFiles.length}개의 이미지가 성공적으로 업로드되었습니다.`,
-      data: uploadedFiles
+      data: uploadedFiles,
     });
   } catch (error) {
     next(error);
@@ -76,7 +78,7 @@ export const deleteImage = async (req, res, next) => {
 
     res.status(200).json({
       message: '이미지가 성공적으로 삭제되었습니다.',
-      data: { filename: decodedFilename }
+      data: { filename: decodedFilename },
     });
   } catch (error) {
     next(error);
@@ -125,7 +127,7 @@ const uploadController = {
   uploadSingleImage,
   uploadMultipleImages,
   deleteImage,
-  serveImage
+  serveImage,
 };
 
 export default uploadController;

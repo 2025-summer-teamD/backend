@@ -1,6 +1,7 @@
 // src/services/gcsService.js
 
 import { Storage } from '@google-cloud/storage';
+import crypto from 'crypto';
 
 // ✅ 환경변수 유효성 검사
 const requiredEnvVars = [
@@ -34,9 +35,9 @@ export const uploadImageToGCS = (file) => {
       return reject(new Error('업로드할 파일이 없습니다.'));
     }
 
-    // ✅ 충돌 방지를 위한 고유 파일 이름 생성
+    // ✅ 충돌 방지를 위한 보안 랜덤값 포함 파일 이름 생성
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8); // 충분히 충돌 방지 가능
+    const random = crypto.randomBytes(6).toString('hex'); // 12자리 hex (보안 안전)
     const gcsFileName = `${timestamp}-${random}-${file.originalname}`;
 
     const blob = bucket.file(gcsFileName);
@@ -62,5 +63,4 @@ export const uploadImageToGCS = (file) => {
   });
 };
 
-// ✅ bucket도 export 해서 다른 모듈에서 재사용 가능하게 함
 export { bucket };
