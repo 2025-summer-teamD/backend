@@ -1,3 +1,6 @@
+import dotenv from 'dotenv'
+dotenv.config()
+
 import { VertexAI } from '@google-cloud/vertexai';
 
 const vertexAi = new VertexAI({
