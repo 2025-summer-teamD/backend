@@ -1,46 +1,66 @@
+// uploadMiddleware.js
 import multer from 'multer';
+import { Storage } from '@google-cloud/storage';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
-// 업로드 디렉토리 설정
-const uploadDir = path.join(__dirname, '../../uploads');
+// 1. 메모리에 파일 저장
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
 
-// 스토리지 설정
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
+    if (mimetype && extname) {
+      cb(null, true);
+    } else {
+      cb(new Error('이미지 파일만 업로드 가능합니다. (jpeg, jpg, png, gif, webp)'));
+    }
   },
-  filename: (req, file, cb) => {
-    // 파일명 중복 방지를 위해 타임스탬프 추가
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB 제한
+  },
 });
 
-// 파일 필터링
-const fileFilter = (req, file, cb) => {
-  // 허용할 이미지 타입
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+// 2. GCS 클라이언트 초기화
+const storage = new Storage({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+});
 
-  if (mimetype && extname) {
-    return cb(null, true);
-  } else {
-    cb(new Error('이미지 파일만 업로드 가능합니다. (jpeg, jpg, png, gif, webp)'));
-  }
+const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
+
+// 3. GCS로 업로드하는 함수
+const uploadToGCS = (file) => {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('파일이 없습니다.'));
+
+    const gcsFileName = `${Date.now()}-${file.originalname}`;
+    const fileUpload = bucket.file(gcsFileName);
+
+    const stream = fileUpload.createWriteStream({
+      resumable: false,
+      contentType: file.mimetype,
+      metadata: {
+        contentType: file.mimetype,
+      },
+    });
+
+    stream.on('error', (err) => {
+      reject(err);
+    });
+
+    stream.on('finish', () => {
+      // 퍼블릭 URL 생성
+      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
+      resolve(publicUrl);
+    });
+
+    stream.end(file.buffer);
+  });
 };
 
-// multer 설정
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB 제한
-  }
-});
-
-export default upload; 
+export { upload, uploadToGCS };
