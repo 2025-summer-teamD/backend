@@ -1,23 +1,18 @@
 import express from 'express';
-import controllers from '../controllers/_index.js';
-import middlewares from '../middlewares/_index.js';
-
-const { userController, personaController, chatController } = controllers;
-const { authMiddleware, personaValidator, paginationValidator } = middlewares;
-
-const { getUserProfile } = userController;
-const { getMyPersonaList, getMyPersonaDetails, updatePersona, deletePersona } = personaController;
-const { getMyChats } = chatController;
-const { clerkAuthMiddleware, requireAuth } = authMiddleware;
-const { validateMyPersonaList, validateIdParam } = personaValidator;
-const { validatePagination } = paginationValidator;
+// 개별 import 방식으로 변경
+import userController from '../controllers/userController.js';
+import personaController from '../controllers/personaController.js'; 
+import chatController from '../controllers/chatController.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
+import personaValidator from '../middlewares/personaValidator.js';
+import paginationValidator from '../middlewares/paginationValidator.js';
 
 const router = express.Router();
 
 // /api/users/profile 경로에 대한 GET 요청을 처리합니다.
 // 요청이 오면, 먼저 requireAuth 미들웨어를 실행하여 인증 여부를 확인합니다.
 // 인증이 성공하면, getUserProfile 컨트롤러 함수가 실행됩니다.
-router.get('/profile', requireAuth, getUserProfile);
+router.get('/profile', authMiddleware.requireAuth, userController.getUserProfile);
 
 /**
   * @swagger
@@ -71,10 +66,10 @@ router.get('/profile', requireAuth, getUserProfile);
   */
 router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type=liked)
   '/characters',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,            // 1. 로그인 필수
-  validateMyPersonaList,  // 2. 쿼리 파라미터 유효성 검사
-  getMyPersonaList        // 3. 컨트롤러 실행
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth,            // 1. 로그인 필수
+  personaValidator.validateMyPersonaList,  // 2. 쿼리 파라미터 유효성 검사
+  personaController.getMyPersonaList        // 3. 컨트롤러 실행
 );
 
 /**
@@ -143,10 +138,10 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  */
 router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/:character_id)
   '/characters/:character_id',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth, // 1. 로그인 필수
-  validateIdParam, // 2. ID가 유효한 숫자인지 확인
-  getMyPersonaDetails // 3. 컨트롤러 실행
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth, // 1. 로그인 필수
+  personaValidator.validateIdParam, // 2. ID가 유효한 숫자인지 확인
+  personaController.getMyPersonaDetails // 3. 컨트롤러 실행
 );
 
 /**
@@ -211,10 +206,10 @@ router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/
 
 router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1&size=10)
 '/chat-characters',
-clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-requireAuth,        // 1. 로그인 필수
-validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
-getMyChats          // 3. 컨트롤러 실행
+authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+authMiddleware.requireAuth,        // 1. 로그인 필수
+paginationValidator.validatePagination, // 2. 페이지네이션 쿼리 검증 및 준비
+chatController.getMyChats          // 3. 컨트롤러 실행
 );
 
 /**
@@ -273,9 +268,9 @@ getMyChats          // 3. 컨트롤러 실행
  */
 router.patch(
   '/characters/:character_id',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,         // 1. 로그인 필수
-  updatePersona       // 2. 컨트롤러 실행
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth,         // 1. 로그인 필수
+  personaController.updatePersona       // 2. 컨트롤러 실행
 );
 
 /**
@@ -315,9 +310,9 @@ router.patch(
  */
 router.delete(
   '/characters/:character_id',
-  clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
-  requireAuth,         // 1. 로그인 필수
-  deletePersona       // 2. 컨트롤러 실행
+  authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
+  authMiddleware.requireAuth,         // 1. 로그인 필수
+  personaController.deletePersona       // 2. 컨트롤러 실행
 );
 
 

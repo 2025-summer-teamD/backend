@@ -1,4 +1,5 @@
-import { uploadToGCS, bucket } from '../middlewares/uploadMiddleware.js';
+//import { uploadToGCS, bucket } from '../middlewares/uploadMiddleware.js';
+import uploadMiddleware from "../middlewares/uploadMiddleware.js";
 
 /**
  * 단일 이미지 업로드
@@ -9,7 +10,7 @@ export const uploadSingleImage = async (req, res, next) => {
       return res.status(400).json({ message: '이미지 파일을 업로드해주세요.' });
     }
 
-    const publicUrl = await uploadToGCS(req.file);
+    const publicUrl = await uploadMiddleware.uploadToGCS(req.file);
 
     res.status(200).json({
       message: '이미지가 성공적으로 업로드되었습니다.',
@@ -35,7 +36,7 @@ export const uploadMultipleImages = async (req, res, next) => {
       return res.status(400).json({ message: '이미지 파일을 업로드해주세요.' });
     }
 
-    const uploadPromises = req.files.map(file => uploadToGCS(file));
+    const uploadPromises = req.files.map(file => uploadMiddleware.uploadToGCS(file));
     const publicUrls = await Promise.all(uploadPromises);
 
     const uploadedFiles = req.files.map((file, index) => ({
@@ -63,7 +64,7 @@ export const deleteImage = async (req, res, next) => {
     const { filename } = req.params;
     const decodedFilename = decodeURIComponent(filename);
 
-    const file = bucket.file(decodedFilename);
+    const file = uploadMiddleware.bucket.file(decodedFilename);
     const [exists] = await file.exists();
 
     console.log(`[삭제요청] filename: ${decodedFilename}, exists: ${exists}`);
@@ -96,7 +97,7 @@ export const serveImage = async (req, res, next) => {
   try {
     const encodedFilename = req.params.filename;
     const decodedFilename = decodeURIComponent(encodedFilename);
-    const file = bucket.file(decodedFilename);
+    const file = uploadMiddleware.bucket.file(decodedFilename);
 
     const [exists] = await file.exists();
     console.log(`[이미지요청] filename: ${decodedFilename}, exists: ${exists}`);

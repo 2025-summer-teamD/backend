@@ -1,6 +1,6 @@
 import express from 'express';
 import uploadController from '../controllers/uploadController.js';
-import { upload } from '../middlewares/uploadMiddleware.js';
+import uploadMiddleware from '../middlewares/uploadMiddleware.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -52,7 +52,7 @@ const router = express.Router();
  *       500:
  *         description: 서버 오류
  */
-router.post('/single', upload.single('image'), uploadController.uploadSingleImage);
+router.post('/single', uploadMiddleware.upload.single('image'), uploadController.uploadSingleImage);
 
 /**
  * @swagger
@@ -105,7 +105,7 @@ router.post('/single', upload.single('image'), uploadController.uploadSingleImag
  *       500:
  *         description: 서버 오류
  */
-router.post('/multiple', upload.array('images', 10), uploadController.uploadMultipleImages);
+router.post('/multiple', uploadMiddleware.upload.array('images', 10), uploadController.uploadMultipleImages);
 
 /**
  * @swagger
@@ -130,7 +130,7 @@ router.post('/multiple', upload.array('images', 10), uploadController.uploadMult
  *       500:
  *         description: 서버 오류
  */
-router.delete('/:filename', authMiddleware, uploadController.deleteImage);
+router.delete('/:filename', authMiddleware.requireAuth, uploadController.deleteImage);
 
 /**
  * @swagger

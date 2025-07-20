@@ -15,8 +15,8 @@ const router = express.Router();
 
 
 // upload routes (단수·복수 모두 지원)
-router.use('/upload', uploadRouter);
-router.use('/uploads', uploadRouter);   // ← 추가된 라우트
+router.use('/upload', uploadRoute);
+router.use('/uploads', uploadRoute);   // ← 추가된 라우트
 
 // 페르소나 관련 라우트
 router.use('/personas', personaRoute);
