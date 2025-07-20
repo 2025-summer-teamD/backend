@@ -1,12 +1,7 @@
 import express from 'express';
-import controllers from '../controllers/_index.js';
-import middlewares from '../middlewares/_index.js';
-
-const { personaController } = controllers;
-const { personaValidator } = middlewares;
-
-const { getPersonaList, getCommunityPersonaDetails } = personaController;
-const { validateGetPersonas, validateIdParam } = personaValidator;
+// 개별 import 방식으로 변경
+import personaController from '../controllers/personaController.js';
+import personaValidator from '../middlewares/personaValidator.js';
 
 const router = express.Router();
 
@@ -66,8 +61,8 @@ const router = express.Router();
 
 router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
     '/characters',
-    validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
-    getPersonaList       // 2. 컨트롤러 실행
+    personaValidator.validateGetPersonas, // 1. 쿼리 파라미터가 유효한지 확인
+    personaController.getPersonaList       // 2. 컨트롤러 실행
 );
 
 
@@ -135,8 +130,8 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
 router.get(
     '/characters/:character_id',
     
-    validateIdParam,              // 1. ID가 유효한 숫자인지 확인
-    getCommunityPersonaDetails    // 2. 컨트롤러 실행
+    personaValidator.validateIdParam,              // 1. ID가 유효한 숫자인지 확인
+    personaController.getCommunityPersonaDetails    // 2. 컨트롤러 실행
 );
 
 export default router;
