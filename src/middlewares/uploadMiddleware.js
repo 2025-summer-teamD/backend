@@ -1,10 +1,8 @@
-// uploadMiddleware.js
-import multer from 'multer';
-import { Storage } from '@google-cloud/storage';
-import path from 'path';
-import dotenv from 'dotenv';
+// src/middlewares/uploadMiddleware.js
 
-dotenv.config();
+import multer from 'multer';
+import path from 'path';
+import { uploadImageToGCS } from '../services/gcsService.js';
 
 // 1. 메모리에 파일 저장
 const upload = multer({
@@ -25,42 +23,4 @@ const upload = multer({
   },
 });
 
-// 2. GCS 클라이언트 초기화
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
-
-const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
-
-// 3. GCS로 업로드하는 함수
-const uploadToGCS = (file) => {
-  return new Promise((resolve, reject) => {
-    if (!file) return reject(new Error('파일이 없습니다.'));
-
-    const gcsFileName = `${Date.now()}-${file.originalname}`;
-    const fileUpload = bucket.file(gcsFileName);
-
-    const stream = fileUpload.createWriteStream({
-      resumable: false,
-      contentType: file.mimetype,
-      metadata: {
-        contentType: file.mimetype,
-      },
-    });
-
-    stream.on('error', (err) => {
-      reject(err);
-    });
-
-    stream.on('finish', () => {
-      // 퍼블릭 URL 생성
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
-      resolve(publicUrl);
-    });
-
-    stream.end(file.buffer);
-  });
-};
-
-export { upload, uploadToGCS };
+export { upload, uploadImageToGCS as uploadToGCS };

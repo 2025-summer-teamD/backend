@@ -1,16 +1,4 @@
-import { uploadToGCS } from '../middlewares/uploadMiddleware.js';
-import { Storage } from '@google-cloud/storage';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-// GCS 클라이언트 초기화
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
-
-const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
+import { uploadToGCS, bucket } from '../middlewares/uploadMiddleware.js';
 
 /**
  * 단일 이미지 업로드
@@ -100,7 +88,6 @@ export const deleteImage = async (req, res, next) => {
  */
 export const serveImage = async (req, res, next) => {
   try {
-
     const encodedFilename = req.params.filename;
     const decodedFilename = decodeURIComponent(encodedFilename);
     const file = bucket.file(decodedFilename);
@@ -116,6 +103,12 @@ export const serveImage = async (req, res, next) => {
     const contentType = metadata.contentType || 'application/octet-stream';
 
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+    res.setHeader('ETag', metadata.etag);
+
+    if (req.headers['if-none-match'] === metadata.etag) {
+      return res.status(304).end();
+    }
 
     file.createReadStream()
       .on('error', (err) => {

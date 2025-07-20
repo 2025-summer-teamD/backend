@@ -1,6 +1,7 @@
 import express from 'express';
 import uploadController from '../controllers/uploadController.js';
 import { upload } from '../middlewares/uploadMiddleware.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -129,7 +130,7 @@ router.post('/multiple', upload.array('images', 10), uploadController.uploadMult
  *       500:
  *         description: 서버 오류
  */
-router.delete('/:filename', uploadController.deleteImage);
+router.delete('/:filename', authMiddleware, uploadController.deleteImage);
 
 /**
  * @swagger
@@ -154,4 +155,4 @@ router.delete('/:filename', uploadController.deleteImage);
  */
 router.get('/:filename', uploadController.serveImage);
 
-export default router; 
+export default router;
