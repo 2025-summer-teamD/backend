@@ -1,5 +1,6 @@
 import express from 'express';
 import chatController from '../controllers/chatController.js';
+import authMiddleware from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
@@ -63,8 +64,8 @@ const router = express.Router();
 //ai 채팅 스트리밍 
 router.post('/rooms/:room_id', chatController.streamChatByRoom);
 
-
-
+// 새로운 캐릭터와의 대화 요청(채팅방 생성)
+router.post('/rooms', authMiddleware.requireAuth, chatController.createChatRoom);
 
 //채팅방 입장
 
@@ -116,5 +117,8 @@ router.post('/rooms/:room_id', chatController.streamChatByRoom);
  */
 
 router.get('/rooms', chatController.enterChatRoom);
+
+// room_id로 채팅방 정보 조회
+router.get('/room-info', chatController.getRoomInfo);
 
 export default router; 

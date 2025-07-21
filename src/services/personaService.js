@@ -186,7 +186,7 @@ const getPersonas = async (options = {}) => {
     });
 
     return {
-      character_id: persona.id,
+      id: persona.id,
       name: persona.name,
       image_url: persona.imageUrl,
       introduction: persona.introduction,
@@ -268,7 +268,7 @@ const getPersonaDetails = async (options) => {
   });
   
   return {
-    character_id: persona.id,
+    id: persona.id,
     user_id: persona.clerkId,
     creator_name: persona.creatorName || persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음',
     name: persona.name,
@@ -308,7 +308,7 @@ const getMyPersonas = async (userId, type = 'created') => {
 
     // 2. 결과를 최종 응답 형태로 가공한다.
     return likedChatRooms.map(room => ({
-      character_id: room.persona.id,
+      id: room.persona.id,
       name: room.persona.name,
       image_url: room.persona.imageUrl,
       introduction: room.persona.introduction,
@@ -347,7 +347,7 @@ const getMyPersonas = async (userId, type = 'created') => {
       const myRoom = p.chatRooms.length > 0 ? p.chatRooms[0] : null;
 
       return {
-        character_id: p.id,
+        id: p.id,
         name: p.name,
         image_url: p.imageUrl,
         introduction: p.introduction,
@@ -434,7 +434,7 @@ const updatePersona = async (personaId, userId, updateData) => {
   });
 
   return {
-    character_id: updated.id,
+    id: updated.id,
     user_id: updated.clerkId,
     creator_name: updated.creatorName || updated.user?.name || updated.user?.firstName || updated.user?.clerkId || '알 수 없음',
     name: updated.name,
@@ -462,9 +462,14 @@ const deletePersona = async (personaId, userId) => {
   if (!persona || persona.clerkId !== userId || persona.isDeleted) {
     throw new Error('삭제 권한이 없거나 존재하지 않는 페르소나입니다.');
   }
-  // 2. isDeleted true로 변경
+  // 2. isDeleted true로 변경 (페르소나)
   const deleted = await prismaConfig.prisma.persona.update({
     where: { id: personaId },
+    data: { isDeleted: true },
+  });
+  // 3. 연관된 chatRoom도 모두 isDeleted 처리
+  await prismaConfig.prisma.chatRoom.updateMany({
+    where: { characterId: personaId, isDeleted: false },
     data: { isDeleted: true },
   });
   return deleted;

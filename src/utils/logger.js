@@ -1,5 +1,5 @@
 /**
- * 로깅 유틸리티
+ * 로깅 유틸리티 (ELK Stack 연동)
  * 
  * 사용 위치:
  * - 모든 서비스와 컨트롤러에서 로깅 시
@@ -10,7 +10,11 @@
  * - 에러 로깅
  * - API 요청/응답 로깅
  * - 성능 모니터링
+ * - ELK Stack으로 로그 전송
  */
+
+import winston from 'winston';
+import { ElasticsearchTransport } from 'winston-elasticsearch';
 
 /**
  * 로그 레벨
@@ -26,6 +30,48 @@ const LOG_LEVELS = {
  * 현재 로그 레벨 (환경변수에서 가져오거나 기본값 사용)
  */
 const CURRENT_LOG_LEVEL = LOG_LEVELS[process.env.LOG_LEVEL?.toUpperCase()] ?? LOG_LEVELS.INFO;
+
+// Winston 로거 설정
+const winstonLogger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'express-app' },
+  transports: [
+    // 콘솔 출력
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    }),
+    
+    // 파일 출력
+    new winston.transports.File({ 
+      filename: 'logs/error.log', 
+      level: 'error' 
+    }),
+    new winston.transports.File({ 
+      filename: 'logs/combined.log' 
+    }),
+    
+    // Elasticsearch로 전송 (환경변수가 설정된 경우에만)
+    ...(process.env.ELASTICSEARCH_URL ? [
+      new ElasticsearchTransport({
+        level: 'info',
+        clientOpts: {
+          node: process.env.ELASTICSEARCH_URL,
+          index: 'logs',
+          type: 'log'
+        },
+        indexPrefix: 'logs'
+      })
+    ] : [])
+  ]
+});
 
 /**
  * 로그 메시지 생성
@@ -54,6 +100,12 @@ const log = (level, message, data = {}) => {
   if (logLevel <= CURRENT_LOG_LEVEL) {
     const logMessage = createLogMessage(level, message, data);
     console.log(JSON.stringify(logMessage));
+    
+    // Winston 로거에도 전송 (level 필드를 명시적으로 추가)
+    const winstonLevel = level.toLowerCase();
+    if (winstonLogger.levels[winstonLevel] !== undefined) {
+      winstonLogger.log(winstonLevel, message, { ...data, level: winstonLevel });
+    }
   }
 };
 
