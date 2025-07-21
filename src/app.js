@@ -20,6 +20,7 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import errorHandler from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
 import authMiddleware from './middlewares/authMiddleware.js';
+import client from 'prom-client';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +84,15 @@ const swaggerOptions = {
 };
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// prom-client 기본 메트릭 수집
+client.collectDefaultMetrics();
+
+// /metrics 엔드포인트 추가 (가장 위쪽에 배치)
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 // 기본 라우트
 app.get('/', (req, res) => {
