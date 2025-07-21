@@ -1,0 +1,240 @@
+services:
+  traefik:
+    image: "traefik:v2.11" 
+    container_name: "traefik"
+    # --- 핵심 설정 부분 ---
+    command:
+      # Docker를 서비스 제공자(Provider)로 사용하겠다고 선언
+      - "--providers.docker=true" 
+      # 보안을 위해 기본적으로 생성되는 라우터를 비활성화
+      - "--providers.docker.exposedbydefault=false"
+      # 웹 대시보드를 활성화하고, 8080 포트로 접근하게 함
+      - "--api.insecure=true"
+      - "--api.dashboard=true"
+      # HTTP(80)와 HTTPS(443) 요청을 받을 진입점(EntryPoints) 설정
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # (선택) HTTP 요청을 HTTPS로 리디렉션
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      # (HTTPS용) Let's Encrypt 설정
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      # 호스트의 80 포트를 컨테이너의 80 포트로 매핑 (HTTP)
+      - "80:80"
+      # 호스트의 443 포트를 컨테이너의 443 포트로 매핑 (HTTPS)
+      - "443:443"
+      # 호스트의 8080 포트를 컨테이너의 8080 포트로 매핑 (Traefik 대시보드)
+      - "8080:8080"
+    volumes:
+      # Docker 소켓을 마운트하여 Traefik이 다른 컨테이너의 이벤트를 감지하게 함
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      # Let's Encrypt 인증서를 저장할 볼륨 (서버 재시작 시에도 유지)
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - app-network
+
+  app:
+    build: .
+    container_name: express_app
+    ports:
+      - 3001:3001
+    volumes:
+      - ./google-credentials:/app/google-credentials:ro
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+    labels:
+      # 이 서비스에 대한 라우팅을 활성화
+      - "traefik.enable=true"
+      # --- HTTP 라우터 설정 ---
+      # 'api-router'라는 이름의 HTTP 라우터 생성
+      - "traefik.http.routers.api-router.rule=Host(`api.your-domain.com`)"
+      # 이 라우터는 'web' 진입점(HTTP/80)을 사용
+      - "traefik.http.routers.api-router.entrypoints=web"
+      # --- HTTPS 라우터 설정 ---
+      # 'api-router-secure'라는 이름의 HTTPS 라우터 생성
+      - "traefik.http.routers.api-router-secure.rule=Host(`api.your-domain.com`)"
+      # 이 라우터는 'websecure' 진입점(HTTPS/443)을 사용
+      - "traefik.http.routers.api-router-secure.entrypoints=websecure"
+      # TLS(SSL) 활성화 및 Let's Encrypt 해석기 지정
+      - "traefik.http.routers.api-router-secure.tls=true"
+      - "traefik.http.routers.api-router-secure.tls.certresolver=myresolver"
+      # --- 서비스 연결 설정 ---
+      # 이 라우터가 어떤 서비스로 요청을 보낼지 지정
+      - "traefik.http.services.api-service.loadbalancer.server.port=3001" 
+      # (Express 앱이 컨테이너 내부에서 3001 포트로 실행된다고 가정)
+    command: npm run start # 여기서 prisma migrate 제거
+
+
+  # ELK Stack
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - app-network
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.0
+    container_name: logstash
+    ports:
+      - "5044:5044"
+      - "5001:5001/tcp"
+      - "5001:5001/udp"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # 세션 유지 설정
+      - GF_AUTH_LOGIN_MAXIMUM_INACTIVE_LIFETIME_DURATION=7d
+      - GF_AUTH_LOGIN_MAXIMUM_LIFETIME_DURATION=30d
+      - GF_SESSION_PROVIDER=memory
+      - GF_SESSION_COOKIE_NAME=grafana_sess
+      - GF_SESSION_COOKIE_SECURE=false
+      - GF_SESSION_COOKIE_MAX_AGE=86400
+      # 자동 로그아웃 방지
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      # 기타 보안 설정
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis_exporter
+    ports:
+      - "9121:9121"
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # Node Exporter (시스템 메트릭)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /var/lib/docker:/host/var/lib/docker:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|tmp|var)($$|/)'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc|tmp|var)($$|/)'
+      - '--collector.filesystem.ignored-fs-types=^(tmpfs|overlay|nsfs|proc|sysfs|cgroup.*|devtmpfs)$$'
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  pgdata:
+  elasticsearch_data:
+  grafana_data:
+
+networks:
+  app-network:
