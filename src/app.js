@@ -19,6 +19,7 @@ import swaggerUi from 'swagger-ui-express';
 import swaggerJSDoc from 'swagger-jsdoc';
 import errorHandler from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
+import authMiddleware from './middlewares/authMiddleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +38,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// Clerk 인증 미들웨어 추가 (전역)
+app.use(authMiddleware.clerkAuthMiddleware);
 
 // 요청 로깅 미들웨어
 app.use(logger.logRequest);

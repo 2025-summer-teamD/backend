@@ -272,10 +272,48 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
   return responseHandler.sendSuccess(res, 200, '채팅방이 성공적으로 삭제되었습니다.');
 });
 
+/**
+ * room_id로 채팅방 정보 조회 (GET /api/chat/room-info?room_id=...)
+ */
+const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
+  const { room_id } = req.query;
+  if (!room_id) {
+    return responseHandler.sendBadRequest(res, 'room_id 쿼리 파라미터가 필요합니다.');
+  }
+  const parsedRoomId = parseInt(room_id);
+  if (isNaN(parsedRoomId)) {
+    return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
+  }
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: {
+      id: parsedRoomId,
+      isDeleted: false
+    },
+    include: {
+      persona: {
+        select: {
+          id: true,
+          name: true,
+          introduction: true,
+          imageUrl: true
+        }
+      }
+    }
+  });
+  if (!chatRoom) {
+    return responseHandler.sendNotFound(res, '해당 채팅방을 찾을 수 없습니다.');
+  }
+  return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
+    room_id: chatRoom.id,
+    character: chatRoom.persona
+  });
+});
+
 export default {
   streamChatByRoom,
   getMyChats,
   enterChatRoom,
   createChatRoom,
-  deleteChatRoom
+  deleteChatRoom,
+  getRoomInfo,
 };

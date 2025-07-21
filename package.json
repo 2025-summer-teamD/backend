@@ -19,7 +19,9 @@
     "multer": "^2.0.2",
     "prisma": "^6.11.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0"
+    "swagger-ui-express": "^5.0.0",
+    "winston": "^3.11.0",
+    "winston-elasticsearch": "^0.17.0"
   },
   "devDependencies": {
     "jest": "^29.0.0",
