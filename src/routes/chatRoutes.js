@@ -67,6 +67,8 @@ router.post('/rooms/:room_id',
     authMiddleware.requireAuth, 
     chatController.streamChatByRoom);
 
+
+    
 // 새로운 캐릭터와의 대화 요청(채팅방 생성)
 router.post('/rooms',
     authMiddleware.clerkAuthMiddleware,

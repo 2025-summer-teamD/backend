@@ -153,6 +153,9 @@ const streamChatByRoom = async (req, res, next) => {
   });
 };
 
+
+
+
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
  * 
@@ -174,6 +177,7 @@ const getMyChats = errorHandler.asyncHandler(async (req, res) => {
   });
 });
 
+
 /**
  * 채팅방 입장
  * 
@@ -193,7 +197,7 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendBadRequest(res, 'character_id는 숫자여야 합니다.');
   }
 
-  // 데이터베이스에서 채팅방 조회
+  // 1. 먼저 채팅방 조회
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       characterId: parsedCharacterId,
@@ -205,7 +209,7 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
           id: true,
           name: true,
           introduction: true,
-          image_url: true
+          imageUrl: true
         }
       }
     }
@@ -215,17 +219,37 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendNotFound(res, '해당 캐릭터의 채팅방을 찾을 수 없습니다.');
   }
 
+  // 2. 해당 채팅방의 대화기록만 별도로 조회 (SQL: SELECT * FROM "ChatLog" WHERE "chatroomId" = chatRoom.id ORDER BY "time")
+  const chatHistory = await prismaConfig.prisma.chatLog.findMany({
+    where: {
+      chatroomId: chatRoom.id,  // 명시적으로 chatroomId로 필터링
+      isDeleted: false
+    },
+    orderBy: { time: 'asc' },   // 시간순 정렬
+    select: {
+      id: true,
+      text: true,
+      speaker: true,
+      time: true
+    }
+  });
+
   logger.logUserActivity('ENTER_CHAT_ROOM', req.auth?.userId, {
     roomId: chatRoom.id,
     characterId: parsedCharacterId,
-    characterName: chatRoom.persona.name
+    characterName: chatRoom.persona.name,
+    previousMessageCount: chatHistory.length
   });
 
   return responseHandler.sendSuccess(res, 200, '채팅방에 입장했습니다.', {
     room_id: chatRoom.id,
-    character: chatRoom.persona
+    character: chatRoom.persona,
+    chat_history: chatHistory // 해당 채팅방의 대화기록만
   });
 });
+
+
+
 
 /**
  * 새로운 채팅방 생성
