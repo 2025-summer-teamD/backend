@@ -61,6 +61,7 @@ const getMyChatList = async (userId, pagination) => {
   const chatList = chatRooms.map(room => {
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
     return {
+      room_id: room.id,
       character_id: room.persona.id,
       name: room.persona.name,
       image_url: room.persona.imageUrl,
@@ -100,11 +101,28 @@ const deleteLikedCharacter = async (userId, characterId) => {
   return deleted;
 };
 
+const createChatRoom = async (characterId, userId) => {
+  // 1. 기존 채팅방 있는지 확인
+  let chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: {
+      clerkId: userId,
+      characterId: parseInt(characterId, 10),
+      isDeleted: false,
+    },
+  });
 
+  // 2. 없으면 새로 생성
+  if (!chatRoom) {
+    chatRoom = await prismaConfig.prisma.chatRoom.create({
+      data: {
+        clerkId: userId,
+        characterId: parseInt(characterId, 10),
+      },
+    });
+  }
 
-
-
-
+  return chatRoom;
+};
 
 
 /**
@@ -145,6 +163,7 @@ const chatService = {
   getMyChatList,
   deleteLikedCharacter,
   generateAiChatResponse,
+  createChatRoom, // 추가!
 };
 
 export default chatService;
