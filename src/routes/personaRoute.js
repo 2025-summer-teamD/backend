@@ -189,7 +189,7 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
 
 /**
  * @swagger
- * /characters/{character_id}/like:
+ * /characters/{characterId}/like:
  *   post:
  *     summary: 페르소나 좋아요 토글
  *     description: 특정 페르소나에 대한 좋아요를 추가하거나 취소합니다.
@@ -197,7 +197,7 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
  *       - like
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -226,7 +226,7 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
  *         description: 페르소나를 찾을 수 없음
  */
 router.post(
-  '/:character_id/like',
+  '/:characterId/like',
   authMiddleware.clerkAuthMiddleware,
   authMiddleware.requireAuth,
   ensureUserInDB,
@@ -235,7 +235,7 @@ router.post(
 
 /**
  * @swagger
- * /characters/{character_id}/view:
+ * /characters/{characterId}/view:
  *   post:
  *     summary: 페르소나 조회수 증가
  *     description: 특정 페르소나의 조회수를 1 증가시킵니다.
@@ -243,7 +243,7 @@ router.post(
  *       - view
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -269,13 +269,83 @@ router.post(
  *         description: 페르소나를 찾을 수 없음
  */
 router.post(
-  '/:character_id/view',
+  '/:characterId/view',
   authMiddleware.clerkAuthMiddleware,
   authMiddleware.requireAuth,
   ensureUserInDB,
   personaController.incrementViewCount
 );
 
+/**
+ * @swagger
+ * /characters/{characterId}:
+ *   get:
+ *     summary: 페르소나 상세 조회
+ *     description: 특정 페르소나의 상세 정보를 조회합니다.
+ *     tags:
+ *       - get character
+ *     parameters:
+ *       - in: path
+ *         name: characterId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 페르소나 ID
+ *     responses:
+ *       200:
+ *         description: 조회 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 페르소나 상세 조회 성공
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     name:
+ *                       type: string
+ *                       example: 캐릭터 이름
+ *                     image_url:
+ *                       type: string
+ *                       example: https://example.com/image.png
+ *                     is_public:
+ *                       type: boolean
+ *                       example: true
+ *                     prompt:
+ *                       type: object
+ *                       properties:
+ *                         tone:
+ *                           type: string
+ *                           example: 말투입니다
+ *                         personality:
+ *                           type: string
+ *                           example: 성격입니다
+ *                         tag:
+ *                           type: string
+ *                           example: "#태그"
+ *                     description:
+ *                       type: string
+ *                       example: 추가설명입니다
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                       example: 2025-07-16T14:10:00.000Z
+ *       404:
+ *         description: 페르소나를 찾을 수 없음
+ */
+router.get(
+  '/:characterId',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  ensureUserInDB,
+  personaController.getMyPersonaDetails
+);
 
 
 export default router;

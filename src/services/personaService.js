@@ -11,7 +11,7 @@ import gemini25 from '../vertexai/gemini25.js';
  */
 const createPersona = async (personaData, userId) => {
   try {
-    const { name, image_url, is_public, prompt, description, creator_name } = personaData;
+    const { name, imageUrl, isPublic, prompt, description, creatorName } = personaData;
 
     // 사용자 정보 가져오기
     const user = await prismaConfig.prisma.user.findUnique({
@@ -21,8 +21,8 @@ const createPersona = async (personaData, userId) => {
     // Sanitize string inputs
     const sanitizedData = {
       name: name.trim(),
-      imageUrl: image_url.trim(),
-      isPublic: is_public,
+      imageUrl: imageUrl.trim(),
+      isPublic: isPublic,
       introduction: description ? description.trim() : null,
       prompt: {
         tone: prompt.tone.trim(),
@@ -30,7 +30,7 @@ const createPersona = async (personaData, userId) => {
         tag: prompt.tag.trim()
       },
       clerkId: userId,
-      creatorName: creator_name || user?.name || user?.firstName || user?.username || userId
+      creatorName: creatorName || user?.name || user?.firstName || user?.username || userId
     };
     
     // DB에 저장하는 로직 (Prisma 예시)
@@ -54,7 +54,7 @@ const createPersona = async (personaData, userId) => {
  * @returns {Promise<object>} 완전히 생성된 페르소나 객체
  */
 const createPersonaWithAI = async (initialData, userId) => {
-  const { name, image_url, is_public, creator_name } = initialData;
+  const { name, imageUrl, isPublic, creatorName } = initialData;
 
   // 사용자 정보 가져오기
   const user = await prismaConfig.prisma.user.findUnique({
@@ -98,11 +98,11 @@ const createPersonaWithAI = async (initialData, userId) => {
   const fullPersonaData = {
     clerkId: userId,
     name,
-    imageUrl: image_url,
-    isPublic: is_public,
+    imageUrl: imageUrl,
+    isPublic: isPublic,
     introduction: aiGeneratedDetails.description, // AI가 생성
     prompt: aiGeneratedDetails.prompt,          // AI가 생성
-    creatorName: creator_name || user?.name || user?.firstName || user?.username || userId
+    creatorName: creatorName || user?.name || user?.firstName || user?.username || userId
   };
 
   // 4. 완성된 데이터를 DB에 저장
@@ -141,7 +141,7 @@ const getPersonas = async (options = {}) => {
   const orderBy = {};
   if (sort === 'likes') {
     orderBy.likesCount = 'desc'; // DB 필드명은 likesCount
-  } else if (sort === 'view_count' || sort === 'uses_count') {
+  } else if (sort === 'viewCount' || sort === 'usesCount') {
     orderBy.usesCount = 'desc'; // DB 필드명은 camelCase로
   } else {
     // 기본 정렬은 최신순
@@ -188,13 +188,13 @@ const getPersonas = async (options = {}) => {
     return {
       id: persona.id,
       name: persona.name,
-      image_url: persona.imageUrl,
+      imageUrl: persona.imageUrl,
       introduction: persona.introduction,
       prompt: persona.prompt,
-      creator_name: creatorName,
-      uses_count: persona.usesCount,
+      creatorName: creatorName,
+      usesCount: persona.usesCount,
       likes: persona.likesCount,
-      is_public: persona.isPublic,
+      isPublic: persona.isPublic,
       liked: liked,
     };
   }));
@@ -214,40 +214,20 @@ const getPersonas = async (options = {}) => {
 const getPersonaDetails = async (options) => {
   const { personaId, ownerId, currentUserId } = options;
 
-  console.log('getMyPersonaDetails 호출:', { personaId, ownerId, currentUserId });
-
   // 1. 조회 조건(where)을 동적으로 구성
-  const whereCondition = {
-    id: personaId,
-  };
+  const whereCondition = { id: personaId };
+  if (ownerId) whereCondition.clerkId = ownerId;
 
-  // 'ownerId'가 제공되면, 소유권 검증 조건을 추가
-  if (ownerId) {
-    whereCondition.clerkId = ownerId;
-  }
-
-  console.log('조회 조건:', whereCondition);
-
-  const persona = await prismaConfig.prisma.persona.findUnique({
+  const persona = await prismaConfig.prisma.persona.findFirst({
     where: whereCondition,
-    include: {
-      user: true, // Users 테이블과 조인
-    },
+    include: { user: true },
   });
 
-  console.log('데이터베이스에서 가져온 원본 데이터:', {
-    id: persona?.id,
-    introduction: persona?.introduction,
-    prompt: persona?.prompt
-  });
-
-  if (!persona || persona.isDeleted) {
-    return null;
-  }
+  if (!persona || persona.isDeleted) return null;
 
   // 2. 'liked' 상태를 계산
   let liked = false;
-  if (currentUserId) { // 'currentUserId'가 제공된 경우에만 '좋아요' 상태를 확인
+  if (currentUserId) {
     const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: {
         clerkId: currentUserId,
@@ -257,27 +237,18 @@ const getPersonaDetails = async (options) => {
     liked = chatRoom ? chatRoom.likes : false;
   }
 
-  // 3. 최종 응답 객체 조립
-  console.log('페르소나 상세 정보:', {
-    id: persona.id,
-    clerkId: persona.clerkId,
-    user: persona.user,
-    creator_name: persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음',
-    introduction: persona.introduction,
-    prompt: persona.prompt
-  });
-  
+  // 3. 최종 응답 객체 조립 (필드명 일치)
   return {
     id: persona.id,
-    user_id: persona.clerkId,
-    creator_name: persona.creatorName || persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음',
+    userId: persona.clerkId,
+    creatorName: persona.creatorName || persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음',
     name: persona.name,
-    image_url: persona.imageUrl,
+    imageUrl: persona.imageUrl,
     introduction: persona.introduction,
     prompt: persona.prompt,
-    uses_count: persona.usesCount,
+    usesCount: persona.usesCount,
     likes: persona.likesCount,
-    is_public: persona.isPublic,
+    isPublic: persona.isPublic,
     liked: liked,
   };
 };
@@ -295,14 +266,14 @@ const getMyPersonas = async (userId, type = 'created') => {
     // 1. 내가 좋아요 한 ChatRoom을 먼저 찾는다.
     const likedChatRooms = await prismaConfig.prisma.chatRoom.findMany({
       where: {
-        clerkId: userId,  // ChatRoom 생성자 ID가 내 ID이고
-        likes: true,      // likes가 true이며
-        persona: {        // 연결된 페르소나가
-          isDeleted: false, // 삭제되지 않은 경우
+        clerkId: userId,
+        likes: true,
+        persona: {
+          isDeleted: false,
         }
       },
       include: {
-        persona: true, // 관련된 페르소나 정보를 함께 가져온다 (Join)
+        persona: true,
       }
     });
 
@@ -310,29 +281,27 @@ const getMyPersonas = async (userId, type = 'created') => {
     return likedChatRooms.map(room => ({
       id: room.persona.id,
       name: room.persona.name,
-      image_url: room.persona.imageUrl,
+      imageUrl: room.persona.imageUrl,
       introduction: room.persona.introduction,
       prompt: room.persona.prompt,
-      creator_name: room.persona.creatorName || room.persona.user?.name || room.persona.user?.firstName || room.persona.user?.clerkId || '알 수 없음',
-      uses_count: room.persona.usesCount, // 조회수 추가
-      likes: room.persona.likesCount,
+      creatorName: room.persona.creatorName || room.persona.user?.name || room.persona.user?.firstName || room.persona.user?.clerkId || '알 수 없음',
+      usesCount: room.persona.usesCount,
+      likesCount: room.persona.likesCount,
       liked: true, // 이 목록은 항상 true
-      intimacy: room.friendship, // friendship 필드 사용
-      is_deleted: room.persona.isDeleted,
+      friendship: room.friendship, // friendship 필드 사용
+      isDeleted: room.persona.isDeleted,
     }));
-
   } else {
     // --- 내가 만든 페르소나 조회 로직 ('created') ---
 
     // 1. 내가 만든 페르소나를 모두 찾는다.
     const myCreatedPersonas = await prismaConfig.prisma.persona.findMany({
       where: {
-        clerkId: userId,    // 페르소나 생성자 ID가 내 ID이고
-        isDeleted: false,   // 삭제되지 않은 경우
+        clerkId: userId,
+        isDeleted: false,
       },
       include: {
-        user: true, // Users 테이블과 조인
-        // 이 페르소나와 '나' 사이의 채팅방 정보를 함께 가져온다.
+        user: true,
         chatRooms: {
           where: {
             clerkId: userId,
@@ -345,19 +314,18 @@ const getMyPersonas = async (userId, type = 'created') => {
     return myCreatedPersonas.map(p => {
       // 나와의 채팅방은 유일하거나 없어야 한다.
       const myRoom = p.chatRooms.length > 0 ? p.chatRooms[0] : null;
-
       return {
         id: p.id,
         name: p.name,
-        image_url: p.imageUrl,
+        imageUrl: p.imageUrl,
         introduction: p.introduction,
         prompt: p.prompt,
-        creator_name: p.creatorName || p.user?.name || p.user?.firstName || p.user?.clerkId || '알 수 없음',
-        uses_count: p.usesCount, // 조회수 추가
-        likes: p.likesCount,
+        creatorName: p.creatorName || p.user?.name || p.user?.firstName || p.user?.clerkId || '알 수 없음',
+        usesCount: p.usesCount,
+        likesCount: p.likesCount,
         liked: myRoom ? myRoom.likes : false,
-        intimacy: myRoom ? myRoom.friendship : 0,
-        is_deleted: p.isDeleted,
+        friendship: myRoom ? myRoom.friendship : 0,
+        isDeleted: p.isDeleted,
       };
     });
   }
@@ -371,23 +339,13 @@ const getMyPersonas = async (userId, type = 'created') => {
  * @returns {Promise<object>} 수정된 페르소나 객체
  */
 const updatePersona = async (personaId, userId, updateData) => {
-  console.log('updatePersona 호출:', { personaId, userId, updateData });
-  
   // 1. 본인 소유 페르소나인지 확인
   const persona = await prismaConfig.prisma.persona.findUnique({
     where: { id: personaId },
   });
-  
-  console.log('수정 전 원본 데이터:', {
-    id: persona?.id,
-    introduction: persona?.introduction,
-    prompt: persona?.prompt
-  });
-  
   if (!persona || persona.clerkId !== userId || persona.isDeleted) {
     throw new Error('수정 권한이 없거나 존재하지 않는 페르소나입니다.');
   }
-
   // 2. 업데이트할 필드 준비
   const updateFields = {};
   if (updateData.introduction !== undefined) {
@@ -407,24 +365,14 @@ const updatePersona = async (personaId, userId, updateData) => {
       ...(updateData.tag !== undefined ? { tag: updateData.tag } : {}),
     };
   }
-
-  console.log('업데이트할 필드:', updateFields);
-
   // 3. DB 업데이트
   const updated = await prismaConfig.prisma.persona.update({
     where: { id: personaId },
     data: updateFields,
     include: {
-      user: true, // Users 테이블과 조인
+      user: true,
     },
   });
-
-  console.log('수정된 페르소나 데이터:', {
-    id: updated.id,
-    introduction: updated.introduction,
-    prompt: updated.prompt
-  });
-
   // 4. getPersonaDetails와 동일한 구조로 반환
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
@@ -432,18 +380,17 @@ const updatePersona = async (personaId, userId, updateData) => {
       characterId: personaId,
     },
   });
-
   return {
     id: updated.id,
-    user_id: updated.clerkId,
-    creator_name: updated.creatorName || updated.user?.name || updated.user?.firstName || updated.user?.clerkId || '알 수 없음',
+    userId: updated.clerkId,
+    creatorName: updated.creatorName || updated.user?.name || updated.user?.firstName || updated.user?.clerkId || '알 수 없음',
     name: updated.name,
-    image_url: updated.imageUrl,
+    imageUrl: updated.imageUrl,
     introduction: updated.introduction,
     prompt: updated.prompt,
-    uses_count: updated.usesCount,
-    likes: updated.likesCount,
-    is_public: updated.isPublic,
+    usesCount: updated.usesCount,
+    likesCount: updated.likesCount,
+    isPublic: updated.isPublic,
     liked: chatRoom ? chatRoom.likes : false,
   };
 };
@@ -472,7 +419,10 @@ const deletePersona = async (personaId, userId) => {
     where: { characterId: personaId, isDeleted: false },
     data: { isDeleted: true },
   });
-  return deleted;
+  return {
+    id: deleted.id,
+    isDeleted: deleted.isDeleted,
+  };
 };
 
 /**
@@ -486,16 +436,13 @@ const toggleLike = async (personaId, userId) => {
   const persona = await prismaConfig.prisma.persona.findUnique({
     where: { id: personaId, isDeleted: false },
   });
-  
   if (!persona) {
     throw new Error('존재하지 않는 페르소나입니다.');
   }
-
   // 2. 본인 페르소나 좋아요 방지
   if (persona.clerkId === userId) {
     throw new Error('자신이 만든 페르소나는 좋아요할 수 없습니다.');
   }
-
   // 3. 기존 ChatRoom 확인 또는 생성
   let chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
@@ -503,7 +450,6 @@ const toggleLike = async (personaId, userId) => {
       characterId: personaId,
     },
   });
-
   if (!chatRoom) {
     // ChatRoom이 없으면 생성
     chatRoom = await prismaConfig.prisma.chatRoom.create({
@@ -521,7 +467,6 @@ const toggleLike = async (personaId, userId) => {
       data: { likes: !chatRoom.likes },
     });
   }
-
   // 4. 페르소나의 총 좋아요 수 업데이트
   const totalLikes = await prismaConfig.prisma.chatRoom.count({
     where: {
@@ -529,12 +474,10 @@ const toggleLike = async (personaId, userId) => {
       likes: true,
     },
   });
-
   await prismaConfig.prisma.persona.update({
     where: { id: personaId },
     data: { likesCount: totalLikes },
   });
-
   return {
     isLiked: chatRoom.likes,
     likesCount: totalLikes,
@@ -551,11 +494,9 @@ const incrementViewCount = async (personaId) => {
   const persona = await prismaConfig.prisma.persona.findUnique({
     where: { id: personaId, isDeleted: false },
   });
-  
   if (!persona) {
     throw new Error('존재하지 않는 페르소나입니다.');
   }
-
   // 2. 조회수 증가
   const updated = await prismaConfig.prisma.persona.update({
     where: { id: personaId },
@@ -565,9 +506,8 @@ const incrementViewCount = async (personaId) => {
       },
     },
   });
-
   return {
-    viewCount: updated.usesCount,
+    usesCount: updated.usesCount,
   };
 };
 
