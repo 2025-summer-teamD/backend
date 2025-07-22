@@ -85,28 +85,8 @@ const streamChatByRoom = async (req, res, next) => {
       chatHistory = '아직 대화 기록이 없습니다.';
     }
 
-    logger.logUserActivity('CHAT_MESSAGE', sender, {
-      roomId: room_id,
-      personaName: personaInfo.name,
-      messageLength: message.length
-    });
-
-    // --- SSE 헤더 설정 ---
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
-
-    // --- AI 응답 생성 ---
-    const fullResponseText = await chatService.generateAiChatResponse(
-      message,
-      personaInfo,
-      chatHistory
-    );
-
-    // --- 사용자 메시지와 AI 응답을 데이터베이스에 저장 ---
+    // --- 1. 먼저 사용자 메시지를 즉시 DB에 저장 ---
     try {
-      // 사용자 메시지 저장
       await prismaConfig.prisma.chatLog.create({
         data: {
           chatroomId: parseInt(room_id, 10),
@@ -116,8 +96,32 @@ const streamChatByRoom = async (req, res, next) => {
           time: new Date(timestamp)
         }
       });
+      
+      logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
+        roomId: room_id,
+        personaName: personaInfo.name,
+        messageLength: message.length
+      });
+    } catch (dbError) {
+      logger.logError('사용자 메시지 저장 실패', dbError, { roomId: room_id });
+      return responseHandler.sendServerError(res, '메시지 저장에 실패했습니다.');
+    }
 
-      // AI 응답 저장
+    // --- 2. SSE 헤더 설정 ---
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // --- 3. AI 응답 생성 ---
+    const fullResponseText = await chatService.generateAiChatResponse(
+      message,
+      personaInfo,
+      chatHistory
+    );
+
+    // --- 4. AI 응답만 별도로 DB에 저장 ---
+    try {
       await prismaConfig.prisma.chatLog.create({
         data: {
           chatroomId: parseInt(room_id, 10),
@@ -128,8 +132,8 @@ const streamChatByRoom = async (req, res, next) => {
         }
       });
     } catch (dbError) {
-      logger.logError('채팅 기록 저장 실패', dbError, { roomId: room_id });
-      // 저장 실패해도 SSE 응답은 계속 진행
+      logger.logError('AI 응답 저장 실패', dbError, { roomId: room_id });
+      // AI 응답 저장 실패해도 SSE는 계속 진행
     }
 
     // --- 생성된 전체 응답을 SSE로 전송 ---
