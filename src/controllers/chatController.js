@@ -18,6 +18,21 @@ import logger from '../utils/logger.js';
 import errorHandler from '../middlewares/errorHandler.js';
 
 /**
+ * 채팅 EXP 계산 함수
+ * 기본 1점 + 70자 이상이면 +1점 + 이모티콘 하나당 0.1점
+ */
+const calculateExp = (message) => {
+  let exp = 1;
+  if (message.length >= 70) exp += 1;
+  const emojiRegex = /[\p{Emoji}]/gu;
+  const emojiMatches = message.match(emojiRegex);
+  if (emojiMatches) {
+    exp += emojiMatches.length * 0.1;
+  }
+  return exp;
+};
+
+/**
  * 스트리밍 채팅 응답 생성
  * 
  * @param {object} req - Express request 객체
@@ -127,6 +142,14 @@ const streamChatByRoom = async (req, res, next) => {
           time: new Date()
         }
       });
+
+      // EXP 계산 및 반영
+      const expToAdd = calculateExp(message);
+      await prismaConfig.prisma.chatRoom.update({
+        where: { id: parseInt(room_id, 10) },
+        data: { exp: { increment: expToAdd } }
+      });
+
     } catch (dbError) {
       logger.logError('채팅 기록 저장 실패', dbError, { roomId: room_id });
       // 저장 실패해도 SSE 응답은 계속 진행

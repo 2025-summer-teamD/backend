@@ -42,11 +42,11 @@ router.get('/profile', authMiddleware.requireAuth, userController.getUserProfile
   *                   items:
   *                     type: object
   *                     properties:
-  *                       character_id:
+  *                       characterId:
   *                         type: integer
   *                       name:
   *                         type: string
-  *                       image_url:
+  *                       imageUrl:
   *                         type: string
   *                       introduction:
   *                         type: string
@@ -56,12 +56,12 @@ router.get('/profile', authMiddleware.requireAuth, userController.getUserProfile
   *                         type: boolean
   *                       intimacy:
   *                         type: integer
-  *                       is_deleted:
+  *                       isDeleted:
   *                         type: boolean
-  *                 page_info:
+  *                 pageInfo:
   *                   type: object
   *                   properties:
-  *                     total_elements:
+  *                     totalElements:
   *                       type: integer
   */
 router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type=liked)
@@ -74,17 +74,17 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
 
 /**
  * @swagger
- * /my/characters/{character_id}:
+ * /my/characters/{characterId}:
  *   get:
  *     tags:
  *       - my character
  *     summary: 내 케릭터 상세 조회
- *     description: character_id로 내 케릭터의 상세 정보를 조회합니다.
+ *     description: characterId로 내 케릭터의 상세 정보를 조회합니다.
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -97,13 +97,13 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  *             schema:
  *               type: object
  *               properties:
- *                 character_id:
+ *                 characterId:
  *                   type: integer
- *                 user_id:
+ *                 userId:
  *                   type: integer
  *                 name:
  *                   type: string
- *                 image_url:
+ *                 imageUrl:
  *                   type: string
  *                 introduction:
  *                   type: string
@@ -116,13 +116,13 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  *                       type: string
  *                     tag:
  *                       type: string
- *                 uses_count:
+ *                 usesCount:
  *                   type: integer
  *                 likes:
  *                   type: integer
  *                 liked:
  *                   type: boolean
- *                 is_public:
+ *                 isPublic:
  *                   type: boolean
  *       404:
  *         description: 캐릭터를 찾을 수 없음
@@ -137,7 +137,7 @@ router.get(   // 나의 페르소나 목록 조회 (GET /api//my/characters?type
  *                   type: string
  */
 router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/:character_id)
-  '/characters/:character_id',
+  '/characters/:characterId',
   authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   authMiddleware.requireAuth, // 1. 로그인 필수
   personaValidator.validateIdParam, // 2. ID가 유효한 숫자인지 확인
@@ -187,7 +187,7 @@ router.get(   // 나의 특정 페르소나 상세 조회 (GET /api/my/personas/
  *                   items:
  *                     type: object
  *                     properties:
- *                       character_id:
+ *                       characterId:
  *                         type: string
  *                       name:
  *                         type: string
@@ -214,7 +214,7 @@ chatController.getMyChats          // 3. 컨트롤러 실행
 
 /**
  * @swagger
- * /my/characters/{character_id}:
+ * /my/characters/{characterId}:
  *   patch:
  *     summary: 페르소나 정보 수정 (본인만 가능)
  *     description: introduction, personality, tone, tag 중 일부만 부분 수정할 수 있습니다. 본인 소유 페르소나만 수정 가능.
@@ -224,7 +224,7 @@ chatController.getMyChats          // 3. 컨트롤러 실행
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -267,7 +267,7 @@ chatController.getMyChats          // 3. 컨트롤러 실행
  *         description: 존재하지 않거나 권한 없는 페르소나
  */
 router.patch(
-  '/characters/:character_id',
+  '/characters/:characterId',
   authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   authMiddleware.requireAuth,         // 1. 로그인 필수
   personaController.updatePersona       // 2. 컨트롤러 실행
@@ -275,7 +275,7 @@ router.patch(
 
 /**
  * @swagger
- * /my/characters/{character_id}:
+ * /my/characters/{characterId}:
  *   delete:
  *     summary: 페르소나 소프트 삭제 (본인만 가능)
  *     description: 본인 소유 페르소나만 삭제 가능. 실제로는 isDeleted만 true로 변경됩니다.
@@ -285,7 +285,7 @@ router.patch(
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -309,7 +309,7 @@ router.patch(
  *         description: 존재하지 않거나 권한 없는 페르소나
  */
 router.delete(
-  '/characters/:character_id',
+  '/characters/:characterId',
   authMiddleware.clerkAuthMiddleware, // 0. Clerk 인증 미들웨어
   authMiddleware.requireAuth,         // 1. 로그인 필수
   personaController.deletePersona       // 2. 컨트롤러 실행

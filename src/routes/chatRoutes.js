@@ -67,8 +67,36 @@ router.post('/rooms/:room_id',
     authMiddleware.requireAuth, 
     chatController.streamChatByRoom);
 
-
-    
+/**
+ * @swagger
+ * /chat/rooms:
+ *   post:
+ *     summary: 새로운 채팅방 생성
+ *     description: 캐릭터당 채팅방은 하나만 생성됩니다. 이미 존재하는 경우 기존 방을 반환합니다.
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               character_id:
+ *                 type: integer
+ *                 description: 채팅할 캐릭터 ID
+ *                 example: 102
+ *     responses:
+ *       201:
+ *         description: 채팅방 생성 성공
+ *       200:
+ *         description: 이미 존재하는 채팅방 반환
+ *       400:
+ *         description: 요청 형식 오류 또는 캐릭터 ID 누락
+ *       500:
+ *         description: 서버 내부 오류
+ */
 // 새로운 캐릭터와의 대화 요청(채팅방 생성)
 router.post('/rooms',
     authMiddleware.clerkAuthMiddleware,

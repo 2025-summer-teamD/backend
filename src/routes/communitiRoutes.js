@@ -38,24 +38,24 @@ const router = express.Router();
  *                   items:
  *                     type: object
  *                     properties:
- *                       character_id:
+ *                       characterId:
  *                         type: integer
  *                       name:
  *                         type: string
- *                       image_url:
+ *                       imageUrl:
  *                         type: string
  *                       introduction:
  *                         type: string
- *                       uses_count:
+ *                       usesCount:
  *                         type: integer
  *                       likes:
  *                         type: integer
  *                       liked:
  *                         type: boolean
- *                 page_info:
+ *                 pageInfo:
  *                   type: object
  *                   properties:
- *                     total_elements:
+ *                     totalElements:
  *                       type: integer
  */
 
@@ -68,15 +68,15 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
 
 /**
  * @swagger
- * /communities/characters/{character_id}:
+ * /communities/characters/{characterId}:
  *   get:
  *     tags:
  *       - community
  *     summary: 커뮤니티 캐릭터 상세 조회
- *     description: character_id로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
+ *     description: characterId로 커뮤니티 캐릭터의 상세 정보를 조회합니다.
  *     parameters:
  *       - in: path
- *         name: character_id
+ *         name: characterId
  *         required: true
  *         schema:
  *           type: integer
@@ -89,13 +89,13 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
  *             schema:
  *               type: object
  *               properties:
- *                 character_id:
+ *                 characterId:
  *                   type: integer
- *                 user_id:
+ *                 userId:
  *                   type: integer
  *                 name:
  *                   type: string
- *                 image_url:
+ *                 imageUrl:
  *                   type: string
  *                 introduction:
  *                   type: string
@@ -108,7 +108,7 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
  *                       type: string
  *                     tag:
  *                       type: string
- *                 uses_count:
+ *                 usesCount:
  *                   type: integer
  *                 likes:
  *                   type: integer
@@ -126,9 +126,9 @@ router.get(// 페르소나 목록 조회 라우트 (GET /communities/characters)
  *                 result:
  *                   type: string
  */
-// 페르소나 상세 조회 (GET /communities/characters/:character_id)
+// 페르소나 상세 조회 (GET /communities/characters/:characterId)
 router.get(
-    '/characters/:character_id',
+    '/characters/:characterId',
     
     personaValidator.validateIdParam,              // 1. ID가 유효한 숫자인지 확인
     personaController.getCommunityPersonaDetails    // 2. 컨트롤러 실행
