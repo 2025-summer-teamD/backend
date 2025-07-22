@@ -130,7 +130,7 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { personas, total } = await PersonaService.getPersonas(options);
 
   return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
-    total_elements: total
+    totalElements: total
   });
 });
 
@@ -171,7 +171,7 @@ const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const personas = await PersonaService.getMyPersonas(userId, type);
 
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
-    total_elements: personas.length
+    totalElements: personas.length
   });
 });
 

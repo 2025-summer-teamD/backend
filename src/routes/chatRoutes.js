@@ -62,7 +62,7 @@ const router = express.Router();
  */
 
 //ai 채팅 스트리밍 
-router.post('/rooms/:room_id',
+router.post('/rooms/:roomId',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth, 
     chatController.streamChatByRoom);

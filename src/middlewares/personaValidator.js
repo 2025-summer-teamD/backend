@@ -45,9 +45,9 @@ const validateGetPersonas = (req, res, next) => {
   const { sort } = req.query;
 
   // sort 파라미터가 존재하지만, 허용된 값이 아닌 경우
-  if (sort && !['likes', 'uses_count', 'createdAt'].includes(sort)) { // createdAt 추가
+  if (sort && !['likes', 'usesCount', 'createdAt'].includes(sort)) { // createdAt 추가
     return res.status(400).json({ 
-      error: "잘못된 정렬 값입니다. 'likes', 'uses_count', 'createdAt' 중 하나를 사용해주세요." 
+      error: "잘못된 정렬 값입니다. 'likes', 'usesCount', 'createdAt' 중 하나를 사용해주세요." 
     });
   }
 

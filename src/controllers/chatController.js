@@ -41,7 +41,7 @@ const calculateExp = (message) => {
  */
 const streamChatByRoom = async (req, res, next) => {
   try {
-    const { room_id } = req.params;
+    const { roomId } = req.params;
     const { message, sender, timestamp } = req.body;
 
     // 입력 검증
@@ -52,7 +52,7 @@ const streamChatByRoom = async (req, res, next) => {
     // 실제 채팅방 정보를 데이터베이스에서 조회
     const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
       where: { 
-        id: parseInt(room_id, 10),
+        id: parseInt(roomId, 10),
         isDeleted: false
       },
       include: {
@@ -78,7 +78,7 @@ const streamChatByRoom = async (req, res, next) => {
     });
 
     if (!chatRoom) {
-      return responseHandler.sendNotFound(res, `채팅방 ID ${room_id}를 찾을 수 없습니다.`);
+      return responseHandler.sendNotFound(res, `채팅방 ID ${roomId}를 찾을 수 없습니다.`);
     }
 
     const personaInfo = {
@@ -104,7 +104,7 @@ const streamChatByRoom = async (req, res, next) => {
     try {
       await prismaConfig.prisma.chatLog.create({
         data: {
-          chatroomId: parseInt(room_id, 10),
+          chatroomId: parseInt(roomId, 10),
           text: message,
           type: 'text',
           speaker: 'user',
@@ -113,12 +113,12 @@ const streamChatByRoom = async (req, res, next) => {
       });
       
       logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
-        roomId: room_id,
+        roomId: roomId,
         personaName: personaInfo.name,
         messageLength: message.length
       });
     } catch (dbError) {
-      logger.logError('사용자 메시지 저장 실패', dbError, { roomId: room_id });
+      logger.logError('사용자 메시지 저장 실패', dbError, { roomId: roomId });
       return responseHandler.sendServerError(res, '메시지 저장에 실패했습니다.');
     }
 
@@ -139,7 +139,7 @@ const streamChatByRoom = async (req, res, next) => {
     try {
       await prismaConfig.prisma.chatLog.create({
         data: {
-          chatroomId: parseInt(room_id, 10),
+          chatroomId: parseInt(roomId, 10),
           text: fullResponseText,
           type: 'text',
           speaker: 'ai',
@@ -150,12 +150,12 @@ const streamChatByRoom = async (req, res, next) => {
       // EXP 계산 및 반영
       const expToAdd = calculateExp(message);
       await prismaConfig.prisma.chatRoom.update({
-        where: { id: parseInt(room_id, 10) },
+        where: { id: parseInt(roomId, 10) },
         data: { exp: { increment: expToAdd } }
       });
 
     } catch (dbError) {
-      logger.logError('AI 응답 저장 실패', dbError, { roomId: room_id });
+      logger.logError('AI 응답 저장 실패', dbError, { roomId: roomId });
       // AI 응답 저장 실패해도 SSE는 계속 진행
     }
 
@@ -165,7 +165,7 @@ const streamChatByRoom = async (req, res, next) => {
     res.end();
 
   } catch (error) {
-    logger.logError('스트리밍 채팅 에러', error, { roomId: req.params.room_id });
+    logger.logError('스트리밍 채팅 에러', error, { roomId: req.params.roomId });
     if (!res.headersSent) {
       next(error);
     } else {
@@ -175,7 +175,7 @@ const streamChatByRoom = async (req, res, next) => {
 
   // 클라이언트 연결 종료 이벤트 처리
   req.on('close', () => {
-    logger.logUserActivity('CHAT_DISCONNECT', req.auth?.userId, { roomId: req.params.room_id });
+    logger.logUserActivity('CHAT_DISCONNECT', req.auth?.userId, { roomId: req.params.roomId });
     res.end();
   });
 };
@@ -213,15 +213,15 @@ const getMyChats = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { character_id } = req.query;
+  const { characterId } = req.query;
   
-  if (!character_id) {
-    return responseHandler.sendBadRequest(res, 'character_id 쿼리 파라미터가 필요합니다.');
+  if (!characterId) {
+    return responseHandler.sendBadRequest(res, 'characterId 쿼리 파라미터가 필요합니다.');
   }
 
-  const parsedCharacterId = parseInt(character_id);
+  const parsedCharacterId = parseInt(characterId);
   if (isNaN(parsedCharacterId)) {
-    return responseHandler.sendBadRequest(res, 'character_id는 숫자여야 합니다.');
+    return responseHandler.sendBadRequest(res, 'characterId는 숫자여야 합니다.');
   }
 
   // 1. 먼저 채팅방 조회
@@ -269,9 +269,9 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
   });
 
   return responseHandler.sendSuccess(res, 200, '채팅방에 입장했습니다.', {
-    room_id: chatRoom.id,
+    roomId: chatRoom.id,
     character: chatRoom.persona,
-    chat_history: chatHistory // 해당 채팅방의 대화기록만
+    chatHistory: chatHistory // 해당 채팅방의 대화기록만
   });
 });
 
@@ -286,18 +286,18 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { character_id } = req.body;
+  const { characterId } = req.body;
   const userId = req.auth.userId;
 
-  if (!character_id) {
+  if (!characterId) {
     return responseHandler.sendBadRequest(res, 'character_id가 필요합니다.');
   }
 
-  const result = await chatService.createChatRoom(character_id, userId);
+  const result = await chatService.createChatRoom(characterId, userId);
 
   logger.logUserActivity('CREATE_CHAT_ROOM', userId, {
     roomId: result.id,
-    characterId: character_id
+    characterId: characterId
   });
 
   return responseHandler.sendSuccess(res, 201, '채팅방이 성공적으로 생성되었습니다.', result);
@@ -311,13 +311,13 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { room_id } = req.params;
+  const { roomId } = req.params;
   const userId = req.auth.userId;
 
-  await chatService.deleteChatRoom(room_id, userId);
+  await chatService.deleteChatRoom(roomId, userId);
 
   logger.logUserActivity('DELETE_CHAT_ROOM', userId, {
-    roomId: room_id
+    roomId: roomId
   });
 
   return responseHandler.sendSuccess(res, 200, '채팅방이 성공적으로 삭제되었습니다.');
@@ -327,11 +327,11 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * room_id로 채팅방 정보 조회 (GET /api/chat/room-info?room_id=...)
  */
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
-  const { room_id } = req.query;
-  if (!room_id) {
+  const { roomId } = req.query;
+  if (!roomId) {
     return responseHandler.sendBadRequest(res, 'room_id 쿼리 파라미터가 필요합니다.');
   }
-  const parsedRoomId = parseInt(room_id);
+  const parsedRoomId = parseInt(roomId);
   if (isNaN(parsedRoomId)) {
     return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
   }
@@ -355,7 +355,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendNotFound(res, '해당 채팅방을 찾을 수 없습니다.');
   }
   return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
-    room_id: chatRoom.id,
+    roomId: chatRoom.id,
     character: chatRoom.persona
   });
 });

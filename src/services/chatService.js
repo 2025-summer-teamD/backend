@@ -61,11 +61,11 @@ const getMyChatList = async (userId, pagination) => {
   const chatList = chatRooms.map(room => {
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
     return {
-      room_id: room.id,
-      character_id: room.persona.id,
+      roomId: room.id,
+      characterId: room.persona.id,
       name: room.persona.name,
-      image_url: room.persona.imageUrl,
-      last_chat: lastChat ? lastChat.text : null,
+      imageUrl: room.persona.imageUrl,
+      lastChat: lastChat ? lastChat.text : null,
       time: lastChat ? lastChat.time.toISOString() : null, // 실제 시간 데이터 사용
     };
   });

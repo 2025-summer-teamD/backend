@@ -141,7 +141,7 @@ const getPersonas = async (options = {}) => {
   const orderBy = {};
   if (sort === 'likes') {
     orderBy.likesCount = 'desc'; // DB 필드명은 likesCount
-  } else if (sort === 'view_count' || sort === 'uses_count') {
+  } else if (sort === 'viewCount' || sort === 'usesCount') {
     orderBy.usesCount = 'desc'; // DB 필드명은 camelCase로
   } else {
     // 기본 정렬은 최신순
