@@ -21,14 +21,14 @@ enum ChatLogSpeaker {
 }
 
 model User {
-  clerkId   String   @id
+  clerkId   String   @id @map("clerk_id")
   name      String?  @db.VarChar(100)
   email     String?  @db.VarChar(255)
-  firstName String?  @db.VarChar(100)
-  lastName  String?  @db.VarChar(100)
-  createdAt DateTime @default(now())
-  updatedAt DateTime?
-  isDeleted Boolean  @default(false)
+  firstName String?  @db.VarChar(100) @map("first_name")
+  lastName  String?  @db.VarChar(100) @map("last_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+  isDeleted Boolean  @default(false) @map("is_deleted")
   personas   Persona[]
   chatRooms  ChatRoom[]
 
@@ -37,19 +37,19 @@ model User {
 
 model Persona {
   id           Int      @id @default(autoincrement())
-  clerkId     String
+  clerkId     String   @map("clerk_id")
   user         User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
-  creatorName  String?  @db.VarChar(100)  // 크리에이터 이름
+  creatorName  String?  @db.VarChar(100) @map("creator_name")  // 크리에이터 이름
   name         String   @db.VarChar(100)
-  imageUrl    String   @db.VarChar(1024)
-  isPublic    Boolean  @default(true)
+  imageUrl    String   @db.VarChar(1024) @map("image_url")
+  isPublic    Boolean  @default(true) @map("is_public")
   introduction String?
   prompt       Json
-  usesCount   Int      @default(0)
-  likesCount  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime?
-  isDeleted   Boolean  @default(false)
+  usesCount   Int      @default(0) @map("uses_count")
+  likesCount  Int      @default(0) @map("likes_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime? @map("updated_at")
+  isDeleted   Boolean  @default(false) @map("is_deleted")
   chatRooms    ChatRoom[]
 
   @@index([clerkId])
@@ -57,28 +57,28 @@ model Persona {
 
 model ChatRoom {
   id           Int      @id @default(autoincrement()) @unique
-  clerkId     String
+  clerkId     String   @map("clerk_id")
   user         User     @relation(fields: [clerkId], references: [clerkId])
-  characterId Int
+  characterId Int      @map("character_id")
   persona      Persona  @relation(fields: [characterId], references: [id])
   friendship   Int      @default(1)
   exp          Int      @default(0)
   likes        Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime?
-  isDeleted   Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime? @map("updated_at")
+  isDeleted   Boolean  @default(false) @map("is_deleted")
   ChatLogs     ChatLog[]
 }
 
 model ChatLog {
   id          Int           @id @default(autoincrement())
-  chatroomId Int
+  chatroomId Int           @map("chatroom_id")
   chatRoom    ChatRoom @relation(fields: [chatroomId], references: [id], onDelete: Cascade)
   text        String
   type        ChatLogType
   speaker     ChatLogSpeaker
   time        DateTime @default(now())
-  isDeleted  Boolean  @default(false)
+  isDeleted  Boolean  @default(false) @map("is_deleted")
 
   @@index([chatroomId])
 }

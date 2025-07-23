@@ -8,6 +8,7 @@
  * - CORS 설정
  * - 정적 파일 서빙
  * - API 문서화 (Swagger)
+ * - 요청 추적 (Tracing)
  */
 
 import express from 'express';
@@ -20,6 +21,7 @@ import swaggerJSDoc from 'swagger-jsdoc';
 import errorHandler from './middlewares/errorHandler.js';
 import logger from './utils/logger.js';
 import authMiddleware from './middlewares/authMiddleware.js';
+import traceMiddleware from './middlewares/traceMiddleware.js';
 import client from 'prom-client';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,15 +38,14 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'], // 프론트엔드 주소들
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-trace-id'], // 추적 ID 헤더 추가
 }));
 
-// Clerk 인증 미들웨어 추가 (전역)
-app.use(authMiddleware.clerkAuthMiddleware);
+// 요청 추적 미들웨어 (가장 먼저 등록)
+app.use(traceMiddleware.traceMiddleware);
 
-// 요청 로깅 미들웨어
+// 요청 로깅 미들웨어 (인증 전에 등록)
 app.use(logger.logRequest);
-
 
 // Swagger 설정
 const swaggerOptions = {
@@ -91,15 +92,27 @@ app.get('/metrics', async (req, res) => {
   res.end(await client.register.metrics());
 });
 
-// 기본 라우트
+// 기본 라우트 (인증 없이 접근 가능)
 app.get('/', (req, res) => {
     res.json({
       message: 'Character Chat API 서버에 오신 것을 환영합니다!',
       version: '1.0.0',
-      docs: '/api-docs'
+      docs: '/api-docs',
+      traceId: req.traceId // 추적 ID 포함
     });
 });
-  
+
+// Clerk 인증 미들웨어 (API 경로에만 적용)
+app.use('/api', authMiddleware.clerkAuthMiddleware);
+
+// 인증 후 사용자 정보를 추적 컨텍스트에 추가하는 미들웨어 (API 경로에만 적용)
+app.use('/api', (req, res, next) => {
+  if (req.auth?.userId) {
+    traceMiddleware.setUserContext(req.auth.userId, req.auth.sessionId);
+  }
+  next();
+});
+
 //app.use(express.json());
 
 // API 라우터

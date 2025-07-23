@@ -57,7 +57,22 @@ const validateIdParam = (req, res, next) => {
   next();
 };
 
-// 나의 페르소나 목록 조회 요청의 쿼리를 검증하는 미들웨어
+
+// roomId 파라미터 검증 미들웨어 (chat 전용)
+const validateRoomIdParam = (req, res, next) => {
+  const roomId = parseInt(req.params.roomId, 10);
+
+  if (isNaN(roomId) || roomId <= 0) {
+    return res.status(400).json({ error: '유효하지 않은 roomId입니다. ID는 양의 정수여야 합니다.' });
+  }
+
+  // 검증된 roomId를 req에 저장 (컨트롤러에서 재검증 불필요)
+  req.validatedRoomId = roomId;
+  next();
+};
+
+// '나의 페르소나 목록' 조회 요청의 쿼리를 검증하는 미들웨어
+
 const validateMyPersonaList = (req, res, next) => {
   const { type } = req.query;
 
@@ -87,6 +102,7 @@ const personaValidator = {
   validateCreatePersona,
   validateGetPersonas,
   validateIdParam,
+  validateRoomIdParam,
   validateMyPersonaList,
   validateAiCreatePersona,
 };

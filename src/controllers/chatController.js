@@ -44,6 +44,14 @@ const streamChatByRoom = async (req, res, next) => {
     const { roomId } = req.params;
     const { message, sender, timestamp } = req.body;
 
+    // 디버깅: roomId 값 확인
+    console.log('🔍 DEBUG: roomId 값 확인');
+    console.log('- req.params:', req.params);
+    console.log('- roomId 원본값:', roomId);
+    console.log('- roomId 타입:', typeof roomId);
+    console.log('- parseInt 결과:', parseInt(roomId, 10));
+    console.log('- isNaN 체크:', isNaN(parseInt(roomId, 10)));
+
     // 입력 검증
     if (!message || !sender || !timestamp) {
       return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
@@ -335,6 +343,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   if (isNaN(parsedRoomId)) {
     return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
   }
+  
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       id: parsedRoomId,

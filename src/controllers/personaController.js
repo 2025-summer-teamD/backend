@@ -40,10 +40,20 @@ const createCustomPersona = async (req, res, next) => {
       imageUrl: imageUrl
     };
     const newPersona = await PersonaService.createPersona(personaData, userId);
+
+
+    // 5. 사용자 활동 로깅
+    logger.logUserActivity('CREATE_PERSONA', userId, {
+      personaId: newPersona.id,
+      personaName: newPersona.name
+    });
+
+    // 6. 성공 응답 생성
     res.status(201).json({
       message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
     });
+
   } catch (error) {
     next(error);
   }
