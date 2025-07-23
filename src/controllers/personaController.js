@@ -15,6 +15,7 @@ import PersonaService from '../services/personaService.js';
 import responseHandler from '../utils/responseHandler.js';
 import logger from '../utils/logger.js';
 import errorHandler from '../middlewares/errorHandler.js';
+import prismaConfig from '../config/prisma.js';
 
 /**
  * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
@@ -62,7 +63,25 @@ const createCustomPersona = async (req, res, next) => {
   } catch (error) {
     // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
     next(error);
-  }
+
+  };
+
+  // 페르소나 데이터 준비
+  const personaData = {
+    ...req.body,
+    imageUrl: imageUrl
+  };
+
+  // 서비스 호출
+  const newPersona = await PersonaService.createPersona(personaData, userId);
+
+  // 사용자 활동 로깅
+  logger.logUserActivity('CREATE_PERSONA', userId, {
+    personaId: newPersona.characterId,
+    personaName: newPersona.name
+  });
+
+  return responseHandler.sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
 };
 
 /**
@@ -76,7 +95,7 @@ const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   
   // 이미지 업로드 처리
-  let imageUrl = req.body.image_url || '';
+  let imageUrl = req.body.imageUrl || '';
   if (req.file) {
     imageUrl = `/api/uploads/${req.file.filename}`;
   }
@@ -84,7 +103,7 @@ const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
   // 페르소나 데이터 준비
   const initialData = {
     ...req.body,
-    image_url: imageUrl
+    imageUrl: imageUrl
   };
 
   // 서비스 호출
@@ -92,7 +111,7 @@ const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
 
   // 사용자 활동 로깅
   logger.logUserActivity('CREATE_AI_PERSONA', userId, {
-    personaId: newPersona.character_id,
+    personaId: newPersona.characterId,
     personaName: newPersona.name
   });
 
@@ -118,7 +137,7 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { personas, total } = await PersonaService.getPersonas(options);
 
   return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
-    total_elements: total
+    totalElements: total
   });
 });
 
@@ -130,7 +149,7 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const getCommunityPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   const currentUserId = req.auth ? req.auth.userId : null;
 
   const persona = await PersonaService.getPersonaDetails({
@@ -159,7 +178,7 @@ const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const personas = await PersonaService.getMyPersonas(userId, type);
 
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
-    total_elements: personas.length
+    totalElements: personas.length
   });
 });
 
@@ -171,7 +190,7 @@ const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   const { userId } = req.auth;
 
   const persona = await PersonaService.getPersonaDetails({
@@ -184,8 +203,24 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
   }
 
+  // ChatRoom에서 EXP 가져오기
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: {
+      clerkId: userId,
+      characterId: personaId,
+      isDeleted: false
+    },
+    select: {
+      exp: true
+    }
+  });
+
+  // persona 객체에 exp 필드 추가
+  persona.exp = chatRoom ? chatRoom.exp : 0;
+
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
 });
+
 
 /**
  * [PATCH] 페르소나 수정 (본인만 가능)
@@ -196,7 +231,7 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
  */
 const updatePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   const { introduction, personality, tone, tag } = req.body;
   const updateData = { introduction, personality, tone, tag };
   
@@ -220,7 +255,7 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
  */
 const deletePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   
   await PersonaService.deletePersona(personaId, userId);
 
@@ -241,7 +276,7 @@ const deletePersona = errorHandler.asyncHandler(async (req, res) => {
  */
 const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   
   const result = await PersonaService.toggleLike(personaId, userId);
 
@@ -262,7 +297,7 @@ const toggleLike = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const incrementViewCount = errorHandler.asyncHandler(async (req, res) => {
-  const personaId = parseInt(req.params.character_id, 10);
+  const personaId = parseInt(req.params.characterId, 10);
   
   await PersonaService.incrementViewCount(personaId);
 

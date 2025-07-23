@@ -2,25 +2,8 @@
 const validateCreatePersona = (req, res, next) => {
   const { name, imageUrl, isPublic, prompt, description } = req.body;
   
-  // 디버깅 로그 추가
-  console.log('🔍 Validator 받은 데이터:', {
-    name: name,
-    imageUrl: imageUrl,
-    isPublic: isPublic,
-    prompt: prompt,
-    description: description,
-    fullBody: req.body
-  });
-  
   // 1. 필수 값 존재 여부 검사, 유효하지 않으면 400 Bad Request 에러로 즉시 응답하고 체인을 중단
   if (!name || !name.trim() || !imageUrl || !imageUrl.trim() || typeof isPublic !== 'boolean' || !prompt || !description || !description.trim()) { 
-    console.log('❌ Validator 실패:', {
-      name_ok: !!(name && name.trim()),
-      imageUrl_ok: !!(imageUrl && imageUrl.trim()),
-      isPublic_ok: typeof isPublic === 'boolean',
-      prompt_ok: !!prompt,
-      description_ok: !!(description && description.trim())
-    });
     return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, imageUrl, isPublic, prompt, description)' });
   }
   
@@ -62,9 +45,9 @@ const validateGetPersonas = (req, res, next) => {
   const { sort } = req.query;
 
   // sort 파라미터가 존재하지만, 허용된 값이 아닌 경우
-  if (sort && !['likes', 'uses_count', 'createdAt'].includes(sort)) { // createdAt 추가
+  if (sort && !['likes', 'usesCount', 'createdAt'].includes(sort)) { // createdAt 추가
     return res.status(400).json({ 
-      error: "잘못된 정렬 값입니다. 'likes', 'uses_count', 'createdAt' 중 하나를 사용해주세요." 
+      error: "잘못된 정렬 값입니다. 'likes', 'usesCount', 'createdAt' 중 하나를 사용해주세요." 
     });
   }
 
@@ -74,7 +57,7 @@ const validateGetPersonas = (req, res, next) => {
 
 // 경로 파라미터 ID가 유효한 숫자인지 검증하는 미들웨어
 const validateIdParam = (req, res, next) => {
-  const id = parseInt(req.params.character_id, 10);
+  const id = parseInt(req.params.characterId, 10);
 
   // isNaN(id)는 id가 숫자가 아님을 의미합니다.
   // id <= 0은 유효하지 않은 ID 값(보통 ID는 1부터 시작)임을 의미합니다.
@@ -115,11 +98,11 @@ const validateMyPersonaList = (req, res, next) => {
 
 // AI 기반 페르소나 생성 요청의 body를 검증하는 미들웨어
 const validateAiCreatePersona = (req, res, next) => {
-  const { name, image_url, is_public } = req.body;
+  const { name, imageUrl, isPublic } = req.body;
 
   // AI가 생성할 필드(description, prompt 등)는 필수가 아님
-  if (!name || !image_url || typeof is_public !== 'boolean') {
-    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, image_url, is_public)' });
+  if (!name || !imageUrl || typeof isPublic !== 'boolean') {
+    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, imageUrl, isPublic)' });
   }
   next();
 };
