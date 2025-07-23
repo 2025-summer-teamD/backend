@@ -6,11 +6,7 @@ const validateCreatePersona = (req, res, next) => {
     isPublic = isPublic === 'true';
     req.body.isPublic = isPublic;
   }
-
-  // 이미지 파일이 첨부된 경우 imageUrl 체크를 건너뜀
   const hasImageFile = !!req.file;
-
-  // prompt가 문자열이면 JSON 파싱
   if (typeof prompt === 'string') {
     try {
       prompt = JSON.parse(prompt);
@@ -19,50 +15,21 @@ const validateCreatePersona = (req, res, next) => {
       return res.status(400).json({ error: 'prompt가 유효한 JSON 형식이 아닙니다.' });
     }
   }
-
-  // 1. 필수 값 존재 여부 검사, 유효하지 않으면 400 Bad Request 에러로 즉시 응답하고 체인을 중단
-  if (
-    !name || !name.trim() ||
-    (!hasImageFile && (!imageUrl || !imageUrl.trim())) || // 파일이 없을 때만 imageUrl 필수
-    typeof isPublic !== 'boolean' ||
-    !prompt ||
-    !description || !description.trim()
-  ) {
-    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, imageUrl, isPublic, prompt, description)' });
+  // 필수 값만 간단히 체크
+  if (!name?.trim() || typeof isPublic !== 'boolean' || !prompt || !description?.trim()) {
+    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, isPublic, prompt, description)' });
   }
-
-  // URL format validation - 상대 경로도 허용
-  if (!hasImageFile) {
-    if (imageUrl.startsWith('/')) {
-      // 상대 경로는 허용 (예: /api/uploads/default-character.svg)
-      // 추가 검증 없이 통과
-    } else {
-      // 절대 URL인 경우에만 URL 형식 검증
-      try {
-        const parsed = new URL(imageUrl);
-        if (!['http:', 'https:'].includes(parsed.protocol)) {
-          throw new Error('Invalid protocol');
-        }
-      } catch (err) {
-        return res.status(400).json({ error: 'imageUrl은 유효한 URL 형식이어야 합니다.' });
-      }
-    }
+  // 이미지: 파일이 없으면 imageUrl만 체크
+  if (!hasImageFile && (!imageUrl || !imageUrl.trim())) {
+    return res.status(400).json({ error: '이미지 파일 또는 imageUrl이 필요합니다.' });
   }
-
-  // 2. prompt 객체 내부 타입 검사
-  if (typeof prompt !== 'object' || prompt === null) {
-    return res.status(400).json({ error: 'prompt는 객체여야 합니다.' });
-  }
-
-  if (
-    typeof prompt.tone !== 'string' ||
-    typeof prompt.personality !== 'string' ||
-    typeof prompt.tag !== 'string'
-  ) {
+  // prompt 객체 필드만 체크
+  if (typeof prompt !== 'object' || prompt === null ||
+      typeof prompt.tone !== 'string' ||
+      typeof prompt.personality !== 'string' ||
+      typeof prompt.tag !== 'string') {
     return res.status(400).json({ error: 'prompt의 각 필드(tone, personality, tag)는 문자열이어야 합니다.' });
   }
-    
-  // 3. 모든 검사를 통과하면 다음 미들웨어 또는 컨트롤러로 제어권을 넘김
   next();
 };
 
