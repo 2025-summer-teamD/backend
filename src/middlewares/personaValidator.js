@@ -128,6 +128,7 @@ const personaValidator = {
   validateCreatePersona,
   validateGetPersonas,
   validateIdParam,
+  validateRoomIdParam,
   validateMyPersonaList,
   validateAiCreatePersona,
 };

@@ -1,5 +1,23 @@
 #!/bin/bash
 
+#================================================
+# 모니터링 스택 실행 스크립트
+#================================================
+# 실행 명령어:
+#   Linux/Mac: ./monitoring.sh
+#   또는:      sh monitoring.sh  
+#   또는:      docker compose -f docker-compose.monitoring.yml up -d
+#
+# 포함 서비스: traefik, jaeger, prometheus, grafana, kibana, elasticsearch 등
+# 전제 조건: 기본 앱이 먼저 실행되어 있어야 함 (./start.sh)
+#
+# 접속 URL:
+#   - Jaeger: http://localhost:16686
+#   - Grafana: http://localhost:3000 (admin/admin123)
+#   - Kibana: http://localhost:5601
+#   - Prometheus: http://localhost:9090
+#================================================
+
 # Docker 데몬 확인
 if ! docker info > /dev/null 2>&1; then
   echo "[ERROR] Docker 데몬이 실행 중이 아닙니다. Docker Desktop을 먼저 실행하세요."

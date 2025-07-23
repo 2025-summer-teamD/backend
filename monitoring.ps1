@@ -1,4 +1,20 @@
-# Windows PowerShell 모니터링 환경 시작 스크립트
+#================================================
+# Windows PowerShell 모니터링 스택 실행 스크립트
+#================================================
+# 실행 명령어:
+#   Windows: .\monitoring.ps1
+#   또는:    powershell .\monitoring.ps1
+#   또는:    docker compose -f docker-compose.monitoring.yml up -d
+#
+# 포함 서비스: traefik, jaeger, prometheus, grafana, kibana, elasticsearch 등
+# 전제 조건: 기본 앱이 먼저 실행되어 있어야 함 (.\dev.ps1)
+#
+# 접속 URL:
+#   - Jaeger: http://localhost:16686
+#   - Grafana: http://localhost:3000 (admin/admin123)
+#   - Kibana: http://localhost:5601
+#   - Prometheus: http://localhost:9090
+#================================================
 
 Write-Host "[INFO] Docker 데몬 확인..." -ForegroundColor Green
 try {
