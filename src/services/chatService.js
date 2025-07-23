@@ -1,5 +1,9 @@
 import prismaConfig from '../config/prisma.js';
 import gemini25 from '../vertexai/gemini25.js';
+import veo3 from '../vertexai/veo3.js';
+import { Storage } from '@google-cloud/storage';
+import { uploadImageToGCS } from './gcsService.js';
+import axios from 'axios';
 
 /**
  * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
@@ -247,13 +251,103 @@ const deleteChatRoom = async (roomId, userId) => {
   
   return deleted;
 };
+/**
+ * Veo3 프롬프트 템플릿 생성 함수
+ */
+function makeVeo3Prompt({ subject, style, mood, action, duration, language = '한국어' }) {
+  return `
+${language}로 아래 조건에 맞는 짧은 영상을 만들어 주세요.
+
+- 주제: ${subject}
+- 스타일: ${style}
+- 분위기: ${mood}
+- 주요 동작/이벤트: ${action}
+- 영상 길이: 약 ${duration}
+
+영상은 시각적으로 매력적이고, ${subject}의 특징이 잘 드러나게 해주세요.
+`;
+}
+
+/**
+ * Veo3를 이용해 비디오 생성 요청을 보냅니다.
+ * @param {object} options - 프롬프트 옵션 { subject, style, mood, action, duration, language }
+ * @returns {Promise<object>} 생성된 비디오 정보
+ */
+const generateVideoWithVeo3 = async (options) => {
+  try {
+    const prompt = makeVeo3Prompt(options);
+    const videoResult = await veo3.generateVideo(prompt);
+    return videoResult;
+  } catch (error) {
+    throw new Error(error.message || 'Veo3 비디오 생성 중 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 비디오 파일을 GCS에 업로드합니다.
+ * @param {object} videoReward - veo3에서 반환된 비디오 정보 (url, base64, blob 등)
+ * @returns {Promise<string>} 업로드된 GCS URL
+ */
+async function uploadVideoToGCS(videoReward) {
+  // 1. videoReward가 URL을 포함하는 경우 (예: videoReward.url)
+  if (videoReward.url) {
+    // URL에서 파일 다운로드
+    const response = await axios.get(videoReward.url, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data, 'binary');
+    const file = {
+      originalname: `veo3-video-${Date.now()}.mp4`,
+      mimetype: 'video/mp4',
+      buffer,
+    };
+    return await uploadImageToGCS(file);
+  }
+  // 2. base64 등 다른 형태라면 (예시)
+  if (videoReward.base64) {
+    const buffer = Buffer.from(videoReward.base64, 'base64');
+    const file = {
+      originalname: `veo3-video-${Date.now()}.mp4`,
+      mimetype: 'video/mp4',
+      buffer,
+    };
+    return await uploadImageToGCS(file);
+  }
+  throw new Error('지원하지 않는 비디오 반환 형식입니다.');
+}
+
+/**
+ * 채팅방 exp가 일정 횟수를 넘으면 영상 생성 보상을 제공
+ * @param {number} chatRoomId - 채팅방 ID
+ * @param {object} veoPromptOptions - Veo3 프롬프트 옵션 { subject, style, mood, action, duration, language }
+ * @returns {Promise<object|null>} 생성된 비디오 정보 또는 null
+ */
+const checkAndGenerateVideoReward = async (chatRoomId, veoPromptOptions) => {
+  // 1. 채팅방 exp 조회
+  const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
+    where: { id: chatRoomId },
+    select: { exp: true }
+  });
+  if (!chatRoom) throw new Error('존재하지 않는 채팅방입니다.');
+
+  // 2. exp가 일정 횟수 초과면 영상 생성
+  if (chatRoom.exp > 1) {
+    const videoReward = await generateVideoWithVeo3(veoPromptOptions);
+    // GCS 업로드
+    const gcsUrl = await uploadVideoToGCS(videoReward);
+    return { gcsUrl };
+  }
+  // 3. 조건 미달 시 null 반환
+  return null;
+};
+
 
 const chatService = {
   getMyChatList,
   deleteLikedCharacter,
   generateAiChatResponse,
   createChatRoom,
-  deleteChatRoom, // 🆕 추가!
+  deleteChatRoom, 
+  generateVideoWithVeo3,
+  checkAndGenerateVideoReward,
 };
 
 export default chatService;
