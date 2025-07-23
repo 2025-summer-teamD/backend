@@ -7,16 +7,12 @@
 import express from 'express';
 import personaRoute from './personaRoute.js';
 import chatRoutes from './chatRoutes.js';
-import uploadRoute from './uploadRoute.js';
 import userRoute from './userRoute.js';
 import communitiRoutes from './communitiRoutes.js';
+import imageRoute from './imageRoute.js';
 
 const router = express.Router();
 
-
-// upload routes (단수·복수 모두 지원)
-router.use('/upload', uploadRoute);
-router.use('/uploads', uploadRoute);   // ← 추가된 라우트
 
 // 페르소나 관련 라우트
 router.use('/personas', personaRoute);
@@ -31,5 +27,6 @@ router.use('/my', userRoute);
 
 // 커뮤니티 관련 라우트
 router.use('/communities', communitiRoutes);
+router.use('/', imageRoute);
 
 export default router;
