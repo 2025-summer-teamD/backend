@@ -152,8 +152,22 @@ ${chatHistory}
 사용자: ${userMessage}
 ${personaInfo.name}:`;
 
-  // 2. Gemini AI를 호출하여 응답 생성
-  const aiResponseText = await gemini25.generateText(prompt.trim()) || '죄송해요, 지금은 답변을 드릴 수 없어요.';
+  // 2. Google AI 호출 (타임아웃 에러 처리 포함)
+  let aiResponseText;
+  try {
+    console.log('🤖 Google AI 호출 시도...');
+    aiResponseText = await gemini25.generateText(prompt.trim());
+    console.log('✅ Google AI 응답 성공');
+  } catch (error) {
+    console.error('❌ Google AI 호출 실패:', error.message);
+    console.log('🔄 폴백 응답 사용');
+    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
+  }
+  
+  // 응답이 없으면 기본 메시지
+  if (!aiResponseText || aiResponseText.trim() === '') {
+    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
+  }
 
   // 3. 생성된 AI 응답 텍스트 반환
   return aiResponseText;

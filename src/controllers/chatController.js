@@ -29,6 +29,14 @@ const streamChatByRoom = async (req, res, next) => {
     const { room_id } = req.params;
     const { message, sender, timestamp } = req.body;
 
+    // 디버깅: room_id 값 확인
+    console.log('🔍 DEBUG: room_id 값 확인');
+    console.log('- req.params:', req.params);
+    console.log('- room_id 원본값:', room_id);
+    console.log('- room_id 타입:', typeof room_id);
+    console.log('- parseInt 결과:', parseInt(room_id, 10));
+    console.log('- isNaN 체크:', isNaN(parseInt(room_id, 10)));
+
     // 입력 검증
     if (!message || !sender || !timestamp) {
       return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
@@ -63,7 +71,7 @@ const streamChatByRoom = async (req, res, next) => {
     });
 
     if (!chatRoom) {
-      return responseHandler.sendNotFound(res, `채팅방 ID ${room_id}를 찾을 수 없습니다.`);
+      return responseHandler.sendNotFound(res, `채팅방 ID ${req.params.room_id}를 찾을 수 없습니다.`);
     }
 
     const personaInfo = {
@@ -86,7 +94,7 @@ const streamChatByRoom = async (req, res, next) => {
     }
 
     logger.logUserActivity('CHAT_MESSAGE', sender, {
-      roomId: room_id,
+      roomId: req.params.room_id,
       personaName: personaInfo.name,
       messageLength: message.length
     });
@@ -109,7 +117,7 @@ const streamChatByRoom = async (req, res, next) => {
       // 사용자 메시지 저장
       await prismaConfig.prisma.chatLog.create({
         data: {
-          chatroomId: parseInt(room_id, 10),
+          chatroomId: parseInt(room_id, 10), // 검증된 숫자 사용
           text: message,
           type: 'text',
           speaker: 'user',
@@ -120,7 +128,7 @@ const streamChatByRoom = async (req, res, next) => {
       // AI 응답 저장
       await prismaConfig.prisma.chatLog.create({
         data: {
-          chatroomId: parseInt(room_id, 10),
+          chatroomId: parseInt(room_id, 10), // 검증된 숫자 사용
           text: fullResponseText,
           type: 'text',
           speaker: 'ai',
@@ -128,7 +136,7 @@ const streamChatByRoom = async (req, res, next) => {
         }
       });
     } catch (dbError) {
-      logger.logError('채팅 기록 저장 실패', dbError, { roomId: room_id });
+      logger.logError('채팅 기록 저장 실패', dbError, { roomId: req.params.room_id });
       // 저장 실패해도 SSE 응답은 계속 진행
     }
 
@@ -301,13 +309,18 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
  */
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { room_id } = req.query;
+  
+  // room_id 파라미터 검증
   if (!room_id) {
     return responseHandler.sendBadRequest(res, 'room_id 쿼리 파라미터가 필요합니다.');
   }
-  const parsedRoomId = parseInt(room_id);
-  if (isNaN(parsedRoomId)) {
-    return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
+  
+  // room_id를 숫자로 변환 및 검증
+  const parsedRoomId = parseInt(room_id, 10);
+  if (isNaN(parsedRoomId) || parsedRoomId <= 0) {
+    return responseHandler.sendBadRequest(res, '유효하지 않은 room_id입니다. 양의 정수여야 합니다.');
   }
+  
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       id: parsedRoomId,

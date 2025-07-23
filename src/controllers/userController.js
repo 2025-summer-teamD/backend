@@ -1,12 +1,13 @@
 // 나중에 데이터베이스 로직을 위해 service를 가져올 수 있습니다.
 // import { userService } from '../services/_index.js';
+import logger from '../utils/logger.js';
 
 const getUserProfile = async (req, res) => {
     try {
       // requireAuth 미들웨어를 통과했기 때문에 req.auth는 항상 존재합니다.
       const { userId } = req.auth;
   
-      console.log(`컨트롤러에서 받아온 Clerk User ID: ${userId}`);
+      logger.info(`컨트롤러에서 받아온 Clerk User ID: ${userId}`);
   
       // 예를 들어, 이 userId를 사용하여 데이터베이스에서 사용자 정보를 조회합니다.
       // const user = await userService.findUserByClerkId(userId);
@@ -20,7 +21,7 @@ const getUserProfile = async (req, res) => {
         // dbUserData: user
       });
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       res.status(500).json({ error: '서버 오류가 발생했습니다.' });
     }
   };

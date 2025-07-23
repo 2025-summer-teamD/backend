@@ -1,25 +1,42 @@
 // 페르소나 생성 요청의 body를 검증하는 미들웨어
 const validateCreatePersona = (req, res, next) => {
-  const { name, image_url, is_public, prompt, description } = req.body;
+  const { name, imageUrl, isPublic, prompt, description } = req.body;
+  
+  // 디버깅 로그 추가
+  console.log('🔍 Validator 받은 데이터:', {
+    name: name,
+    imageUrl: imageUrl,
+    isPublic: isPublic,
+    prompt: prompt,
+    description: description,
+    fullBody: req.body
+  });
   
   // 1. 필수 값 존재 여부 검사, 유효하지 않으면 400 Bad Request 에러로 즉시 응답하고 체인을 중단
-  if (!name || !name.trim() || !image_url || !image_url.trim() || typeof is_public !== 'boolean' || !prompt || !description || !description.trim()) { 
-    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, image_url, is_public, prompt, description)' });
+  if (!name || !name.trim() || !imageUrl || !imageUrl.trim() || typeof isPublic !== 'boolean' || !prompt || !description || !description.trim()) { 
+    console.log('❌ Validator 실패:', {
+      name_ok: !!(name && name.trim()),
+      imageUrl_ok: !!(imageUrl && imageUrl.trim()),
+      isPublic_ok: typeof isPublic === 'boolean',
+      prompt_ok: !!prompt,
+      description_ok: !!(description && description.trim())
+    });
+    return res.status(400).json({ error: '필수 값이 누락되었습니다. (name, imageUrl, isPublic, prompt, description)' });
   }
   
   // URL format validation - 상대 경로도 허용
-  if (image_url.startsWith('/')) {
+  if (imageUrl.startsWith('/')) {
     // 상대 경로는 허용 (예: /api/uploads/default-character.svg)
     // 추가 검증 없이 통과
   } else {
     // 절대 URL인 경우에만 URL 형식 검증
     try {
-      const parsed = new URL(image_url);
+      const parsed = new URL(imageUrl);
       if (!['http:', 'https:'].includes(parsed.protocol)) {
         throw new Error('Invalid protocol');
       }
     } catch (err) {
-      return res.status(400).json({ error: 'image_url은 유효한 URL 형식이어야 합니다.' });
+      return res.status(400).json({ error: 'imageUrl은 유효한 URL 형식이어야 합니다.' });
     }
   }
 
@@ -66,6 +83,19 @@ const validateIdParam = (req, res, next) => {
   }
 
   // 검사를 통과하면 다음으로 넘어감
+  next();
+};
+
+// room_id 파라미터 검증 미들웨어 (chat 전용)
+const validateRoomIdParam = (req, res, next) => {
+  const roomId = parseInt(req.params.room_id, 10);
+
+  if (isNaN(roomId) || roomId <= 0) {
+    return res.status(400).json({ error: '유효하지 않은 room_id입니다. ID는 양의 정수여야 합니다.' });
+  }
+
+  // 검증된 roomId를 req에 저장 (컨트롤러에서 재검증 불필요)
+  req.validatedRoomId = roomId;
   next();
 };
 

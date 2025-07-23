@@ -31,7 +31,7 @@ const createCustomPersona = async (req, res, next) => {
     const file = req.file; // multer 미들웨어가 파일을 req.file에 담아줌
 
     // 2. 이미지 업로드 처리
-    let imageUrl = req.body.image_url || '';
+    let imageUrl = req.body.imageUrl || '';
     
     // 만약 이미지 파일이 업로드되었다면
     if (req.file) {
@@ -41,39 +41,28 @@ const createCustomPersona = async (req, res, next) => {
     // 3. 페르소나 데이터 준비 (이미지 URL 포함)
     const personaData = {
       ...req.body,
-      image_url: imageUrl
+      imageUrl: imageUrl
     };
 
     // 4. 서비스 호출: 실제 생성 작업은 서비스에 위임
     const newPersona = await PersonaService.createPersona(personaData, userId);
 
-    // 5. 성공 응답 생성
+    // 5. 사용자 활동 로깅
+    logger.logUserActivity('CREATE_PERSONA', userId, {
+      personaId: newPersona.id,
+      personaName: newPersona.name
+    });
+
+    // 6. 성공 응답 생성
     res.status(201).json({
       message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
     });
+
   } catch (error) {
     // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
     next(error);
-
-  };
-
-  // 페르소나 데이터 준비
-  const personaData = {
-    ...req.body,
-    image_url: imageUrl
-  };
-
-  // 서비스 호출
-  const newPersona = await PersonaService.createPersona(personaData, userId);
-
-  // 사용자 활동 로깅
-  logger.logUserActivity('CREATE_PERSONA', userId, {
-    personaId: newPersona.character_id,
-    personaName: newPersona.name
-  });
-
-  return responseHandler.sendSuccess(res, 201, '사용자 정의 페르소나를 성공적으로 생성했습니다.', newPersona);
+  }
 };
 
 /**

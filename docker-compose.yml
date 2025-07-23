@@ -1,242 +1,74 @@
 services:
-  app:
+  # 백엔드 API 서버
+  backend:
     build: .
-    container_name: express_app
+    container_name: character-chat-backend
     ports:
-      - 3001:3001
-    volumes:
-      - ./google-credentials:/app/google-credentials:ro
-    env_file:
-      - .env
+      - "3001:3001"
     environment:
-      NODE_ENV: development
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    restart: unless-stopped
+      - NODE_ENV=production
+      - ENABLE_TRACING=true
+      - OTEL_SERVICE_NAME=character-chat-backend
+      - OTEL_SERVICE_VERSION=1.0.0
+      - JAEGER_ENDPOINT=http://jaeger:4318/v1/traces
+      - DATABASE_URL=${DATABASE_URL}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-credentials/service-account.json
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./google-credentials:/app/google-credentials:ro
     networks:
       - app-network
-    command: npm run start # 여기서 prisma migrate 제거
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolalloworigin=*"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      - "traefik.http.middlewares.backend-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.routers.backend.middlewares=backend-cors"
 
+  # PostgreSQL 데이터베이스
   db:
-    image: postgres:16
-    container_name: postgres_db
-    env_file:
-      - .env
+    image: postgres:15
+    container_name: postgres-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     ports:
-      - 5432:5432
+      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
+      - postgres_data:/var/lib/postgresql/data
+      - ./add-user.sql:/docker-entrypoint-initdb.d/add-user.sql
     networks:
       - app-network
-    labels:
-      - "traefik.enable=false"
+    restart: unless-stopped
 
+  # Redis (캐싱 및 세션 스토리지)
   redis:
-    image: redis:7
-    container_name: redis_server
+    image: redis:7-alpine
+    container_name: redis-cache
     ports:
-      - 6379:6379
-    restart: unless-stopped
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - app-network
-    labels:
-      - "traefik.enable=false"
-
-  backend:
-    build: .
-    volumes:
-      - ./google-credentials:/app/google-credentials:ro
-    env_file:
-      - .env
-
-  migrate:
-    build: .
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      NODE_ENV: ${NODE_ENV:-development}
-    command: >
-      sh -c "
-        if [ \"$NODE_ENV\" = \"production\" ]; then
-          npx prisma migrate deploy
-        else
-          npx prisma migrate reset --force && npx prisma migrate dev --name init
-        fi
-      "
-      
-  # # ELK Stack
-  # elasticsearch:
-  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
-  #   container_name: elasticsearch
-  #   environment:
-  #     - discovery.type=single-node
-  #     - xpack.security.enabled=false
-  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-  #   ports:
-  #     - "9200:9200"
-  #     - "9300:9300"
-  #   volumes:
-  #     - elasticsearch_data:/usr/share/elasticsearch/data
-  #   networks:
-  #     - app-network
-  #   labels:
-  #     - "traefik.enable=false"
-  #   restart: unless-stopped
-
-  # logstash:
-  #   image: docker.elastic.co/logstash/logstash:8.12.0
-  #   container_name: logstash
-  #   ports:
-  #     - "5044:5044"
-  #     - "5001:5001/tcp"
-  #     - "5001:5001/udp"
-  #     - "9600:9600"
-  #   environment:
-  #     LS_JAVA_OPTS: "-Xmx256m -Xms256m"
-  #   volumes:
-  #     - ./logstash/pipeline:/usr/share/logstash/pipeline
-  #     - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
-  #   networks:
-  #     - app-network
-  #   depends_on:
-  #     - elasticsearch
-  #   labels:
-  #     - "traefik.enable=false"
-  #   restart: unless-stopped
-
-  # kibana:
-  #   image: docker.elastic.co/kibana/kibana:8.12.0
-  #   container_name: kibana
-  #   ports:
-  #     - "5601:5601"
-  #   environment:
-  #     ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-  #   networks:
-  #     - app-network
-  #   depends_on:
-  #     - elasticsearch
-  #   labels:
-  #     - "traefik.enable=false"
-  #   restart: unless-stopped
-
-  # cadvisor:
-  #   image: gcr.io/cadvisor/cadvisor:latest
-  #   container_name: cadvisor
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - /:/rootfs:ro
-  #     - /var/run:/var/run:ro
-  #     - /sys:/sys:ro
-  #     - /var/lib/docker/:/var/lib/docker:ro
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-
-  # prometheus:
-  #   image: prom/prometheus:latest
-  #   container_name: prometheus
-  #   ports:
-  #     - "9090:9090"
-  #   volumes:
-  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   container_name: grafana
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     # 세션 유지 설정
-  #     - GF_AUTH_LOGIN_MAXIMUM_INACTIVE_LIFETIME_DURATION=7d
-  #     - GF_AUTH_LOGIN_MAXIMUM_LIFETIME_DURATION=30d
-  #     - GF_SESSION_PROVIDER=memory
-  #     - GF_SESSION_COOKIE_NAME=grafana_sess
-  #     - GF_SESSION_COOKIE_SECURE=false
-  #     - GF_SESSION_COOKIE_MAX_AGE=86400
-  #     # 자동 로그아웃 방지
-  #     - GF_AUTH_DISABLE_LOGIN_FORM=false
-  #     - GF_AUTH_ANONYMOUS_ENABLED=false
-  #     # 기타 보안 설정
-  #     - GF_SECURITY_ALLOW_EMBEDDING=true
-  #     - GF_SECURITY_COOKIE_SECURE=false
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-
-  # redis-exporter:
-  #   image: oliver006/redis_exporter:latest
-  #   container_name: redis_exporter
-  #   ports:
-  #     - "9121:9121"
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-
-  # # PostgreSQL Exporter
-  # postgres-exporter:
-  #   image: prometheuscommunity/postgres-exporter
-  #   container_name: postgres_exporter
-  #   environment:
-  #     DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
-  #   ports:
-  #     - "9187:9187"
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
-
-  # # Node Exporter (시스템 메트릭)
-  # node-exporter:
-  #   image: prom/node-exporter:latest
-  #   container_name: node_exporter
-  #   ports:
-  #     - "9100:9100"
-  #   volumes:
-  #     - /proc:/host/proc:ro
-  #     - /sys:/host/sys:ro
-  #     - /:/rootfs:ro
-  #     - /var/lib/docker:/host/var/lib/docker:ro
-  #   command:
-  #     - '--path.procfs=/host/proc'
-  #     - '--path.sysfs=/host/sys'
-  #     - '--path.rootfs=/rootfs'
-  #     - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|tmp|var)($$|/)'
-  #     - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc|tmp|var)($$|/)'
-  #     - '--collector.filesystem.ignored-fs-types=^(tmpfs|overlay|nsfs|proc|sysfs|cgroup.*|devtmpfs)$$'
-  #   restart: unless-stopped
-  #   networks:
-  #     - app-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
 
 volumes:
-  pgdata:
-  # elasticsearch_data:
-  # grafana_data:
+  postgres_data:
+  redis_data:
 
 networks:
   app-network:
+    driver: bridge

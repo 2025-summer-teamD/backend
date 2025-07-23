@@ -1,6 +1,7 @@
 import express from 'express';
 import chatController from '../controllers/chatController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
+import personaValidator from '../middlewares/personaValidator.js';
 
 const router = express.Router();
 
@@ -64,7 +65,8 @@ const router = express.Router();
 //ai 채팅 스트리밍 
 router.post('/rooms/:room_id',
     authMiddleware.clerkAuthMiddleware,
-    authMiddleware.requireAuth, 
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,  // room_id 검증 추가!
     chatController.streamChatByRoom);
 
 
@@ -129,7 +131,7 @@ router.get('/rooms',
     authMiddleware.requireAuth,
     chatController.enterChatRoom);
 
-// room_id로 채팅방 정보 조회
+// room_id로 채팅방 정보 조회 (하지만 query parameter이므로 별도 검증 필요)
 router.get('/room-info', 
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,

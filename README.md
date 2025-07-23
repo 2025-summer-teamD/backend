@@ -1,154 +1,183 @@
-# 프로젝트 실행 안내 (Docker 기반)
+# Character Chat Backend API
 
-이 프로젝트는 Docker 환경에서 개발 및 실행합니다. 로컬에 Node.js, npm, nvm 등은 설치할 필요가 없습니다.
+Express.js 기반의 캐릭터 채팅 백엔드 API 서버입니다.
 
----
+## 🚀 주요 기능
 
-## 1. Docker Desktop 설치
-- [공식 다운로드](https://www.docker.com/products/docker-desktop/)
-- 설치 후 Docker Desktop을 실행하세요.
+- **사용자 인증**: Clerk 기반 JWT 인증
+- **캐릭터 관리**: 캐릭터 생성, 수정, 삭제, 조회
+- **채팅 시스템**: 실시간 AI 채팅 (Google Vertex AI)
+- **파일 업로드**: Google Cloud Storage 연동
+- **분산 트레이싱**: OpenTelemetry + Jaeger 
+- **모니터링**: ELK Stack + Prometheus + Grafana
+- **로드 밸런싱**: Traefik 리버스 프록시
 
-## 2. 컨테이너 실행 및 종료
+## 🔧 기술 스택
 
-### 실행
+- **Runtime**: Node.js 22+
+- **Framework**: Express.js
+- **Database**: PostgreSQL + Prisma ORM
+- **Cache**: Redis
+- **Authentication**: Clerk
+- **AI**: Google Vertex AI (Gemini)
+- **Storage**: Google Cloud Storage
+- **Monitoring**: 
+  - Logs: ELK Stack (Elasticsearch, Logstash, Kibana)
+  - Metrics: Prometheus + Grafana
+  - Tracing: OpenTelemetry + Jaeger
+- **Proxy**: Traefik
 
-#### Mac
+## 📊 모니터링 & 트레이싱
+
+### 🔍 분산 트레이싱 접속
+
 ```bash
-sh start.sh
+# 모니터링 스택 시작
+npm run monitoring
+
+# 접속 URLs
+- Jaeger UI: http://localhost:16686 (트레이싱)
+- Traefik Dashboard: http://localhost:8080 (프록시 상태)
+- Kibana: http://localhost:5601 (로그 분석)
+- Grafana: http://localhost:3000 (메트릭 대시보드)
+- Prometheus: http://localhost:9090 (메트릭 수집)
 ```
-- Docker 데몬이 실행 중인지 자동으로 확인합니다.
-- Express, PostgreSQL, Redis가 함께 실행됩니다.
 
-#### Window
+### 🎯 트레이싱 기능
 
-docker compose up --build -d
+1. **요청 추적**: 모든 API 요청에 고유 추적 ID 부여
+2. **분산 추적**: Traefik → Backend → Database 전체 플로우 추적
+3. **성능 모니터링**: 병목 지점 및 지연 시간 분석
+4. **에러 추적**: 에러 발생 지점과 전파 경로 추적
+5. **사용자 활동**: 인증된 사용자의 모든 활동 추적
 
-### 종료
+### 📈 추적 ID 활용
 
-#### Mac
+```javascript
+// API 응답에 추적 ID 포함
+{
+  "data": {...},
+  "traceId": "abc123def456"
+}
+
+// 로그에서 추적 ID로 검색
+// Kibana: traceId:"abc123def456"
+// Jaeger: Trace ID 검색
+```
+
+## 🚀 시작하기
+
+### 개발 환경 설정
+
 ```bash
-sh stop.sh
-```
-- 모든 컨테이너를 중지 및 정리합니다.
+# 의존성 설치
+npm install
 
-#### Window
+# 환경변수 설정
+cp .env.example .env
+# .env 파일 편집 필요
 
-docker compose down
+# 데이터베이스 마이그레이션
+npx prisma migrate dev
 
-## 3.환경 변수 설정
-./.env 파일 생성 및 변수 입력
-./google-credentials 디렉토리 생성 및 안에 json 키 입력
-
-## 4. 서버 접속
-- 브라우저에서 (http://localhost:EXPRESS_PORT) 접속
-
----
-
-## 5. Swagger API 문서 접속 방법
-- 브라우저에서 아래 주소로 접속하면 API 명세(Swagger UI)를 확인할 수 있습니다.
-
-```
-http://localhost:EXPRESS_PORT/api-docs
+# 개발 서버 시작 (트레이싱 비활성화)
+npm run dev
 ```
 
-- API 엔드포인트, 파라미터, 응답 예시 등을 한눈에 볼 수 있습니다.
-- Swagger 문서는 코드의 JSDoc 주석을 기반으로 자동 생성됩니다.
+### 환경변수 설정
 
----
+```bash
+# 서버 설정
+PORT=3001
+NODE_ENV=development
 
-# 디렉토리 구조
-```text
-.
-├── __tests__/
-│   ├── setup.js                # 테스트 전역 설정 (DB 초기화 등)
-│   ├── fixtures/               # 테스트용 가짜 데이터
-│   │   └── user.fixture.js
-│   ├── unit/                   # 유닛 테스트
-│   │   ├── services/
-│   │   │   └── userService.spec.js
-│   │   └── utils/
-│   │       └── token.spec.js
-│   └── integration/            # 통합 테스트
-│       └── user.integration.spec.js
-├── src/                        # 소스 코드를 담는 메인 디렉토리
-│   ├── app.js                  #Express 애플리케이션의 핵심 설정 파일
-│   ├── index.js                #진입점
-│   ├── config/                 #설정 관련 파일 디렉토리
-│   │   ├── index.js            # 환경 변수 로드 및 관리
-│   │   └── prisma.js           # Prisma Client 싱글톤 인스턴스
-│   ├── controllers/            #요청-응답 처리 로직 디렉토리
-│   │   ├──index.js
-│   │   └── userController.js
-│   ├── routes/                 #라우팅(경로) 설정 디렉토리
-│   │   ├──index.js
-│   │   └── userRoutes.js
-│   ├── services/               #핵심 비즈니스 로직 디렉토리
-│   │   ├──index.js
-│   │   └── userService.js
-│   ├── middlewares/            #요청과 응답 사이의 중간 처리 로직 디렉토리
-│   │   ├──index.js
-│   │   ├── errorHandler.js
-│   │   └── authMiddleware.js
-│   └── utils/                  #재사용 가능한 유틸리티 함수 디렉토리
-│       ├──index.js
-│       └── token.js
-├── prisma/
-│   └── schema.prisma
-├── .env                        #환경 변수 설정 파일
-├── .env.test                   #테스트 환경 전용 환경 변수
-├── jest.config.js              #Jest 테스트 설정 파일
-├── Dockerfile
-├── docker-compose.yml
-├── .dockerignore
-├── package.json
-└── README.md
+# 트레이싱 설정 (개발: false, 운영: true)
+ENABLE_TRACING=false
+OTEL_SERVICE_NAME=character-chat-backend
+JAEGER_ENDPOINT=http://localhost:4318/v1/traces
+
+# Clerk 인증
+CLERK_PUBLISHABLE_KEY=your_key
+CLERK_SECRET_KEY=your_secret
+
+# 데이터베이스
+DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+
+# Google Cloud
+GOOGLE_APPLICATION_CREDENTIALS=./google-credentials/service-account.json
+GCS_BUCKET_NAME=your-bucket
 ```
 
-## src/index.js 와 src/app.js 차이
+### Docker 환경
 
-## 요청 처리 흐름
-1. 클라이언트 → src/app.js (요청 수신 및 미들웨어 실행)
-2. app.js → src/routes/index.js (메인 라우팅)
-3. routes/index.js → src/routes/*.js (세부 라우팅)
-4. routes/*.js → src/middlewares/authMiddleware.js (인증 처리)
-5. routes/*.js → src/controllers/ (컨트롤러 연결)
-6. services → controllers (결과 반환)
-7. controllers → 클라이언트 (최종 응답)
-8. (에러 발생 시) (모든 단계) → src/middlewares/errorHandler.js
+```bash
+# 개발 환경 (트레이싱 비활성화)
+docker-compose -f docker-compose.dev.yml up
 
-app.js는 “Express 앱의 모든 설정(미들웨어, 라우트, 에러처리 등)”을 담당하는 파일
-실제 서버 실행(포트 listen)은 index.js에서 담당
+# 운영 환경 (트레이싱 활성화)
+docker-compose up
 
-서비스 → 컨트롤러 → 클라이언트로의 데이터 흐름이 실제로 잘 분리되어 있는지, 컨트롤러에서 비즈니스 로직이 섞여 있지 않은지 점검 필요.
-에러 핸들러가 모든 라우터/미들웨어 뒤에 등록되어 있는지(Express에서 순서 중요) 확인.
+# 모니터링 스택 (Traefik + Jaeger + ELK + Grafana)
+docker-compose -f docker-compose.monitoring.yml up
+```
 
-    클라이언트 (손님): 주문을 합니다.
+## 🔍 API 문서
 
-    요청 (주문서): 손님의 주문 내용입니다.
+```bash
+# 서버 시작 후 접속
+http://localhost:3001/api-docs
+```
 
-    미들웨어 (웨이터/지배인):
+## 📋 사용 가능한 스크립트
 
-        손님을 맞이하고 예약 여부를 확인합니다. (인증/권한 미들웨어)
+```bash
+npm start          # 운영 모드 시작
+npm run dev        # 개발 모드 시작 (nodemon)
+npm test          # 테스트 실행
+npm run monitoring # 모니터링 스택 시작
+```
 
-        주문서를 주방에 전달하기 전에 읽기 쉽게 정리합니다. (body-parser 미들웨어)
+## 🐛 트레이싱 디버깅
 
-        모든 주문에 공통적으로 물을 한 잔씩 제공합니다. (로깅 또는 공통 데이터 추가 미들웨어)
+### Jaeger에서 추적하기
 
-        웨이터는 주방장(컨트롤러)에게 주문서를 전달할지 말지를 결정할 수 있습니다. (예약이 없으면 돌려보냄)
+1. **Jaeger UI** 접속: http://localhost:16686
+2. **Service 선택**: `character-chat-backend`
+3. **추적 ID 검색**: API 응답의 `traceId` 사용
+4. **전체 플로우 확인**: Traefik → Backend → Database
 
-    컨트롤러 (주방장/셰프):
+### 로그 연결 분석
 
-        웨이터에게 주문서를 받습니다.
+```bash
+# Kibana에서 특정 추적 ID의 모든 로그 검색
+traceId:"abc123def456"
 
-        주문서 내용을 보고 어떤 요리를 만들지 결정합니다.
+# 특정 사용자의 모든 활동 추적
+userId:"user_12345" AND traceId:*
+```
 
-        직접 모든 요리를 하지 않고, 각 분야의 전문 요리사에게 지시합니다. "스테이크 담당, 미디움 레어로 구워줘!", "파스타 담당, 알리오 올리오 만들어줘!"
+## 🚨 문제 해결
 
-    서비스 (전문 요리사들 - 그릴, 파스타, 샐러드 담당):
+### 트레이싱 관련
 
-        주방장의 지시를 받아 **실제 요리(핵심 로직, DB 작업 등)**를 합니다.
+1. **Jaeger 연결 실패**
+   ```bash
+   # Jaeger 컨테이너 상태 확인
+   docker logs jaeger
+   
+   # 네트워크 연결 확인
+   docker network ls
+   ```
 
-        완성된 요리를 주방장에게 전달합니다.
+2. **추적 ID가 전파되지 않음**
+   - `ENABLE_TRACING=true` 환경변수 확인
+   - OpenTelemetry 초기화 로그 확인
 
-    응답 (완성된 요리): 주방장이 요리들을 예쁘게 플레이팅해서 웨이터를 통해 손님에게 전달합니다.
+3. **성능 이슈**
+   - 개발환경에서는 `ENABLE_TRACING=false` 사용 권장
+   - 운영환경에서만 분산 트레이싱 활성화
+
+## 📞 지원
+
+트레이싱 및 모니터링 관련 문의사항이 있으시면 개발팀에 문의해주세요.
 

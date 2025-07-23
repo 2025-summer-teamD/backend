@@ -11,7 +11,7 @@ import gemini25 from '../vertexai/gemini25.js';
  */
 const createPersona = async (personaData, userId) => {
   try {
-    const { name, image_url, is_public, prompt, description, creator_name } = personaData;
+    const { name, imageUrl, isPublic, prompt, description, creatorName } = personaData;
 
     // 사용자 정보 가져오기
     const user = await prismaConfig.prisma.user.findUnique({
@@ -21,8 +21,8 @@ const createPersona = async (personaData, userId) => {
     // Sanitize string inputs
     const sanitizedData = {
       name: name.trim(),
-      imageUrl: image_url.trim(),
-      isPublic: is_public,
+      imageUrl: imageUrl.trim(),
+      isPublic: isPublic,
       introduction: description ? description.trim() : null,
       prompt: {
         tone: prompt.tone.trim(),
@@ -30,7 +30,7 @@ const createPersona = async (personaData, userId) => {
         tag: prompt.tag.trim()
       },
       clerkId: userId,
-      creatorName: creator_name || user?.name || user?.firstName || user?.username || userId
+      creatorName: creatorName || user?.name || user?.firstName || user?.username || userId
     };
     
     // DB에 저장하는 로직 (Prisma 예시)
@@ -228,7 +228,7 @@ const getPersonaDetails = async (options) => {
 
   console.log('조회 조건:', whereCondition);
 
-  const persona = await prismaConfig.prisma.persona.findUnique({
+  const persona = await prismaConfig.prisma.persona.findFirst({
     where: whereCondition,
     include: {
       user: true, // Users 테이블과 조인
