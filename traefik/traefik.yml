@@ -1,0 +1,59 @@
+# Traefik 정적 설정
+
+# API 및 대시보드 설정
+api:
+  dashboard: true
+  insecure: true
+
+# 엔트리포인트 설정
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+# 프로바이더 설정
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: app-network
+
+# 분산 트레이싱 설정
+tracing:
+  otlp:
+    http:
+      endpoint: "http://jaeger:4318/v1/traces"
+      timeout: 10s
+      headers:
+        Authorization: "Bearer token"
+    
+# 메트릭 설정 (Prometheus)
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+
+# 로그 설정
+log:
+  level: INFO
+
+# 액세스 로그 설정
+accessLog:
+  format: json
+  fields:
+    headers:
+      defaultMode: keep
+      names:
+        X-Trace-ID: keep
+        Authorization: drop
+
+# 인증서 관리 (나중에 Let's Encrypt 설정 가능)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@example.com
+      storage: acme.json
+      httpChallenge:
+        entryPoint: web 

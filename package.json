@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "test": "jest",
+    "monitoring": "docker-compose -f docker-compose.monitoring.yml up -d",
+    "monitoring:stop": "docker-compose -f docker-compose.monitoring.yml down",
+    "monitoring:logs": "docker-compose -f docker-compose.monitoring.yml logs -f"
   },
   "dependencies": {
     "@clerk/clerk-sdk-node": "^4.13.23",

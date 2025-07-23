@@ -1,22 +1,44 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
 
 scrape_configs:
+  # Express App 메트릭
+  - job_name: 'express-app'
+    static_configs:
+      - targets: ['app:3001']
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+
+  # Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # cAdvisor (컨테이너 메트릭)
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+    scrape_interval: 5s
+
+  # Redis 메트릭
   - job_name: 'redis'
     static_configs:
       - targets: ['redis-exporter:9121']
-  - job_name: 'express'
-    static_configs:
-      - targets: ['app:3001']
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['prometheus:9090']
+    scrape_interval: 5s
+
+  # PostgreSQL 메트릭
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres-exporter:9187']
+    scrape_interval: 5s
+
+  # Node Exporter (시스템 메트릭)
   - job_name: 'node'
     static_configs:
-      - targets: ['node-exporter:9100'] 
+      - targets: ['node-exporter:9100']
+    scrape_interval: 5s 

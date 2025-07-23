@@ -48,11 +48,18 @@ const createCustomPersona = async (req, res, next) => {
     // 4. 서비스 호출: 실제 생성 작업은 서비스에 위임
     const newPersona = await PersonaService.createPersona(personaData, userId);
 
-    // 5. 성공 응답 생성
+    // 5. 사용자 활동 로깅
+    logger.logUserActivity('CREATE_PERSONA', userId, {
+      personaId: newPersona.id,
+      personaName: newPersona.name
+    });
+
+    // 6. 성공 응답 생성
     res.status(201).json({
       message: '사용자 정의 페르소나를 성공적으로 생성했습니다.',
       data: newPersona,
     });
+
   } catch (error) {
     // 서비스에서 발생한 에러는 중앙 에러 핸들러로 전달
     next(error);

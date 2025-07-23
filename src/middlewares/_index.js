@@ -10,6 +10,7 @@ import personaValidator from './personaValidator.js';
 import uploadMiddleware from './uploadMiddleware.js';
 import ensureUserInDB from './ensureUserInDB.js';
 import paginationValidator from './paginationValidator.js';
+import traceMiddleware from './traceMiddleware.js';
 
 export default {
   authMiddleware,
@@ -17,5 +18,6 @@ export default {
   personaValidator,
   uploadMiddleware,
   ensureUserInDB,
-  paginationValidator
+  paginationValidator,
+  traceMiddleware
 };
