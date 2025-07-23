@@ -165,6 +165,34 @@ const streamChatByRoom = async (req, res, next) => {
         data: { exp: { increment: expToAdd } }
       });
 
+      // --- exp 초과 시 영상 생성 보상 로직 ---
+      // (예시: personaInfo와 message를 활용해 프롬프트 옵션 구성)
+      const videoReward = await chatService.checkAndGenerateVideoReward(
+        parseInt(roomId, 10),
+        {
+          subject: `${personaInfo.name}와의 대화`,
+          style: '밝고 따뜻한 애니메이션',
+          mood: '즐겁고 에너지 넘치게',
+          action: `사용자와 AI가 대화를 나누는 장면. 최근 메시지: ${message}`,
+          duration: '10초',
+          language: '한국어'
+        }
+      );
+      if (videoReward && videoReward.gcsUrl) {
+        // ChatLog에 영상 기록 저장
+        await prismaConfig.prisma.chatLog.create({
+          data: {
+            chatroomId: parseInt(roomId, 10),
+            text: videoReward.gcsUrl,
+            type: 'video',
+            speaker: 'ai',
+            time: new Date()
+          }
+        });
+        // SSE로 영상 URL 전송
+        res.write(`data: ${JSON.stringify({ videoUrl: videoReward.gcsUrl })}\n\n`);
+      }
+
     } catch (dbError) {
       logger.logError('AI 응답 저장 실패', dbError, { roomId: roomId });
       // AI 응답 저장 실패해도 SSE는 계속 진행

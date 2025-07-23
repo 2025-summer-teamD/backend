@@ -5,7 +5,7 @@ import crypto from 'crypto';
 
 // ✅ 환경변수 유효성 검사
 const requiredEnvVars = [
-  'GOOGLE_PROJECT_ID',
+  'GOOGLE_CLOUD_PROJECT',
   'GCS_BUCKET_NAME',
   'GOOGLE_APPLICATION_CREDENTIALS',
 ];
