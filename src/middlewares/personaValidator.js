@@ -87,14 +87,10 @@ const validateMyPersonaList = (req, res, next) => {
 
 // AI 기반 페르소나 생성 요청의 body를 검증하는 미들웨어
 const validateAiCreatePersona = (req, res, next) => {
-  const { name, imageUrl, isPublic } = req.body;
-
-  if (!name || (!imageUrl && !req.file) || typeof isPublic !== 'boolean') {
-    return res.status(400).json({
-      error: '필수 값이 누락되었습니다. (name, imageUrl, isPublic)',
-    });
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: '캐릭터 이름(name)은 필수입니다.' });
   }
-
   next();
 };
 

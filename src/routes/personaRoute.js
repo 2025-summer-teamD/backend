@@ -188,6 +188,18 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
 );
 
 /**
+ * AI로 캐릭터 정보를 생성만 하고 DB에 저장하지 않는 preview API
+ */
+router.post(
+  '/existing/preview',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  ensureUserInDB,
+  personaValidator.validateAiCreatePersona,
+  personaController.previewAiPersona
+);
+
+/**
  * @swagger
  * /characters/{characterId}/like:
  *   post:

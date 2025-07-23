@@ -16,11 +16,6 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
-// ✅ GCS 클라이언트 초기화
-const storage = new Storage({
-  projectId: process.env.GOOGLE_PROJECT_ID,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
 
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
