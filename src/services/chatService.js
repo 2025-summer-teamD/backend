@@ -213,11 +213,47 @@ ${personaInfo.name}:`;
   return aiResponseText;
 };
 
+/**
+ * 채팅방 삭제 (소프트 삭제)
+ * @param {number} roomId - 삭제할 채팅방 ID
+ * @param {string} userId - 요청자 Clerk ID (권한 확인용)
+ * @returns {Promise<object>} 삭제된 채팅방 객체
+ */
+const deleteChatRoom = async (roomId, userId) => {
+  // 1. 본인 소유 채팅방인지 확인
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: { 
+      id: parseInt(roomId, 10),
+      clerkId: userId,  // 🔒 사용자별 권한 확인!
+      isDeleted: false 
+    },
+  });
+  
+  if (!chatRoom) {
+    throw new Error('삭제 권한이 없거나 존재하지 않는 채팅방입니다.');
+  }
+  
+  // 2. 채팅방을 소프트 삭제
+  const deleted = await prismaConfig.prisma.chatRoom.update({
+    where: { id: chatRoom.id },
+    data: { isDeleted: true },
+  });
+  
+  // 3. 관련 채팅 로그도 소프트 삭제
+  await prismaConfig.prisma.chatLog.updateMany({
+    where: { chatroomId: chatRoom.id },
+    data: { isDeleted: true },
+  });
+  
+  return deleted;
+};
+
 const chatService = {
   getMyChatList,
   deleteLikedCharacter,
   generateAiChatResponse,
-  createChatRoom, // 추가!
+  createChatRoom,
+  deleteChatRoom, // 🆕 추가!
 };
 
 export default chatService;

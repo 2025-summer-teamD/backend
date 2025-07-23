@@ -57,10 +57,13 @@ const streamChatByRoom = async (req, res, next) => {
       return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
     }
 
-    // 실제 채팅방 정보를 데이터베이스에서 조회
-    const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
+    // 실제 채팅방 정보를 데이터베이스에서 조회 (사용자별 필터링)
+    const { userId } = req.auth; // 인증된 사용자 ID 가져오기
+    
+    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: { 
         id: parseInt(roomId, 10),
+        clerkId: userId, // 🔒 사용자별 접근 권한 확인!
         isDeleted: false
       },
       include: {
@@ -222,6 +225,7 @@ const getMyChats = errorHandler.asyncHandler(async (req, res) => {
  */
 const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
   const { characterId } = req.query;
+  const { userId } = req.auth; // 인증된 사용자 ID 가져오기
   
   if (!characterId) {
     return responseHandler.sendBadRequest(res, 'characterId 쿼리 파라미터가 필요합니다.');
@@ -232,10 +236,11 @@ const enterChatRoom = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendBadRequest(res, 'characterId는 숫자여야 합니다.');
   }
 
-  // 1. 먼저 채팅방 조회
+  // 1. 먼저 사용자별 채팅방 조회 (보안 중요!)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       characterId: parsedCharacterId,
+      clerkId: userId, // 🔒 사용자별 필터링 추가!
       isDeleted: false
     },
     include: {
@@ -336,6 +341,8 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
  */
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { roomId } = req.query;
+  const { userId } = req.auth; // 인증된 사용자 ID 가져오기
+  
   if (!roomId) {
     return responseHandler.sendBadRequest(res, 'room_id 쿼리 파라미터가 필요합니다.');
   }
@@ -344,9 +351,11 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
   }
   
+  // 🔒 사용자별 채팅방 정보 조회 (보안 중요!)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       id: parsedRoomId,
+      clerkId: userId, // 🔒 사용자별 필터링 추가!
       isDeleted: false
     },
     include: {
