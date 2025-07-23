@@ -94,6 +94,49 @@ const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
 });
 
 /**
+ * AI를 사용하여 캐릭터 정보를 미리보기로만 생성 (DB 저장 X)
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  // 1. Gemini에 보낼 프롬프트 생성 (JSON 형식으로 응답하도록 지시)
+  const promptForGemini = `
+    다음은 새로운 페르소나 캐릭터에 대한 정보입니다:
+    - 이름: ${name}
+
+    이 정보를 바탕으로, 아래 JSON 형식에 맞춰 캐릭터의 상세 설정을 한국어로 생성해주세요:
+    {
+      "description": "캐릭터에 대한 상세하고 매력적인 소개 (3-4문장)",
+      "prompt": {
+        "tone": "캐릭터의 대표적인 말투 (예: 차분하고 논리적인, 활기차고 친근한)",
+        "personality": "캐릭터의 핵심 성격 키워드 3가지 (쉼표로 구분)",
+        "tag": "캐릭터를 대표하는 해시태그 3가지 (쉼표로 구분, # 제외)"
+      }
+    }
+  `;
+  let aiGeneratedDetails;
+  try {
+    aiGeneratedDetails = await import('../vertexai/gemini25.js').then(m => m.default.generatePersonaDetailsWithGemini(promptForGemini));
+  } catch (error) {
+    aiGeneratedDetails = {
+      description: `${name}에 대한 상세한 소개입니다.`,
+      prompt: {
+        tone: "친근하고 자연스러운 말투",
+        personality: "친절함, 호기심, 적극성",
+        tag: "친근함,호기심,적극성"
+      }
+    };
+  }
+  // 2. AI가 생성한 정보만 반환 (DB 저장 X)
+  return responseHandler.sendSuccess(res, 200, 'AI로 생성된 캐릭터 정보 미리보기', {
+    name,
+    ...aiGeneratedDetails
+  });
+});
+
+/**
  * 커뮤니티 페르소나 목록을 조회하는 컨트롤러
  * 
  * @param {object} req - Express request 객체
@@ -282,6 +325,7 @@ const incrementViewCount = errorHandler.asyncHandler(async (req, res) => {
 export default {
   createCustomPersona,
   createAiPersona,
+  previewAiPersona,
   getPersonaList,
   getCommunityPersonaDetails,
   getMyPersonaList,

@@ -18,7 +18,7 @@ requiredEnvVars.forEach(varName => {
 
 // ✅ GCS 클라이언트 초기화
 const storage = new Storage({
-  projectId: process.env.GOOGLE_PROJECT_ID,
+  projectId: process.env.GOOGLE_CLOUD_PROJECT,
   keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
 });
 

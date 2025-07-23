@@ -305,7 +305,8 @@ const getMyPersonas = async (userId, type = 'created') => {
         chatRooms: {
           where: {
             clerkId: userId,
-          }
+          },
+          select: { exp: true }, // exp 포함
         }
       }
     });
@@ -325,6 +326,7 @@ const getMyPersonas = async (userId, type = 'created') => {
         likesCount: p.likesCount,
         liked: myRoom ? myRoom.likes : false,
         friendship: myRoom ? myRoom.friendship : 0,
+        exp: myRoom ? myRoom.exp : 0, // exp(친밀도) 추가
         isDeleted: p.isDeleted,
       };
     });
