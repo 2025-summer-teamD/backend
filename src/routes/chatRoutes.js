@@ -167,8 +167,11 @@ router.get('/room-info',
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
 
-// multer 설정: uploads 폴더에 저장
-const upload = multer({ dest: 'uploads/' });
+// multer 설정: uploads 폴더에 저장, 파일 크기 제한(5MB)
+const upload = multer({
+  dest: 'uploads/',
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB 제한
+});
 
 // 채팅 이미지 업로드 라우트
 router.post('/upload-image', upload.single('image'), uploadImage);
