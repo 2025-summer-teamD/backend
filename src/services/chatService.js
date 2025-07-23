@@ -102,13 +102,27 @@ const deleteLikedCharacter = async (userId, characterId) => {
 };
 
 const createChatRoom = async (characterId, userId) => {
-  // 1. 기존 채팅방 있는지 확인
+  // 1. 기존 채팅방 있는지 확인 (캐릭터 정보 포함)
   let chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
       clerkId: userId,
       characterId: parseInt(characterId, 10),
       isDeleted: false,
     },
+    include: {
+      persona: {
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          introduction: true,
+          prompt: true,
+          creatorName: true,
+          usesCount: true,
+          likesCount: true,
+        }
+      }
+    }
   });
 
   // 2. 없으면 새로 생성
@@ -118,10 +132,36 @@ const createChatRoom = async (characterId, userId) => {
         clerkId: userId,
         characterId: parseInt(characterId, 10),
       },
+      include: {
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            introduction: true,
+            prompt: true,
+            creatorName: true,
+            usesCount: true,
+            likesCount: true,
+          }
+        }
+      }
     });
   }
 
-  return chatRoom;
+  // 3. 반환 데이터 형식 맞추기
+  return {
+    id: chatRoom.id,
+    clerkId: chatRoom.clerkId,
+    characterId: chatRoom.characterId,
+    character: chatRoom.persona, // 캐릭터 정보 포함!
+    exp: chatRoom.exp,
+    friendship: chatRoom.friendship,
+    likes: chatRoom.likes,
+    isDeleted: chatRoom.isDeleted,
+    createdAt: chatRoom.createdAt,
+    updatedAt: chatRoom.updatedAt,
+  };
 };
 
 

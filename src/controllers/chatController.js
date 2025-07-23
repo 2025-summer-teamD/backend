@@ -44,13 +44,13 @@ const streamChatByRoom = async (req, res, next) => {
     const { roomId } = req.params;
     const { message, sender, timestamp } = req.body;
 
-    // 디버깅: room_id 값 확인
-    console.log('🔍 DEBUG: room_id 값 확인');
+    // 디버깅: roomId 값 확인
+    console.log('🔍 DEBUG: roomId 값 확인');
     console.log('- req.params:', req.params);
-    console.log('- room_id 원본값:', room_id);
-    console.log('- room_id 타입:', typeof room_id);
-    console.log('- parseInt 결과:', parseInt(room_id, 10));
-    console.log('- isNaN 체크:', isNaN(parseInt(room_id, 10)));
+    console.log('- roomId 원본값:', roomId);
+    console.log('- roomId 타입:', typeof roomId);
+    console.log('- parseInt 결과:', parseInt(roomId, 10));
+    console.log('- isNaN 체크:', isNaN(parseInt(roomId, 10)));
 
     // 입력 검증
     if (!message || !sender || !timestamp) {
