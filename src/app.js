@@ -47,9 +47,6 @@ app.use(traceMiddleware.traceMiddleware);
 // 요청 로깅 미들웨어 (인증 전에 등록)
 app.use(logger.logRequest);
 
-// 업로드된 이미지를 정적 파일로 서빙
-app.use('/api/uploads', express.static(path.join(__dirname, '../uploads')));
-
 // Swagger 설정
 const swaggerOptions = {
   definition: {
