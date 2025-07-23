@@ -2,6 +2,8 @@ import express from 'express';
 import chatController from '../controllers/chatController.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
 import personaValidator from '../middlewares/personaValidator.js';
+import multer from 'multer';
+import { uploadImage } from '../controllers/uploadController.js';
 
 const router = express.Router();
 
@@ -164,5 +166,11 @@ router.get('/room-info',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
+
+// multer 설정: uploads 폴더에 저장
+const upload = multer({ dest: 'uploads/' });
+
+// 채팅 이미지 업로드 라우트
+router.post('/upload-image', upload.single('image'), uploadImage);
 
 export default router; 
