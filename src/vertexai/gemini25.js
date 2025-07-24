@@ -96,9 +96,88 @@ const getGoogleImages = async (query, GOOGLE_API_KEY, GOOGLE_CX, limit=10) => {
     }
 }
 
+// Perplexity API 호출 함수
+async function generateCharacterWithPerplexity(characterName) {
+ try {
+   const response = await fetch('https://api.perplexity.ai/chat/completions', {
+     method: 'POST',
+     headers: {
+       'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+       'Content-Type': 'application/json'
+     },
+     body: JSON.stringify({
+       model: 'sonar-pro',
+       messages: [
+         {
+           role: 'user',
+           content: `당신은 주어진 이름의 실제 인물 또는 등장인물에 대한 정보를 바탕으로 한국어 JSON을 생성하는 전문가입니다. 웃기고 과장되게 표현해줘. 특히 캐릭터라면 더욱 과장되게.
+
+이름: 특징이나 직업을 제외하고 이름만 생성 해주세요. 예를 들어, "박보영 배우"를 "박보영"과 같이 이름만.
+
+아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요:
+
+{
+ "description": "${characterName}에 대한 상세하고 디테일한 캐릭터적 소개를 검색하여 요약. 특히 주목해야할 특징위주로 (3-4문장)",
+ "prompt": {
+   "tone": "${characterName}의 대표적인 말투 혹은 유행어나 밈을 자세하게 적기",
+   "personality": "${characterName}의 성격을 아주 디테일하고 자세하게 묘사",
+   "tag": "${characterName}를 대표하는 해시태그 4가지 (직업, 성별, 성격, 특징) (쉼표로 구분, # 제외)",
+   "ImageUrl": []
+ }
+}`
+         }
+       ],
+       search_domain_filter: ['namu.wiki', 'wikipedia.org', 'wikidata.org'],
+       search_recency_filter: 'month',
+       response_format: {
+         type: 'json_schema',
+         json_schema: {
+           schema: {
+             type: 'object',
+             properties: {
+               description: { type: 'string' },
+               prompt: {
+                 type: 'object',
+                 properties: {
+                   tone: { type: 'string' },
+                   personality: { type: 'string' },
+                   tag: { type: 'string' },
+                   ImageUrl: {
+                     type: 'array',
+                     items: { type: 'string' }
+                   }
+                 },
+                 required: ['tone', 'personality', 'tag', 'ImageUrl']
+               }
+             },
+             required: ['description', 'prompt']
+           }
+         }
+       }
+     })
+   });
+
+    const data = await response.json();
+    console.log('Perplexity API 응답:', data);
+    // JSON 응답 파싱
+    const messageContent = data.choices[0].message.content;
+    const characterData = JSON.parse(messageContent);
+
+    return characterData;
+
+  } catch (error) {
+    console.error('Perplexity API 오류:', error.response?.data || error.message);
+    throw new Error('캐릭터 생성 실패');
+  }
+}
+
 
 export default {
   generateText,
   generatePersonaDetailsWithGemini,
-  getGoogleImages
+  getGoogleImages,
+  generateCharacterWithPerplexity
 };
+
+
+

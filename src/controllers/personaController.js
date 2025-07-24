@@ -138,12 +138,13 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
   let aiGeneratedDetails;
   let imageUrls;
   try {
-    aiGeneratedDetails = await import('../vertexai/gemini25.js').then(m => m.default.generatePersonaDetailsWithGemini(promptForGemini));
+    // aiGeneratedDetails = await import('../vertexai/gemini25.js').then(m => m.default.generatePersonaDetailsWithGemini(promptForGemini));
+    aiGeneratedDetails = await import('../vertexai/gemini25.js').then(m => m.default.generateCharacterWithPerplexity(name));
     const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
     const GOOGLE_CX = process.env.GOOGLE_CX;
-    console.log('AI가 생성한 캐릭터 정보:', GOOGLE_API_KEY, GOOGLE_CX);
+    // console.log('AI가 생성한 캐릭터 정보:', GOOGLE_API_KEY, GOOGLE_CX);
     imageUrls = await import('../vertexai/gemini25.js').then(m => m.default.getGoogleImages(name, GOOGLE_API_KEY, GOOGLE_CX));
-    // console.log('AI가 생성한 캐릭터 정보:', userId, GOOGLE_API_KEY, GOOGLE_CX, imageUrl);
+    // console.log('AI가 생성한 캐릭터 정보:', userId, GOOGLE_API_KEY, GOOGLE_CX, imageUrls);
     // aiGeneratedDetails.prompt.imageUrl = aiGeneratedDetails.prompt.imageUrl[0]?.url || '';
     // aiGeneratedDetails.data.imageUrl = "ffffff";
     aiGeneratedDetails.prompt.imageUrl = [];
