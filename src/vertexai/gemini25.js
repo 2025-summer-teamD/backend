@@ -1,6 +1,7 @@
 // src/services/geminiService.js
 
 import { VertexAI } from '@google-cloud/vertexai';
+import axios from 'axios';
 
 const vertexAi = new VertexAI({
   project: process.env.GOOGLE_CLOUD_PROJECT,
@@ -55,8 +56,49 @@ const generatePersonaDetailsWithGemini = async (promptText) => {
   }
 };
 
+const getGoogleImages = async (query, GOOGLE_API_KEY, GOOGLE_CX, limit=10) => {
+    if (!GOOGLE_API_KEY || !GOOGLE_CX) {
+        console.log('Google API 키 상태:', {
+            hasApiKey: !!GOOGLE_API_KEY,
+            hasCustomSearchId: !!GOOGLE_CX,
+            apiKeyLength: GOOGLE_API_KEY?.length,
+            cxLength: GOOGLE_CX?.length
+        });
+        return ["Error: Google API 키 또는 Custom Search ID가 설정되지 않았습니다."];
+    }
+
+    try {
+        const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+            params: {
+                key: GOOGLE_API_KEY,
+                cx: GOOGLE_CX,
+                q: query,
+                searchType: 'image',
+                num: Math.min(limit, 10),
+                safe: 'active'
+            }
+        });
+
+        return response.data.items?.map(item => ({
+            title: item.title || '',
+            url: item.link || '',
+            thumbnail: item.image?.thumbnailLink || '',
+            source: 'google',
+            width: item.image?.width,
+            height: item.image?.height
+        })) || [];
+    } catch (error) {
+        console.error('Google Images 검색 오류:', error.message);
+        console.error('에러 상세:', error.response?.data);
+        console.error('요청 URL:', error.config?.url);
+        console.error('요청 파라미터:', error.config?.params);
+        return [];
+    }
+}
+
 
 export default {
   generateText,
-  generatePersonaDetailsWithGemini
+  generatePersonaDetailsWithGemini,
+  getGoogleImages
 };
