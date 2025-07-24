@@ -32,7 +32,7 @@ const createPersona = async (personaData, userId) => {
       clerkId: userId,
       creatorName: creatorName || user?.name || user?.firstName || user?.username || userId
     };
-    
+
     // DB에 저장하는 로직 (Prisma 예시)
     // 여기서 prompt는 JSON 타입으로 DB에 저장될 수 있습니다.
     const newPersona = await prismaConfig.prisma.persona.create({
@@ -54,7 +54,7 @@ const createPersona = async (personaData, userId) => {
  * @returns {Promise<object>} 완전히 생성된 페르소나 객체
  */
 const createPersonaWithAI = async (initialData, userId) => {
-  const { name, imageUrl, isPublic, creatorName } = initialData;
+  const { name, isPublic, creatorName } = initialData;
 
   // 사용자 정보 가져오기
   const user = await prismaConfig.prisma.user.findUnique({
@@ -79,8 +79,16 @@ const createPersonaWithAI = async (initialData, userId) => {
 
   // 2. LLM 서비스 호출하여 상세 정보 생성
   let aiGeneratedDetails;
+  let imageUrl;
   try {
           aiGeneratedDetails = await gemini25.generatePersonaDetailsWithGemini(promptForGemini);
+          const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+          const GOOGLE_CX = process.env.GOOGLE_CX;
+          imageUrl = await gemini25.getGoogleImages(name + ' 사진', GOOGLE_API_KEY, GOOGLE_CX);
+          // aiGeneratedDetails.prompt.imageUrl = aiGeneratedDetails.prompt.imageUrl[0]?.url || '';
+          console.log(imageUrl);
+          aiGeneratedDetails.data.imageUrl = "ffffff";
+
   } catch (error) {
     console.log('AI 생성 실패, 기본값 사용:', error.message);
     // AI 생성 실패 시 기본값 사용
@@ -98,7 +106,7 @@ const createPersonaWithAI = async (initialData, userId) => {
   const fullPersonaData = {
     clerkId: userId,
     name,
-    imageUrl: imageUrl,
+    imageUrl: imageUrl ? imageUrl[0]?.url : "imageUrl", // 이미지 URL이 배열인 경우 첫 번째 요소 사용
     isPublic: isPublic,
     introduction: aiGeneratedDetails.description, // AI가 생성
     prompt: aiGeneratedDetails.prompt,          // AI가 생성

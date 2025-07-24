@@ -1,9 +1,9 @@
 /**
  * 페르소나 컨트롤러
- * 
+ *
  * 사용 위치:
  * - personaRoute.js에서 라우터 연결
- * 
+ *
  * 기능:
  * - 페르소나 CRUD 작업 처리
  * - 사용자 인증 및 권한 검증
@@ -18,9 +18,10 @@ import errorHandler from '../middlewares/errorHandler.js';
 import prismaConfig from '../config/prisma.js';
 import { uploadToGCS } from '../utils/uploadToGCS.js';
 
+
 /**
  * 사용자 정의 페르소나를 생성하는 요청을 처리하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -61,14 +62,14 @@ const createCustomPersona = async (req, res, next) => {
 
 /**
  * AI를 사용하여 페르소나를 생성하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
 const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  
+
   // 이미지 업로드 처리
   let imageUrl = req.body.imageUrl || '';
   if (req.file) {
@@ -93,6 +94,23 @@ const createAiPersona = errorHandler.asyncHandler(async (req, res) => {
   return responseHandler.sendSuccess(res, 201, 'AI를 통해 페르소나를 성공적으로 생성했습니다.', newPersona);
 });
 
+
+async function isValidImageUrl(url) {
+  try {
+    const response = await fetch(url, {
+      method: 'HEAD',
+      timeout: 5000 // 5초 타임아웃
+    });
+
+    // 상태코드가 200번대이고 content-type이 이미지인지 확인
+    const contentType = response.headers.get('content-type');
+    return response.ok && contentType && contentType.startsWith('image/');
+  } catch (error) {
+    return false;
+  }
+}
+
+
 /**
  * AI를 사용하여 캐릭터 정보를 미리보기로만 생성 (DB 저장 X)
  * @param {object} req - Express request 객체
@@ -112,22 +130,39 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
       "prompt": {
         "tone": "캐릭터의 대표적인 말투 (예: 차분하고 논리적인, 활기차고 친근한)",
         "personality": "캐릭터의 핵심 성격 키워드 3가지 (쉼표로 구분)",
-        "tag": "캐릭터를 대표하는 해시태그 3가지 (쉼표로 구분, # 제외)"
+        "tag": "캐릭터를 대표하는 해시태그 3가지 (쉼표로 구분, # 제외)",
+        "imageUrl": ""
       }
     }
   `;
   let aiGeneratedDetails;
+  let imageUrls;
   try {
     aiGeneratedDetails = await import('../vertexai/gemini25.js').then(m => m.default.generatePersonaDetailsWithGemini(promptForGemini));
+    const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+    const GOOGLE_CX = process.env.GOOGLE_CX;
+    console.log('AI가 생성한 캐릭터 정보:', GOOGLE_API_KEY, GOOGLE_CX);
+    imageUrls = await import('../vertexai/gemini25.js').then(m => m.default.getGoogleImages(name, GOOGLE_API_KEY, GOOGLE_CX));
+    // console.log('AI가 생성한 캐릭터 정보:', userId, GOOGLE_API_KEY, GOOGLE_CX, imageUrl);
+    // aiGeneratedDetails.prompt.imageUrl = aiGeneratedDetails.prompt.imageUrl[0]?.url || '';
+    // aiGeneratedDetails.data.imageUrl = "ffffff";
+    aiGeneratedDetails.prompt.imageUrl = [];
+    for (const imageUrl of imageUrls) {
+      if (await isValidImageUrl(imageUrl.url)) {
+        aiGeneratedDetails.prompt.imageUrl.push(imageUrl.url);
+      }
+    }
+    // aiGeneratedDetails.prompt.imageUrl = imageUrls[1]?.url || '';
+    console.log('AI가 생성한 캐릭터 정보:', aiGeneratedDetails);
+
   } catch (error) {
     aiGeneratedDetails = {
-      description: `${name}에 대한 상세한 소개입니다.`,
-      prompt: {
-        tone: "친근하고 자연스러운 말투",
-        personality: "친절함, 호기심, 적극성",
-        tag: "친근함,호기심,적극성"
-      }
+      description: error.message + ' (AI가 캐릭터 정보를 생성하는 데 실패했습니다.)',
     };
+      // 2. AI가 생성한 정보만 반환 (DB 저장 X)
+    return responseHandler.sendSuccess(res, 500, 'AI로 생성된 캐릭터 정보 미리보기', {
+      aiGeneratedDetails
+    });
   }
   // 2. AI가 생성한 정보만 반환 (DB 저장 X)
   return responseHandler.sendSuccess(res, 200, 'AI로 생성된 캐릭터 정보 미리보기', {
@@ -138,7 +173,7 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 커뮤니티 페르소나 목록을 조회하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -161,7 +196,7 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * [공개] 커뮤니티 페르소나 상세 정보를 조회하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -184,7 +219,7 @@ const getCommunityPersonaDetails = errorHandler.asyncHandler(async (req, res) =>
 
 /**
  * 나의 페르소나 목록(만든 것/좋아요 한 것)을 조회하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -202,7 +237,7 @@ const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * [인증 필수] 나의 페르소나 상세 정보를 조회하는 컨트롤러
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -242,7 +277,7 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * [PATCH] 페르소나 수정 (본인만 가능)
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -252,7 +287,7 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
   const { introduction, personality, tone, tag } = req.body;
   const updateData = { introduction, personality, tone, tag };
-  
+
   const updated = await PersonaService.updatePersona(personaId, userId, updateData);
 
   // 사용자 활동 로깅
@@ -266,7 +301,7 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * [DELETE] 페르소나 소프트 삭제 (본인만 가능)
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -274,7 +309,7 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
 const deletePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.characterId, 10);
-  
+
   await PersonaService.deletePersona(personaId, userId);
 
   // 사용자 활동 로깅
@@ -287,7 +322,7 @@ const deletePersona = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 페르소나 좋아요 토글
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -295,7 +330,7 @@ const deletePersona = errorHandler.asyncHandler(async (req, res) => {
 const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.characterId, 10);
-  
+
   const result = await PersonaService.toggleLike(personaId, userId);
 
   // 사용자 활동 로깅
@@ -309,14 +344,14 @@ const toggleLike = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 조회수 증가
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
  */
 const incrementViewCount = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
-  
+
   await PersonaService.incrementViewCount(personaId);
 
   return responseHandler.sendSuccess(res, 200, '조회수가 증가되었습니다.');
