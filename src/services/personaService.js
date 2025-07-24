@@ -81,12 +81,14 @@ const createPersonaWithAI = async (initialData, userId) => {
   let aiGeneratedDetails;
   let imageUrl;
   try {
-          aiGeneratedDetails = await gemini25.generatePersonaDetailsWithGemini(promptForGemini);
-          const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
-          const GOOGLE_CX = process.env.GOOGLE_CX;
-          imageUrl = await gemini25.getGoogleImages(name + ' 사진', GOOGLE_API_KEY, GOOGLE_CX);
+          // aiGeneratedDetails = await gemini25.generatePersonaDetailsWithGemini(promptForGemini);
+          aiGeneratedDetails = await gemini25.generateCharacterWithPerplexity(name);
+          console.log('AI가 생성한 캐릭터 정보:', aiGeneratedDetails);
+          // const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+          // const GOOGLE_CX = process.env.GOOGLE_CX;
+          // imageUrl = await gemini25.getGoogleImages(name + ' 사진', GOOGLE_API_KEY, GOOGLE_CX);
           // aiGeneratedDetails.prompt.imageUrl = aiGeneratedDetails.prompt.imageUrl[0]?.url || '';
-          console.log(imageUrl);
+          // console.log(imageUrl);
           aiGeneratedDetails.data.imageUrl = "ffffff";
 
   } catch (error) {
