@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         if: github.ref == 'refs/heads/main'
-        run: npm ci
+        run: npm install
 
       # - name: Run tests
       #   run: npm test
