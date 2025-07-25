@@ -167,9 +167,9 @@ router.get('/room-info',
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
 
-// multer 설정: uploads 폴더에 저장, 파일 크기 제한(5MB)
+// 메모리 저장소를 사용하여 파일 버퍼를 직접 얻음 (GCS 업로드에 적합)
 const upload = multer({
-  dest: 'uploads/',
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB 제한
 });
 

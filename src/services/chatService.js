@@ -5,11 +5,6 @@ import { Storage } from '@google-cloud/storage';
 import { uploadImageToGCS } from './gcsService.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
-import {GoogleGenAI} from '@google/genai';
-// dotenv.config(); // .env 파일 로드
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // GEMINI_API_KEY 환경 변수 필요
-const gemini = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" }); // 사용하려는 Gemini 모델 지정
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
@@ -189,7 +184,30 @@ const generateAiChatResponse = async (
   personaInfo,
   chatHistory,
 ) => {
-  // 1. Gemini AI에 보낼 프롬프트 구성
+
+
+  // 1. 이미지 메시지 여부 확인 ([이미지] {url}) 패턴)
+  const imageRegex = /^\[이미지\]\s+(.+)/;
+  const imageMatch = userMessage.match(imageRegex);
+
+  // 이미지 메시지인 경우 → 멀티모달 호출
+  if (imageMatch) {
+    const imageUrl = imageMatch[1].trim();
+    try {
+      console.log('🖼️ Gemini 멀티모달 호출 (image + text)...', imageUrl);
+
+      // 캐릭터 설정을 포함한 프롬프트
+      const promptText = `당신은 "${personaInfo.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.\n- 성격: ${personaInfo.personality}\n- 말투: ${personaInfo.tone}`;
+
+      const aiResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
+      return aiResponse;
+    } catch (error) {
+      console.error('❌ Gemini 이미지 응답 실패:', error.message);
+      return `죄송해요, 이미지를 읽는 데 문제가 발생했습니다. 다른 이미지를 보내주시겠어요?`;
+    }
+  }
+
+  // 2. 텍스트 메시지 → 기존 로직 사용
   const prompt = `
 당신은 "${personaInfo.name}"이라는 이름의 AI 캐릭터입니다. 아래 설정에 맞춰서 사용자와 대화해주세요.
 - 당신의 성격: ${personaInfo.personality}
@@ -203,24 +221,21 @@ ${chatHistory}
 사용자: ${userMessage}
 ${personaInfo.name}:`;
 
-  // 2. Google AI 호출 (타임아웃 에러 처리 포함)
   let aiResponseText;
   try {
-    console.log('🤖 Google AI 호출 시도...');
+    console.log('🤖 Gemini 텍스트 호출 시도...');
     aiResponseText = await gemini25.generateText(prompt.trim());
-    console.log('✅ Google AI 응답 성공');
+    console.log('✅ Gemini 응답 성공');
   } catch (error) {
-    console.error('❌ Google AI 호출 실패:', error.message);
-    console.log('🔄 폴백 응답 사용');
+    console.error('❌ Gemini 텍스트 호출 실패:', error.message);
     aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
   }
-
+  
   // 응답이 없으면 기본 메시지
   if (!aiResponseText || aiResponseText.trim() === '') {
     aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
   }
 
-  // 3. 생성된 AI 응답 텍스트 반환
   return aiResponseText;
 };
 

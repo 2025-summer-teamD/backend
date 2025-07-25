@@ -189,8 +189,8 @@ const streamChatByRoom = async (req, res, next) => {
             time: new Date()
           }
         });
-        // SSE로 영상 URL 전송
-        res.write(`data: ${JSON.stringify({ videoUrl: videoReward.gcsUrl })}\n\n`);
+        // SSE로 영상 URL 전송 (프론트엔드가 type을 기준으로 분기 처리함)
+        res.write(`data: ${JSON.stringify({ type: 'video_url', url: videoReward.gcsUrl })}\n\n`);
       }
 
     } catch (dbError) {
@@ -198,8 +198,8 @@ const streamChatByRoom = async (req, res, next) => {
       // AI 응답 저장 실패해도 SSE는 계속 진행
     }
 
-    // --- 생성된 전체 응답을 SSE로 전송 ---
-    res.write(`data: ${JSON.stringify({ content: fullResponseText })}\n\n`);
+    // 생성된 전체 텍스트 응답 전송 (프론트엔드에서는 type === 'text_chunk'로 처리)
+    res.write(`data: ${JSON.stringify({ type: 'text_chunk', content: fullResponseText })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
 
