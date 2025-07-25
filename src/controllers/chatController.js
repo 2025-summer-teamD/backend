@@ -402,7 +402,14 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   }
   return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
     roomId: chatRoom.id,
-    character: chatRoom.persona
+    character: {
+      id: chatRoom.persona.id,
+      name: chatRoom.persona.name,
+      introduction: chatRoom.persona.introduction,
+      imageUrl: chatRoom.persona.imageUrl,
+      exp: chatRoom.exp, // exp 추가
+      friendship: chatRoom.friendship // friendship 추가
+    }
   });
 });
 
