@@ -19,9 +19,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      # - name: Install dependencies
-      #   run: npm install
+      - name: Install dependencies
+        if: github.ref == 'refs/heads/main'
+        run: npm ci
 
       # - name: Run tests
       #   run: npm test
@@ -34,5 +36,15 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:latest .
+          IMAGE_TAG=$(echo $GITHUB_SHA | head -c7)
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:${IMAGE_TAG} .
+          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:${IMAGE_TAG} ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:latest
+          
+          # main 브랜치인 경우 main 태그 추가
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:${IMAGE_TAG} ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:main
+            docker push ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:main
+          fi
+          
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:${IMAGE_TAG}
           docker push ${{ secrets.DOCKER_HUB_USERNAME }}/your-repo-name:latest
