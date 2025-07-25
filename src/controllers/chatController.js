@@ -352,7 +352,6 @@ const streamChatByRoom2 = async (req, res, next) => {
           fullResponseText += chunk; // 전체 응답 모으기
           // ⭐ 각 토큰(청크)을 SSE 이벤트로 즉시 전송
           // 클라이언트에서 type을 보고 구분할 수 있도록 합니다.
-          await new Promise(resolve => setTimeout(resolve, 1000));
           res.write(`data: ${JSON.stringify({ type: 'text_chunk', content: chunk })}\n\n`);
         }
       }
