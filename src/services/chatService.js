@@ -1,9 +1,55 @@
 import prismaConfig from '../config/prisma.js';
 import gemini25 from '../vertexai/gemini25.js';
 import veo3 from '../vertexai/veo3.js';
-import { Storage } from '@google-cloud/storage';
 import { uploadImageToGCS } from './gcsService.js';
 import axios from 'axios';
+
+/**
+ * 페르소나 정보에서 성격, 말투, 특징을 추출하는 함수
+ * @param {object} personaInfo - 페르소나 정보
+ * @returns {object} { personality, tone, characteristics }
+ */
+const extractPersonaDetails = async (personaInfo) => {
+  try {
+    // prompt 필드가 있고 JSON 형태라면 파싱
+    if (personaInfo.prompt && typeof personaInfo.prompt === 'object') {
+      return {
+        personality: personaInfo.prompt.personality || '친근하고 활발한',
+        tone: personaInfo.prompt.tone || '친근하고 자연스러운',
+        characteristics: personaInfo.prompt.tag || '친근함,활발함,자연스러움,긍정적'
+      };
+    }
+    
+    // prompt가 문자열이거나 없으면 AI로 분석
+    const promptText = `
+다음 캐릭터의 성격, 말투, 특징을 분석해주세요:
+
+이름: ${personaInfo.name}
+소개: ${personaInfo.introduction || ''}
+
+다음 JSON 형식으로 응답해주세요:
+{
+  "personality": "성격을 자세히 설명",
+  "tone": "말투나 유행어",
+  "characteristics": "특징을 쉼표로 구분"
+}
+`;
+
+    const details = await gemini25.generatePersonaDetailsWithGemini(promptText);
+    return {
+      personality: details.personality || '친근하고 활발한',
+      tone: details.tone || '친근하고 자연스러운',
+      characteristics: details.characteristics || '친근함,활발함,자연스러움,긍정적'
+    };
+  } catch (error) {
+    console.error('페르소나 상세 정보 추출 실패:', error);
+    return {
+      personality: '친근하고 활발한',
+      tone: '친근하고 자연스러운',
+      characteristics: '친근함,활발함,자연스러움,긍정적'
+    };
+  }
+};
 
 /**
  * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
@@ -12,162 +58,75 @@ import axios from 'axios';
  * @returns {Promise<object>} { chatList, totalElements, totalPages }
  */
 const getMyChatList = async (userId, pagination) => {
-  const { skip, take, page, size } = pagination;
+  const { skip, take, size } = pagination;
 
-  // 1. 내가 참여하고 삭제되지 않은 채팅방의 총 개수를 먼저 구한다.
-  const totalElements = await prismaConfig.prisma.chatRoom.count({
-    where: {
-      clerkId: userId,
-      isDeleted: false,
-    },
+  // 내가 참여중인 채팅방 id 목록
+  const myRooms = await prismaConfig.prisma.chatRoomParticipant.findMany({
+    where: { clerkId: userId },
+    select: { chatroomId: true }
   });
+  const roomIds = myRooms.map(r => r.chatroomId);
 
-  if (totalElements === 0) {
+  if (roomIds.length === 0) {
     return { chatList: [], totalElements: 0, totalPages: 0 };
   }
-  
-  // 2. 실제 데이터 조회: 관계된 데이터를 한 번의 쿼리로 가져온다.
-  const chatRooms = await prismaConfig.prisma.chatRoom.findMany({
+
+  // 채팅방 정보 조회
+  const totalElements = await prismaConfig.prisma.chatRoom.count({
     where: {
-      clerkId: userId,
+      id: { in: roomIds },
       isDeleted: false,
     },
-    // 최신 채팅이 위로 오도록 정렬 (LastMessage의 생성 시간 기준)
-    orderBy: {
-      updatedAt: 'desc', // 채팅방 업데이트 시간을 기준으로 정렬하는 것이 더 효율적일 수 있음
+  });
+
+  const chatRooms = await prismaConfig.prisma.chatRoom.findMany({
+    where: {
+      id: { in: roomIds },
+      isDeleted: false,
     },
-    skip: skip,
-    take: take,
+    orderBy: {
+      updatedAt: 'desc',
+    },
+    skip,
+    take,
     include: {
-      // ChatRoom에 연결된 Persona 정보 포함
-      persona: {
-        select: { // 페르소나에서 필요한 필드만 선택
-          id: true,
-          name: true,
-          imageUrl: true,
-        },
-      },
-      // ChatRoom에 연결된 모든 ChatLog 중 '마지막 1개'만 가져오기
+      participants: { include: { persona: true } },
       ChatLogs: {
-        orderBy: {
-          time: 'desc',
-        },
-        take: 1, 
-        select: {
-          text: true,
-          time: true,
-        },
+        orderBy: { time: 'desc' },
+        take: 1,
+        select: { text: true, time: true },
       },
     },
   });
 
-  // 3. DB에서 가져온 데이터를 최종 API 응답 형태로 가공
+  // 응답 데이터 가공
   const chatList = chatRooms.map(room => {
+    // 대표 persona(캐릭터) 정보 추출 (AI 참여자 중 첫 번째)
+    const personaParticipant = room.participants.find(p => p.personaId && p.persona);
+    const persona = personaParticipant?.persona;
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
+    // 초대된 모든 AI(페르소나) 정보
+    const aiParticipants = room.participants
+      .filter(p => p.personaId && p.persona)
+      .map(p => ({
+        personaId: p.persona.id,
+        name: p.persona.name,
+        imageUrl: p.persona.imageUrl
+      }));
     return {
       roomId: room.id,
-      characterId: room.persona.id,
-      name: room.persona.name,
-      imageUrl: room.persona.imageUrl,
+      characterId: persona?.id,
+      name: persona?.name,
+      imageUrl: persona?.imageUrl,
       lastChat: lastChat ? lastChat.text : null,
-      time: lastChat ? lastChat.time.toISOString() : null, // 실제 시간 데이터 사용
+      time: lastChat ? lastChat.time.toISOString() : null,
+      aiParticipants
     };
   });
 
   const totalPages = Math.ceil(totalElements / size);
-
   return { chatList, totalElements, totalPages };
 };
-
-/**
- * 내가 찜한(좋아요한) 캐릭터 삭제 (내 목록에서만 삭제)
- * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
- * @param {number} characterId - 찜한 캐릭터의 persona id
- * @returns {Promise<object>} 삭제된 ChatRoom 객체
- */
-const deleteLikedCharacter = async (userId, characterId) => {
-  // 1. ChatRoom에서 해당 관계 찾기
-  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: {
-      clerkId: userId,
-      characterId: characterId,
-      isDeleted: false,
-    },
-  });
-  if (!chatRoom) {
-    throw new Error('해당 캐릭터와의 찜(좋아요) 관계가 없거나 이미 삭제되었습니다.');
-  }
-  // 2. isDeleted true로 변경
-  const deleted = await prismaConfig.prisma.chatRoom.update({
-    where: { id: chatRoom.id },
-    data: { isDeleted: true },
-  });
-  return deleted;
-};
-
-const createChatRoom = async (characterId, userId) => {
-  // 1. 기존 채팅방 있는지 확인 (캐릭터 정보 포함)
-  let chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: {
-      clerkId: userId,
-      characterId: parseInt(characterId, 10),
-      isDeleted: false,
-    },
-    include: {
-      persona: {
-        select: {
-          id: true,
-          name: true,
-          imageUrl: true,
-          introduction: true,
-          prompt: true,
-          creatorName: true,
-          usesCount: true,
-          likesCount: true,
-        }
-      }
-    }
-  });
-
-  // 2. 없으면 새로 생성
-  if (!chatRoom) {
-    chatRoom = await prismaConfig.prisma.chatRoom.create({
-      data: {
-        clerkId: userId,
-        characterId: parseInt(characterId, 10),
-      },
-      include: {
-        persona: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
-            introduction: true,
-            prompt: true,
-            creatorName: true,
-            usesCount: true,
-            likesCount: true,
-          }
-        }
-      }
-    });
-  }
-
-  // 3. 반환 데이터 형식 맞추기
-  return {
-    id: chatRoom.id,
-    clerkId: chatRoom.clerkId,
-    characterId: chatRoom.characterId,
-    character: chatRoom.persona, // 캐릭터 정보 포함!
-    exp: chatRoom.exp,
-    friendship: chatRoom.friendship,
-    likes: chatRoom.likes,
-    isDeleted: chatRoom.isDeleted,
-    createdAt: chatRoom.createdAt,
-    updatedAt: chatRoom.updatedAt,
-  };
-};
-
 
 /**
  * AI 캐릭터의 응답을 생성합니다. (DB 연동 없음)
@@ -181,40 +140,140 @@ const generateAiChatResponse = async (
   userMessage,
   personaInfo,
   chatHistory,
+  otherParticipants = []
 ) => {
-  // 1. Gemini AI에 보낼 프롬프트 구성
-  const prompt = `
-당신은 "${personaInfo.name}"이라는 이름의 AI 캐릭터입니다. 아래 설정에 맞춰서 사용자와 대화해주세요.
-- 당신의 성격: ${personaInfo.personality}
-- 당신의 말투: ${personaInfo.tone}
+  // 1. 내 정보 - AI로 성격, 말투, 특징 추출
+  const myDetails = await extractPersonaDetails(personaInfo);
+  
+  const myInfo = `
+[당신의 정보]
+이름: ${personaInfo.name}
+성격: ${myDetails.personality}
+말투: ${myDetails.tone}
+특징: ${myDetails.characteristics}
+소개: ${personaInfo.introduction || ''}
+`;
 
----
+  // 2. 상대 AI 정보 (표 형태)
+  const othersInfo = await Promise.all(
+    otherParticipants
+      .filter(p => p.persona && p.persona.id !== personaInfo.id)
+      .map(async p => {
+        const otherDetails = await extractPersonaDetails(p.persona);
+        return `이름: ${p.persona.name} | 성격: ${otherDetails.personality} | 말투: ${otherDetails.tone} | 특징: ${otherDetails.characteristics} | 소개: ${p.persona.introduction || ''}`;
+      })
+  );
+  
+  const othersInfoText = othersInfo.join('\n');
+
+  // 3. 프롬프트
+  const prompt = `
+${myInfo}
+[채팅방에 함께 있는 다른 AI 정보]
+${othersInfoText}
+
+너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
+
+중요 규칙:
+- 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
+- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 인사를 창의적으로 할 것
+- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
+- 각 AI의 이름을 정확히 사용해서 대화할 것
+- 지금 채팅방에 처음 입장했다면, 각 상대 AI에게 한 명씩 인사할 것
+- 다른 AI들이 대화할 때도 그들의 이름과 특성을 인지하고 반응할 것
+- 사용자가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
+- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
+
 [최근 대화 기록]
 ${chatHistory}
 ---
-
 사용자: ${userMessage}
 ${personaInfo.name}:`;
 
-  // 2. Google AI 호출 (타임아웃 에러 처리 포함)
+  // 4. Google AI 호출
   let aiResponseText;
   try {
     console.log('🤖 Google AI 호출 시도...');
+    console.log('📝 프롬프트:', prompt.trim());
     aiResponseText = await gemini25.generateText(prompt.trim());
-    console.log('✅ Google AI 응답 성공');
+    console.log('✅ Google AI 응답 성공:', aiResponseText);
   } catch (error) {
     console.error('❌ Google AI 호출 실패:', error.message);
-    console.log('🔄 폴백 응답 사용');
     aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
   }
-  
-  // 응답이 없으면 기본 메시지
   if (!aiResponseText || aiResponseText.trim() === '') {
     aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
   }
-
-  // 3. 생성된 AI 응답 텍스트 반환
   return aiResponseText;
+};
+
+/**
+ * AI 캐릭터가 자동으로 인사하는 메시지를 생성합니다.
+ * @param {object} personaInfo - 페르소나 정보 { name, personality, tone, introduction }
+ * @param {array} otherParticipants - 다른 AI 참여자들 정보
+ * @returns {Promise<string>} AI가 생성한 인사 메시지
+ */
+const generateAiGreeting = async (personaInfo, otherParticipants = []) => {
+  // 1. 내 정보 - AI로 성격, 말투, 특징 추출
+  const myDetails = await extractPersonaDetails(personaInfo);
+  
+  const myInfo = `
+[당신의 정보]
+이름: ${personaInfo.name}
+성격: ${myDetails.personality}
+말투: ${myDetails.tone}
+특징: ${myDetails.characteristics}
+소개: ${personaInfo.introduction || ''}
+`;
+
+  // 2. 상대 AI 정보
+  const othersInfo = await Promise.all(
+    otherParticipants
+      .filter(p => p.persona && p.persona.id !== personaInfo.id)
+      .map(async p => {
+        const otherDetails = await extractPersonaDetails(p.persona);
+        return `이름: ${p.persona.name} | 성격: ${otherDetails.personality} | 말투: ${otherDetails.tone} | 특징: ${otherDetails.characteristics} | 소개: ${p.persona.introduction || ''}`;
+      })
+  );
+  
+  const othersInfoText = othersInfo.join('\n');
+
+  // 3. 인사 전용 프롬프트
+  const greetingPrompt = `
+${myInfo}
+[채팅방에 함께 있는 다른 AI 정보]
+${othersInfoText}
+
+너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
+
+중요 규칙:
+- 반드시 자신의 성격, 말투, 소개만 사용해서 인사할 것
+- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 창의적인 인사를 할 것
+- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
+- 각 AI의 이름을 정확히 사용해서 인사할 것
+- 채팅방에 처음 입장한 상황이므로, 다른 AI들과 사용자에게 자연스럽게 인사할 것
+- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 친근하게 인사할 것
+- 짧고 자연스러운 인사말을 할 것 (2-3문장 이내)
+
+이제 당신의 성격과 말투에 맞게 채팅방에 인사해주세요:`;
+
+  // 4. Google AI 호출
+  let aiGreetingText;
+  try {
+    console.log('🤖 AI 자동 인사 생성 시도...');
+    console.log('📝 인사 프롬프트:', greetingPrompt.trim());
+    aiGreetingText = await gemini25.generateText(greetingPrompt.trim());
+    console.log('✅ AI 자동 인사 생성 성공:', aiGreetingText);
+  } catch (error) {
+    console.error('❌ AI 자동 인사 생성 실패:', error.message);
+    aiGreetingText = `안녕하세요! 저는 ${personaInfo.name}입니다. 함께 대화할 수 있어서 기쁩니다! 😊`;
+  }
+  
+  if (!aiGreetingText || aiGreetingText.trim() === '') {
+    aiGreetingText = `안녕하세요! 저는 ${personaInfo.name}입니다. 함께 대화할 수 있어서 기쁩니다! 😊`;
+  }
+  
+  return aiGreetingText;
 };
 
 /**
@@ -224,31 +283,26 @@ ${personaInfo.name}:`;
  * @returns {Promise<object>} 삭제된 채팅방 객체
  */
 const deleteChatRoom = async (roomId, userId) => {
-  // 1. 본인 소유 채팅방인지 확인
-  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: { 
-      id: parseInt(roomId, 10),
-      clerkId: userId,  // 🔒 사용자별 권한 확인!
-      isDeleted: false 
+  // 1. 본인 참여 채팅방인지 확인 (ChatRoomParticipant 기준)
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    where: {
+      chatroomId: parseInt(roomId, 10),
+      clerkId: userId,
     },
   });
-  
-  if (!chatRoom) {
+  if (!participant) {
     throw new Error('삭제 권한이 없거나 존재하지 않는 채팅방입니다.');
   }
-  
   // 2. 채팅방을 소프트 삭제
   const deleted = await prismaConfig.prisma.chatRoom.update({
-    where: { id: chatRoom.id },
+    where: { id: parseInt(roomId, 10) },
     data: { isDeleted: true },
   });
-  
   // 3. 관련 채팅 로그도 소프트 삭제
   await prismaConfig.prisma.chatLog.updateMany({
-    where: { chatroomId: chatRoom.id },
+    where: { chatroomId: deleted.id },
     data: { isDeleted: true },
   });
-  
   return deleted;
 };
 /**
@@ -339,15 +393,115 @@ const checkAndGenerateVideoReward = async (chatRoomId, veoPromptOptions) => {
   return null;
 };
 
+/**
+ * 여러 캐릭터/유저로 단체 채팅방 생성 (동일 참가자 조합이 있으면 반환, 없으면 새로 생성)
+ * @param {string[]} participantIds - 유저/AI의 clerkId 또는 personaId 배열
+ * @returns {Promise<object>} 생성/조회된 채팅방 정보
+ */
+const createMultiChatRoom = async (participantIds) => {
+  console.log('createMultiChatRoom service - participantIds:', participantIds);
+  
+  // 1. 참가자 배열을 clerkId/personaId로 분리
+  // participantIds는 [userId, personaId1, personaId2, ...] 형태
+  const userIds = participantIds.filter(id => typeof id === 'string' && id.startsWith('user_'));
+  const personaIds = participantIds.filter(id => typeof id === 'number').map(id => parseInt(id, 10));
+  
+  console.log('createMultiChatRoom service - userIds:', userIds);
+  console.log('createMultiChatRoom service - personaIds:', personaIds);
+  
+  // 2. 동일 참가자 조합의 방이 있는지 확인 (모든 참가자가 포함된 방)
+  const candidateRooms = await prismaConfig.prisma.chatRoom.findMany({
+    where: { isDeleted: false },
+    include: { participants: true }
+  });
+  console.log('createMultiChatRoom service - candidateRooms count:', candidateRooms.length);
+  
+  let foundRoom = candidateRooms.find(room => {
+    // 해당 방의 모든 user-persona 조합 확인
+    const roomUserPersonaPairs = room.participants.map(p => ({ clerkId: p.clerkId, personaId: p.personaId }));
+    
+    // 요청된 모든 user-persona 조합이 방에 있는지 확인
+    const requestedPairs = [];
+    for (const userId of userIds) {
+      for (const personaId of personaIds) {
+        requestedPairs.push({ clerkId: userId, personaId: personaId });
+      }
+    }
+    
+    // 모든 요청된 조합이 방에 있고, 방의 조합이 요청된 조합과 정확히 일치하는지 확인
+    const allRequestedInRoom = requestedPairs.every(pair => 
+      roomUserPersonaPairs.some(roomPair => 
+        roomPair.clerkId === pair.clerkId && roomPair.personaId === pair.personaId
+      )
+    );
+    
+    const allRoomInRequested = roomUserPersonaPairs.every(roomPair => 
+      requestedPairs.some(pair => 
+        roomPair.clerkId === pair.clerkId && roomPair.personaId === pair.personaId
+      )
+    );
+    
+    return allRequestedInRoom && allRoomInRequested;
+  });
+  
+  console.log('createMultiChatRoom service - foundRoom:', foundRoom ? foundRoom.id : null);
+  
+  let isNewRoom = false;
+  if (!foundRoom) {
+    // 새로 생성
+    console.log('createMultiChatRoom service - creating new room');
+    isNewRoom = true;
+    foundRoom = await prismaConfig.prisma.chatRoom.create({ data: {}, include: { participants: true } });
+    console.log('createMultiChatRoom service - created room id:', foundRoom.id);
+    
+    // 참가자 추가 - 유저와 AI 조합으로만 생성 (친밀도 추적용)
+    for (const userId of userIds) {
+      for (const personaId of personaIds) {
+        await prismaConfig.prisma.chatRoomParticipant.create({ 
+          data: { 
+            chatroomId: foundRoom.id, 
+            clerkId: userId, 
+            personaId: personaId, 
+            exp: 0 
+          } 
+        });
+      }
+    }
+    // 다시 조회 (참가자 포함)
+    foundRoom = await prismaConfig.prisma.chatRoom.findUnique({ where: { id: foundRoom.id }, include: { participants: { include: { persona: true } } } });
+  } else {
+    // 참가자 정보 포함해서 다시 조회
+    foundRoom = await prismaConfig.prisma.chatRoom.findUnique({ where: { id: foundRoom.id }, include: { participants: { include: { persona: true } } } });
+  }
+  // 채팅 로그
+  const chatHistory = await prismaConfig.prisma.chatLog.findMany({ where: { chatroomId: foundRoom.id, isDeleted: false }, orderBy: { time: 'asc' } });
+  
+  const result = {
+    roomId: foundRoom.id,
+    isNewRoom,
+    participants: foundRoom.participants.map(p => ({
+      clerkId: p.clerkId,
+      personaId: p.personaId,
+      persona: p.persona ? { id: p.persona.id, name: p.persona.name, imageUrl: p.persona.imageUrl } : undefined
+    })),
+    chatHistory
+  };
+  
+  console.log('createMultiChatRoom service - final result:', result);
+  return result;
+};
+
 
 const chatService = {
   getMyChatList,
-  deleteLikedCharacter,
   generateAiChatResponse,
-  createChatRoom,
+  generateAiGreeting,
   deleteChatRoom, 
+  makeVeo3Prompt,
   generateVideoWithVeo3,
+  uploadVideoToGCS,
   checkAndGenerateVideoReward,
+  createMultiChatRoom,
 };
 
 export default chatService;

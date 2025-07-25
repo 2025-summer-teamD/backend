@@ -247,6 +247,18 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
   const { userId } = req.auth;
 
+  // 멀티방 구조: chatRoomParticipant에서 clerkId와 personaId로 참여자 찾고, 그 참여자의 exp 반환
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    where: {
+      clerkId: userId,
+      personaId: personaId
+    },
+    select: { exp: true }
+  });
+  let exp = 0;
+  if (participant && typeof participant.exp === 'number') {
+    exp = participant.exp;
+  }
   const persona = await PersonaService.getPersonaDetails({
     personaId,
     ownerId: userId,
@@ -256,21 +268,7 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   if (!persona) {
     return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
   }
-
-  // ChatRoom에서 EXP 가져오기
-  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: {
-      clerkId: userId,
-      characterId: personaId,
-      isDeleted: false
-    },
-    select: {
-      exp: true
-    }
-  });
-
-  // persona 객체에 exp 필드 추가
-  persona.exp = chatRoom ? chatRoom.exp : 0;
+  persona.exp = exp;
 
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
 });

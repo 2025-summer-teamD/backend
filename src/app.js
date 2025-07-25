@@ -94,6 +94,7 @@ app.get('/metrics', async (req, res) => {
 
 // 채팅방에서 이미지 보내기 폴더
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'))); // 추가: /api/uploads도 인증 없이 서빙
 
 // 기본 라우트 (인증 없이 접근 가능)
 app.get('/', (req, res) => {
