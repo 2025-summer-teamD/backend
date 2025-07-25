@@ -108,18 +108,20 @@ async function generateCharacterWithPerplexity(characterName) {
      body: JSON.stringify({
        model: 'sonar-pro',
        messages: [
+          {
+            'role': 'system',
+            'content': '당신은 웹 검색을 통해 캐릭터나 인물 정보를 찾는 전문가입니다. 반드시 검색을 수행하고 검색 결과를 바탕으로 답변하세요.'
+          },
          {
            role: 'user',
-           content: `당신은 주어진 이름의 실제 인물 또는 등장인물에 대한 정보를 바탕으로 한국어 JSON을 생성하는 전문가입니다. 웃기고 과장되게 표현해줘. 특히 캐릭터라면 더욱 과장되게.
-
-이름: 특징이나 직업을 제외하고 이름만 생성 해주세요. 예를 들어, "박보영 배우"를 "박보영"과 같이 이름만.
+           content: `${characterName}에 대해 검색해서 알려주세요. 이 인물/캐릭터가 누구인지, 어떤 특징이 있는지 자세히 설명해주세요. 아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요
 
 아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요:
 
 {
  "description": "${characterName}에 대한 상세하고 디테일한 캐릭터적 소개를 검색하여 요약. 특히 주목해야할 특징위주로 (3-4문장)",
  "prompt": {
-   "tone": "${characterName}의 대표적인 말투 혹은 유행어나 밈을 자세하게 적기",
+   "tone": "${characterName}의 대표적인 말투 혹은 유행어",
    "personality": "${characterName}의 성격을 아주 디테일하고 자세하게 묘사",
    "tag": "${characterName}를 대표하는 해시태그 4가지 (직업, 성별, 성격, 특징) (쉼표로 구분, # 제외)",
    "ImageUrl": []
@@ -127,8 +129,7 @@ async function generateCharacterWithPerplexity(characterName) {
 }`
          }
        ],
-       search_domain_filter: ['namu.wiki', 'wikipedia.org', 'wikidata.org'],
-       search_recency_filter: 'month',
+       search_recency_filter: 'year',
        response_format: {
          type: 'json_schema',
          json_schema: {
