@@ -31,11 +31,11 @@ scrape_configs:
       - targets: ['redis-exporter:9121']
     scrape_interval: 5s
 
-  # PostgreSQL 메트릭
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['postgres-exporter:9187']
-    scrape_interval: 5s
+  # # PostgreSQL 메트릭
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #   scrape_interval: 5s
 
   # Node Exporter (시스템 메트릭)
   - job_name: 'node'

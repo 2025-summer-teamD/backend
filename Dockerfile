@@ -14,8 +14,11 @@ RUN if [ "$NODE_ENV" = "production" ]; then npm install --omit=dev; else npm ins
 # 실제 서비스에 필요한 소스만 복사
 COPY src ./src
 COPY prisma ./prisma
+COPY grafana ./grafana
+COPY logstash ./logstash
+COPY prometheus ./prometheus
+COPY traefik ./traefik
 RUN npx prisma generate
-
 
 # 앱 실행 (필요에 따라 수정)
 CMD ["npm", "start"]
