@@ -54,7 +54,7 @@ const router = express.Router();
  *               type: string
  *               example: |
  *                 data: {"content": "안녕하세요! 반가워요!"}
- *                 
+ *
  *                 data: [DONE]
  *       '400':
  *         description: 잘못된 요청 (필수 필드 누락)
@@ -64,12 +64,12 @@ const router = express.Router();
  *         description: 서버 오류
  */
 
-//ai 채팅 스트리밍 
+//ai 채팅 스트리밍
 router.post('/rooms/:roomId',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     personaValidator.validateRoomIdParam,  // room_id 검증 추가!
-    chatController.streamChatByRoom);
+    chatController.streamChatByRoom2);
 
 /**
  * @swagger
@@ -156,13 +156,13 @@ router.post('/rooms',
  *         description: 입장 실패
  */
 
-router.get('/rooms', 
+router.get('/rooms',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     chatController.enterChatRoom);
 
 // room_id로 채팅방 정보 조회 (하지만 query parameter이므로 별도 검증 필요)
-router.get('/room-info', 
+router.get('/room-info',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
@@ -176,4 +176,4 @@ const upload = multer({
 // 채팅 이미지 업로드 라우트
 router.post('/upload-image', upload.single('image'), uploadImage);
 
-export default router; 
+export default router;
