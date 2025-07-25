@@ -172,12 +172,58 @@ async function generateCharacterWithPerplexity(characterName) {
   }
 }
 
+/**
+ * 이미지 URL과 텍스트 프롬프트를 함께 보내 멀티모달 응답을 생성합니다.
+ * @param {string} imageUrl - 공개적으로 접근 가능한 이미지 URL (예: GCS public URL)
+ * @param {string} textPrompt - 이미지에 대해 질문하거나 요청할 내용 (한국어)
+ * @returns {Promise<string>} 생성된 텍스트
+ */
+const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 보고 자세히 설명해줘') => {
+  try {
+    // 이미지 파일을 다운로드해 base64로 인코딩 (inlineData 사용)
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data, 'binary');
+
+    // 간단한 MIME 타입 추정
+    let mimeType = 'image/jpeg';
+    if (imageUrl.endsWith('.png')) mimeType = 'image/png';
+    else if (imageUrl.endsWith('.webp')) mimeType = 'image/webp';
+
+    const base64Data = buffer.toString('base64');
+
+    const request = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: textPrompt },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = await generativeModel.generateContent(request);
+    const res = result.response;
+    return res.candidates[0].content.parts[0].text;
+  } catch (error) {
+    console.error('Gemini 이미지+텍스트 생성 오류:', error.message);
+    throw new Error('Gemini가 이미지를 처리하는데 실패했습니다.');
+  }
+};
+
 
 export default {
   generateText,
   generatePersonaDetailsWithGemini,
   getGoogleImages,
-  generateCharacterWithPerplexity
+  generateCharacterWithPerplexity,
+  generateTextWithImage,
 };
 
 
