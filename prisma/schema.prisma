@@ -39,7 +39,7 @@ model Persona {
   id           Int      @id @default(autoincrement())
   clerkId     String   @map("clerk_id")
   user         User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
-  creatorName  String?  @db.VarChar(100) @map("creator_name")  // 크리에이터 이름
+  creatorName  String?  @db.VarChar(100) @map("creatorName")  // 크리에이터 이름
   name         String   @db.VarChar(100)
   imageUrl    String   @db.VarChar(1024) @map("image_url")
   isPublic    Boolean  @default(true) @map("is_public")
