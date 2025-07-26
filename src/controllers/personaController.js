@@ -17,6 +17,7 @@ import logger from '../utils/logger.js';
 import errorHandler from '../middlewares/errorHandler.js';
 import prismaConfig from '../config/prisma.js';
 import { uploadToGCS } from '../utils/uploadToGCS.js';
+import redisClient from '../config/redisClient.js';
 
 
 /**
@@ -48,6 +49,11 @@ const createCustomPersona = async (req, res, next) => {
       personaId: newPersona.id,
       personaName: newPersona.name
     });
+
+    // 2. ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
+    const cacheKeyToDelete = `user:${userId}:characters:created`;
+    await redisClient.del(cacheKeyToDelete);
+    console.log(`🧹 Cache invalidated for key: ${cacheKeyToDelete}`);
 
     // 6. 성공 응답 생성
     res.status(201).json({
@@ -160,7 +166,7 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
     aiGeneratedDetails = {
       description: error.message + ' (AI가 캐릭터 정보를 생성하는 데 실패했습니다.)',
     };
-      // 2. AI가 생성한 정보만 반환 (DB 저장 X)
+    // 2. AI가 생성한 정보만 반환 (DB 저장 X)
     return responseHandler.sendSuccess(res, 500, 'AI로 생성된 캐릭터 정보 미리보기', {
       aiGeneratedDetails
     });
@@ -230,6 +236,19 @@ const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { type } = req.query;
 
   const personas = await PersonaService.getMyPersonas(userId, type);
+
+  // ★★★ 중요: 조회된 데이터를 Redis에 저장 ★★★
+  // 1. 미들웨어와 동일한 규칙으로 캐시 키를 생성합니다.
+  const cacheKey = `user:${userId}:characters:${type}`;
+
+
+
+  // 2. Redis에 데이터를 저장합니다. JSON.stringify()로 문자열 변환이 필수입니다.
+  //    'EX' 옵션으로 만료 시간(초)을 설정하는 것을 강력히 권장합니다. (예: 1시간)
+  await redisClient.set(cacheKey, JSON.stringify(personas), {
+    EX: 3600, // 1시간(3600초) 후 자동 삭제
+  });
+  console.log(`💾 Data cached for key: ${cacheKey}`);
 
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
     totalElements: personas.length
@@ -313,6 +332,11 @@ const deletePersona = errorHandler.asyncHandler(async (req, res) => {
 
   await PersonaService.deletePersona(personaId, userId);
 
+  // 2. ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
+  const cacheKeyToDelete = `user:${userId}:characters:${type}`;
+  await redisClient.del(cacheKeyToDelete);
+  console.log(`🧹 Cache invalidated for key: ${cacheKeyToDelete}`);
+
   // 사용자 활동 로깅
   logger.logUserActivity('DELETE_PERSONA', userId, {
     personaId
@@ -333,6 +357,11 @@ const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
 
   const result = await PersonaService.toggleLike(personaId, userId);
+
+  // 2. ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
+  const cacheKeyToDelete = `user:${userId}:characters:liked`;
+  await redisClient.del(cacheKeyToDelete);
+  console.log(`🧹 Cache invalidated for key: ${cacheKeyToDelete}`);
 
   // 사용자 활동 로깅
   logger.logUserActivity('TOGGLE_LIKE', userId, {
