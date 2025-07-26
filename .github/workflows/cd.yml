@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -23,29 +24,38 @@ jobs:
 
       - name: Deploy to Compute Engine
         run: |
-          # SSH 키 설정
-          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ./private_key
-          chmod 600 ./private_key
+          # 1. SSH 키를 파일로 생성
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ./gcp_ssh_key
+          chmod 600 ./gcp_ssh_key
           
-          # 인스턴스 IP 가져오기
+          # 2. GCP 인스턴스의 외부 IP 주소 가져오기
           INSTANCE_IP=$(gcloud compute instances describe ${{ secrets.GCP_INSTANCE_NAME }} \
             --zone ${{ secrets.GCP_ZONE }} \
             --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
           
-          # Docker 컴포즈 파일들 전송
-          scp -i ./private_key -o StrictHostKeyChecking=no \
+          echo "Instance IP: $INSTANCE_IP"
+
+          # 3. 배포에 필요한 파일들을 인스턴스로 복사
+          # StrictHostKeyChecking=no 옵션은 처음 연결 시 호스트 키 확인을 건너뛰게 해줍니다.
+          scp -i ./gcp_ssh_key -o StrictHostKeyChecking=no \
             docker-compose.prod.yml \
             docker-compose.monitoring.yml \
-            docker.sh \
-            ${{ secrets.GCP_USERNAME }}@${secret.GCP_INSTANCE_IP}:~/
-          
-          # 배포 스크립트 실행
-          ssh -i ./private_key -o StrictHostKeyChecking=no ${{ secrets.GCP_USERNAME }}@${secret.GCP_INSTANCE_IP} '
+            ${{ secrets.GCP_USERNAME }}@$INSTANCE_IP:~/
+            
+          # 4. SSH로 인스턴스에 접속하여 배포 스크립트 실행
+          # $INSTANCE_IP 변수를 사용해야 합니다.
+          ssh -i ./gcp_ssh_key -o StrictHostKeyChecking=no ${{ secrets.GCP_USERNAME }}@$INSTANCE_IP '
+            # 최신 이미지를 pull 받습니다.
             docker-compose -f docker-compose.prod.yml pull && \
+            docker-compose -f docker-compose.monitoring.yml pull
+            
+            # 컨테이너를 백그라운드에서 실행합니다. (기존 컨테이너는 재시작됩니다)
             docker-compose -f docker-compose.prod.yml up -d && \
-            docker-compose -f docker-compose.monitoring.yml pull && \
             docker-compose -f docker-compose.monitoring.yml up -d
+            
+            # 사용하지 않는 Docker 이미지/컨테이너 정리 (선택 사항)
+            docker system prune -af
           '
           
-          # 임시 SSH 키 삭제
-          rm ./private_key
+          # 5. 보안을 위해 사용한 SSH 키 파일 삭제
+          rm ./gcp_ssh_key
