@@ -1,6 +1,9 @@
 services:
   # Reverse Proxy & Load Balancer
   traefik:
+    extends:
+      file: docker-compose.prod.yml
+      service: traefik
     labels:
       # 모니터링용 설정
       - --tracing.otlp.http.endpoint=http://jaeger:4318/v1/traces
