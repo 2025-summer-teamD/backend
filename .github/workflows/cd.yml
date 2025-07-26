@@ -38,25 +38,35 @@ jobs:
           gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} \
             --zone ${{ secrets.GCP_ZONE }} \
             --command "
-              # ✅ 1. 최신 Docker 및 Compose 플러그인 설치
+              # ✅ 1. Docker 설치 확인 및 설치
               if ! command -v docker &> /dev/null; then
                 echo 'Installing Docker...'
-                sudo apt-get update -y && sudo apt-get install -y docker.io
+                sudo apt-get update
+                sudo apt-get install -y ca-certificates curl gnupg
+                sudo install -m 0755 -d /etc/apt/keyrings
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                echo \
+                  'deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                  $(lsb_release -cs) stable' | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                sudo apt-get update
+                sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
               fi
+      
+              # ✅ 2. docker compose 설치 확인
               if ! docker compose version &> /dev/null; then
-                echo 'Installing Docker Compose plugin...'
+                echo 'Docker Compose plugin is missing, installing...'
                 sudo apt-get install -y docker-compose-plugin
               fi
-
-              # ✅ 2. 배포 스크립트 실행
+      
+              # ✅ 3. Pull latest images and restart containers (with sudo)
               echo 'Pulling latest images...'
-              docker compose -f docker-compose.prod.yml pull && \
-              docker compose -f docker-compose.monitoring.yml pull
-
+              sudo docker compose -f docker-compose.prod.yml pull && \
+              sudo docker compose -f docker-compose.monitoring.yml pull
+      
               echo 'Starting containers...'
-              docker compose -f docker-compose.prod.yml up -d && \
-              docker compose -f docker-compose.monitoring.yml up -d
-
+              sudo docker compose -f docker-compose.prod.yml up -d && \
+              sudo docker compose -f docker-compose.monitoring.yml up -d
+      
               echo 'Cleaning unused Docker resources...'
-              docker system prune -af
+              sudo docker system prune -af
             "
