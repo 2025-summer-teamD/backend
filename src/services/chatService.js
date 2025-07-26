@@ -113,11 +113,16 @@ const getMyChatList = async (userId, pagination) => {
         name: p.persona.name,
         imageUrl: p.persona.imageUrl
       }));
+    
+    // AI 참여자가 없는 경우에도 채팅방을 포함하되, 기본값 설정
+    const defaultName = aiParticipants.length > 0 ? aiParticipants[0].name : '채팅방';
+    const defaultImageUrl = aiParticipants.length > 0 ? aiParticipants[0].imageUrl : null;
+    
     return {
       roomId: room.id,
-      characterId: persona?.id,
-      name: persona?.name,
-      imageUrl: persona?.imageUrl,
+      characterId: persona?.id || null,
+      name: persona?.name || defaultName,
+      imageUrl: persona?.imageUrl || defaultImageUrl,
       lastChat: lastChat ? lastChat.text : null,
       time: lastChat ? lastChat.time.toISOString() : null,
       aiParticipants

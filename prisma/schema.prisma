@@ -56,7 +56,7 @@ model Persona {
 
 model ChatRoom {
   id           Int                   @id @unique @default(autoincrement())
-  friendship   Int                   @default(1)
+  
   likes        Boolean               @default(false)
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime?             @map("updated_at")
@@ -74,6 +74,7 @@ model ChatRoomParticipant {
   persona    Persona? @relation("PersonaToParticipant", fields: [personaId], references: [id])
   joinedAt   DateTime @default(now())
   exp        Int      @default(0) // 유저별/캐릭터별 친밀도 (예: 유저1-아이언맨, 유저2-아이언맨 각각 다른 exp)
+  friendship Int      @default(1)
   @@index([chatroomId])
   @@index([clerkId])
   @@index([personaId])

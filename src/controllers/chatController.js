@@ -26,6 +26,16 @@ const calculateExp = (message) => {
   return 1;
 };
 
+// 레벨 계산 함수 (프론트엔드와 동일한 로직)
+const getLevel = (exp) => {
+  if (exp >= 20) return 5;
+  if (exp >= 15) return 4;
+  if (exp >= 10) return 3;
+  if (exp >= 5) return 2;
+  if (exp >= 1) return 1;
+  return 0;
+};
+
 /**
  * 스트리밍 채팅 응답 생성
  * 
@@ -142,23 +152,8 @@ const streamChatByRoom = async (req, res, next) => {
         const expIncrease = calculateExp(message);
         console.log(`🔍 EXP 업데이트 시도: roomId=${roomId}, clerkId=${userId}, personaId=${persona.id}, expIncrease=${expIncrease}`);
         
-        const updateResult = await prismaConfig.prisma.chatRoomParticipant.updateMany({
-          where: {
-            chatroomId: parseInt(roomId, 10),
-            clerkId: userId,
-            personaId: persona.id
-          },
-          data: {
-            exp: {
-              increment: expIncrease
-            }
-          }
-        });
-        
-        console.log(`✅ AI ${persona.name} 친밀도 ${expIncrease} 증가. 업데이트된 레코드 수: ${updateResult.count}`);
-        
-        // 업데이트 후 현재 EXP 확인
-        const currentParticipant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+        // 현재 exp 값 먼저 조회
+        const currentExpData = await prismaConfig.prisma.chatRoomParticipant.findFirst({
           where: {
             chatroomId: parseInt(roomId, 10),
             clerkId: userId,
@@ -166,7 +161,25 @@ const streamChatByRoom = async (req, res, next) => {
           },
           select: { exp: true }
         });
-        console.log(`📊 AI ${persona.name} 현재 EXP: ${currentParticipant?.exp || 0}`);
+        
+        const currentExp = currentExpData?.exp || 0;
+        const newExp = currentExp + expIncrease;
+        const newLevel = getLevel(newExp);
+        
+        const updateResult = await prismaConfig.prisma.chatRoomParticipant.updateMany({
+          where: {
+            chatroomId: parseInt(roomId, 10),
+            clerkId: userId,
+            personaId: persona.id
+          },
+          data: {
+            exp: newExp,
+            friendship: newLevel
+          }
+        });
+        
+        console.log(`✅ AI ${persona.name} 친밀도 ${expIncrease} 증가. 업데이트된 레코드 수: ${updateResult.count}`);
+        console.log(`📊 AI ${persona.name} 현재 EXP: ${newExp}, 레벨: ${newLevel}`);
         
         // 소켓으로 EXP 업데이트 정보 전송
         if (io) {
@@ -174,7 +187,8 @@ const streamChatByRoom = async (req, res, next) => {
             roomId,
             personaId: persona.id,
             personaName: persona.name,
-            newExp: currentParticipant?.exp || 0,
+            newExp: newExp,
+            newLevel: newLevel,
             expIncrease,
             userId
           });
@@ -331,12 +345,12 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
 
   if (!roomId) {
-    return responseHandler.sendBadRequest(res, 'room_id 쿼리 파라미터가 필요합니다.');
+    return responseHandler.sendBadRequest(res, 'roomId 쿼리 파라미터가 필요합니다.');
   }
   const parsedRoomId = parseInt(roomId);
-  if (isNaN(parsedRoomId)) {
-    return responseHandler.sendBadRequest(res, 'room_id는 숫자여야 합니다.');
-  }
+      if (isNaN(parsedRoomId)) {
+      return responseHandler.sendBadRequest(res, 'roomId는 숫자여야 합니다.');
+    }
 
   // 내가 참여한 방인지 확인
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
@@ -384,6 +398,26 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
       introduction: p.persona.introduction
     };
   }));
+
+  // 채팅 기록 조회
+  const chatHistory = await prismaConfig.prisma.chatLog.findMany({
+    where: {
+      chatroomId: parsedRoomId,
+      isDeleted: false
+    },
+    orderBy: {
+      time: 'asc'
+    },
+    select: {
+      id: true,
+      text: true,
+      senderType: true,
+      senderId: true,
+      time: true,
+      type: true
+    }
+  });
+
   return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
     roomId: chatRoom.id,
     character: persona ? {
@@ -392,7 +426,8 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
       introduction: persona.introduction,
       imageUrl: persona.imageUrl
     } : null,
-    participants
+    participants,
+    chatHistory
   });
 });
 
@@ -471,7 +506,35 @@ const generateAiGreetings = errorHandler.asyncHandler(async (req, res) => {
         }
       });
 
-      // 2. 소켓으로 전송 (io가 있을 때만)
+      // 2. AI 참여자의 EXP와 friendship 증가
+      const expIncrease = calculateExp(greetingText);
+      
+      // 현재 EXP 값 조회
+      const currentExpData = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+        where: {
+          chatroomId: parseInt(roomId, 10),
+          personaId: aiParticipant.personaId
+        },
+        select: { exp: true }
+      });
+
+      const currentExp = currentExpData?.exp || 0;
+      const newExp = currentExp + expIncrease;
+      const newLevel = getLevel(newExp);
+
+      // EXP와 friendship 업데이트
+      await prismaConfig.prisma.chatRoomParticipant.updateMany({
+        where: {
+          chatroomId: parseInt(roomId, 10),
+          personaId: aiParticipant.personaId
+        },
+        data: {
+          exp: newExp,
+          friendship: newLevel
+        }
+      });
+
+      // 3. 소켓으로 전송 (io가 있을 때만)
       if (io) {
         io.to(`room-${roomId}`).emit('receiveMessage', {
           roomId,
@@ -480,6 +543,17 @@ const generateAiGreetings = errorHandler.asyncHandler(async (req, res) => {
           aiId: aiParticipant.personaId,
           aiName: aiParticipant.persona.name,
           timestamp: new Date().toISOString(),
+        });
+
+        // EXP 업데이트 소켓 이벤트 전송
+        io.to(`room-${roomId}`).emit('expUpdated', {
+          roomId,
+          personaId: aiParticipant.personaId,
+          personaName: aiParticipant.persona.name,
+          newExp: newExp,
+          newLevel: newLevel,
+          expIncrease,
+          userId: null // AI는 userId가 없음
         });
       }
 
@@ -491,6 +565,7 @@ const generateAiGreetings = errorHandler.asyncHandler(async (req, res) => {
       });
 
       console.log(`✅ ${aiParticipant.persona.name} 인사 완료:`, greetingText.substring(0, 50) + '...');
+      console.log(`📊 ${aiParticipant.persona.name} EXP 증가: ${currentExp} → ${newExp}, 레벨: ${newLevel}`);
     }
 
     console.log('🎉 모든 AI 인사 생성 완료:', greetingMessages.length, '개');
