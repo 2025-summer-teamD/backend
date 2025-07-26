@@ -32,15 +32,31 @@ jobs:
             docker-compose.prod.yml docker-compose.monitoring.yml docker.sh \
             ${{ secrets.GCP_INSTANCE_NAME }}:~/
 
-      # ✅ SSH 접속 후 배포 명령 실행
+      # ✅ SSH 접속 후 배포 명령 실행 (자동 설치 + 최신 Docker Compose)
       - name: Deploy via gcloud ssh
         run: |
           gcloud compute ssh ${{ secrets.GCP_INSTANCE_NAME }} \
             --zone ${{ secrets.GCP_ZONE }} \
             --command "
-              docker-compose -f docker-compose.prod.yml pull && \
-              docker-compose -f docker-compose.monitoring.yml pull && \
-              docker-compose -f docker-compose.prod.yml up -d && \
-              docker-compose -f docker-compose.monitoring.yml up -d && \
+              # ✅ 1. 최신 Docker 및 Compose 플러그인 설치
+              if ! command -v docker &> /dev/null; then
+                echo 'Installing Docker...'
+                sudo apt-get update -y && sudo apt-get install -y docker.io
+              fi
+              if ! docker compose version &> /dev/null; then
+                echo 'Installing Docker Compose plugin...'
+                sudo apt-get install -y docker-compose-plugin
+              fi
+
+              # ✅ 2. 배포 스크립트 실행
+              echo 'Pulling latest images...'
+              docker compose -f docker-compose.prod.yml pull && \
+              docker compose -f docker-compose.monitoring.yml pull
+
+              echo 'Starting containers...'
+              docker compose -f docker-compose.prod.yml up -d && \
+              docker compose -f docker-compose.monitoring.yml up -d
+
+              echo 'Cleaning unused Docker resources...'
               docker system prune -af
             "
