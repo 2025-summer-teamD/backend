@@ -34,7 +34,7 @@ jobs:
       - name: Deploy to Compute Engine
         run: |
           # SSH 키 설정
-          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ./gcp_ssh_key
+          printf "%s" "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ./gcp_ssh_key
           chmod 600 ./gcp_ssh_key
           
           # GCP 인스턴스 IP 가져오기
