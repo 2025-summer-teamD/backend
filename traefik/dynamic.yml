@@ -1,0 +1,95 @@
+# Traefik 동적 설정
+
+# HTTP 미들웨어
+http:
+  middlewares:
+    # CORS 설정
+    cors:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+          - PATCH
+        accessControlAllowOriginList:
+          - "http://localhost:3000"
+          - "http://localhost:5173"
+        accessControlAllowHeaders:
+          - "*"
+        accessControlExposeHeaders:
+          - "x-trace-id"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+    # 추적 ID 헤더 추가
+    trace-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Frame-Options: "DENY"
+          X-Content-Type-Options: "nosniff"
+
+    # 압축 설정
+    compression:
+      excludedContentTypes:
+        - "text/event-stream"
+
+    # 레이트 리미팅
+    rate-limit:
+      rateLimit:
+        burst: 100
+        period: 1m
+
+    # 보안 헤더
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+
+  # 라우터 설정 (예시)
+  routers:
+    # API 라우터
+    api:
+      rule: "Host(`api.localhost`) && PathPrefix(`/api`)"
+      service: backend-api
+      middlewares:
+        - cors
+        - trace-headers
+        - compression
+      entryPoints:
+        - web
+
+    # 프론트엔드 라우터  
+    frontend:
+      rule: "Host(`app.localhost`)"
+      service: frontend
+      middlewares:
+        - cors
+        - security-headers
+        - compression
+      entryPoints:
+        - web
+
+  # 서비스 설정 (예시)
+  services:
+    backend-api:
+      loadBalancer:
+        servers:
+          - url: "http://backend:3001"
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:5173" 

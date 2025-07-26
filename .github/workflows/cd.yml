@@ -1,0 +1,51 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for GCP
+        run: gcloud auth configure-docker asia.gcr.io
+
+      - name: Deploy to Compute Engine
+        run: |
+          # SSH 키 설정
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ./private_key
+          chmod 600 ./private_key
+          
+          # 인스턴스 IP 가져오기
+          INSTANCE_IP=$(gcloud compute instances describe ${{ secrets.GCP_INSTANCE_NAME }} \
+            --zone ${{ secrets.GCP_ZONE }} \
+            --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+          
+          # Docker 컴포즈 파일들 전송
+          scp -i ./private_key -o StrictHostKeyChecking=no \
+            docker-compose.prod.yml \
+            docker-compose.monitoring.yml \
+            docker.sh \
+            ${{ secrets.GCP_USERNAME }}@${secret.GCP_INSTANCE_IP}:~/
+          
+          # 배포 스크립트 실행
+          ssh -i ./private_key -o StrictHostKeyChecking=no ${{ secrets.GCP_USERNAME }}@${secret.GCP_INSTANCE_IP} '
+            docker-compose -f docker-compose.prod.yml pull && \
+            docker-compose -f docker-compose.prod.yml up -d && \
+            docker-compose -f docker-compose.monitoring.yml pull && \
+            docker-compose -f docker-compose.monitoring.yml up -d
+          '
+          
+          # 임시 SSH 키 삭제
+          rm ./private_key

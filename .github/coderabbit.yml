@@ -1,0 +1,11 @@
+code_reviews:
+  enable: true
+  review_mode: suggestions  # or comments
+  summary_mode: always      # always, if_comments, or never
+  include_reviewers: false
+
+pull_request:
+  title_keywords:
+    - "feat"
+    - "fix"
+    - "refactor"

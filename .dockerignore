@@ -1,0 +1,36 @@
+# node_modules는 컨테이너에서 새로 설치하므로 복사하지 않음
+node_modules
+
+# 로그 파일
+npm-debug.log
+*.log
+
+# 환경 변수 파일 (컨테이너에 직접 복사할 경우만 제외)
+.env
+.env.*
+
+# 테스트, 빌드 산출물
+coverage
+__tests__
+*.test.js
+*.spec.js
+jest.config.js
+
+# OS/에디터 관련 불필요 파일
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Git 관련
+.git
+.gitignore
+
+# 기타
+docker.log
+docker-compose.pid
+
+# Google Cloud credentials
+/google-credentials/
+
+letsencrypt/
