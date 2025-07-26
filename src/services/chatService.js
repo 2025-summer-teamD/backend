@@ -3,10 +3,10 @@ import gemini25 from '../vertexai/gemini25.js';
 import veo3 from '../vertexai/veo3.js';
 import { Storage } from '@google-cloud/storage';
 import { uploadImageToGCS } from './gcsService.js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 
-const ai = new GoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
  * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
  * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
