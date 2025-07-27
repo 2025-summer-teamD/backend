@@ -98,12 +98,12 @@ app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'))); // 
 
 // 기본 라우트 (인증 없이 접근 가능)
 app.get('/', (req, res) => {
-    res.json({
-      message: 'Character Chat API 서버에 오신 것을 환영합니다!',
-      version: '1.0.0',
-      docs: '/api-docs',
-      traceId: req.traceId // 추적 ID 포함
-    });
+  res.json({
+    message: 'Character Chat API 서버에 오신 것을 환영합니다!',
+    version: '1.0.0',
+    docs: '/api-docs',
+    traceId: req.traceId // 추적 ID 포함
+  });
 });
 
 // Clerk 인증 미들웨어 (API 경로에만 적용)

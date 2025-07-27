@@ -1,9 +1,9 @@
 /**
  * 채팅 컨트롤러
- * 
+ *
  * 사용 위치:
  * - chatRoutes.js에서 라우터 연결
- * 
+ *
  * 기능:
  * - 채팅방 관리
  * - AI 채팅 응답 생성
@@ -278,7 +278,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -371,7 +371,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 채팅방 삭제
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
