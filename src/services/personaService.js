@@ -176,14 +176,18 @@ const getPersonas = async (options = {}) => {
     // 현재 사용자의 좋아요 상태 확인
     let liked = false;
     if (currentUserId) {
-      const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+      const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
         where: {
           clerkId: currentUserId,
-          characterId: persona.id,
-          likes: true,
+          personaId: persona.id,
         },
+        include: {
+          chatRoom: {
+            select: { likes: true }
+          }
+        }
       });
-      liked = !!chatRoom;
+      liked = !!(participant?.chatRoom?.likes);
     }
 
     const creatorName = persona.creatorName || persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음';
@@ -239,13 +243,18 @@ const getPersonaDetails = async (options) => {
   // 2. 'liked' 상태를 계산
   let liked = false;
   if (currentUserId) {
-    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
       where: {
         clerkId: currentUserId,
-        characterId: personaId,
+        personaId: personaId,
       },
+      include: {
+        chatRoom: {
+          select: { likes: true }
+        }
+      }
     });
-    liked = chatRoom ? chatRoom.likes : false;
+    liked = participant?.chatRoom ? participant.chatRoom.likes : false;
   }
 
   // 3. 최종 응답 객체 조립 (필드명 일치)
@@ -360,6 +369,9 @@ const updatePersona = async (personaId, userId, updateData) => {
   }
   // 2. 업데이트할 필드 준비
   const updateFields = {};
+  if (updateData.name !== undefined) {
+    updateFields.name = updateData.name;
+  }
   if (updateData.introduction !== undefined) {
     updateFields.introduction = updateData.introduction;
   }
@@ -386,15 +398,20 @@ const updatePersona = async (personaId, userId, updateData) => {
     },
   });
   // 4. getPersonaDetails와 동일한 구조로 반환
-  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: {
       clerkId: userId,
-      characterId: personaId,
+      personaId: personaId,
+    },
+    include: {
+      chatRoom: true,
     },
   });
+  const chatRoom = participant?.chatRoom;
   return {
     id: updated.id,
     userId: updated.clerkId,
+    clerkId: updated.clerkId, // 프론트엔드에서 isCharacterCreatedByMe 계산을 위해 필요
     creatorName: updated.creatorName || updated.user?.name || updated.user?.firstName || updated.user?.clerkId || '알 수 없음',
     name: updated.name,
     imageUrl: updated.imageUrl,
@@ -438,13 +455,13 @@ const deletePersona = async (personaId, userId) => {
   
   if (chatRoomsToDelete.length > 0) {
     const chatRoomIds = chatRoomsToDelete.map(cr => cr.chatroomId);
-    await prismaConfig.prisma.chatRoom.updateMany({
+  await prismaConfig.prisma.chatRoom.updateMany({
       where: { 
         id: { in: chatRoomIds },
         isDeleted: false 
       },
-      data: { isDeleted: true },
-    });
+    data: { isDeleted: true },
+  });
   }
   return {
     id: deleted.id,
@@ -516,8 +533,8 @@ const toggleLike = async (personaId, userId) => {
     if (remainingParticipants === 0) {
       await prismaConfig.prisma.chatRoom.delete({
         where: { id: participant.chatRoom.id }
-      });
-    }
+    });
+  }
     
     isLiked = false;
   }
