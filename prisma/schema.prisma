@@ -30,6 +30,7 @@ model User {
   updatedAt DateTime? @map("updated_at")
   isDeleted Boolean   @default(false) @map("is_deleted")
   personas  Persona[]
+  friendships UserCharacterFriendship[]
 
   @@map("users")
 }
@@ -50,13 +51,14 @@ model Persona {
   updatedAt            DateTime?             @map("updated_at")
   isDeleted            Boolean               @default(false) @map("is_deleted")
   chatRoomParticipants ChatRoomParticipant[] @relation("PersonaToParticipant")
+  friendships          UserCharacterFriendship[]
 
   @@index([clerkId])
 }
 
 model ChatRoom {
   id           Int                   @id @unique @default(autoincrement())
-  
+  name         String?               @db.VarChar(255) // 채팅방 이름
   likes        Boolean               @default(false)
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime?             @map("updated_at")
@@ -73,11 +75,27 @@ model ChatRoomParticipant {
   personaId  Int? // AI 참여자 (Persona.id)
   persona    Persona? @relation("PersonaToParticipant", fields: [personaId], references: [id])
   joinedAt   DateTime @default(now())
-  exp        Int      @default(0) // 유저별/캐릭터별 친밀도 (예: 유저1-아이언맨, 유저2-아이언맨 각각 다른 exp)
-  friendship Int      @default(1)
   @@index([chatroomId])
   @@index([clerkId])
   @@index([personaId])
+}
+
+// 사용자-캐릭터 친밀도 관리 (채팅방과 독립적)
+model UserCharacterFriendship {
+  id         Int      @id @default(autoincrement())
+  clerkId    String   @map("clerk_id")
+  personaId  Int      @map("persona_id")
+  user       User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+  persona    Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  exp        Int      @default(0) // 총 경험치 (모든 채팅방에서의 합계)
+  friendship Int      @default(1) // 친밀도 레벨
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([clerkId, personaId]) // 사용자-캐릭터 조합은 유일해야 함
+  @@index([clerkId])
+  @@index([personaId])
+  @@map("user_character_friendships")
 }
 
 model ChatLog {

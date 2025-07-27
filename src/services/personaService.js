@@ -265,8 +265,8 @@ const getPersonaDetails = async (options) => {
 };
 
 /**
- * 특정 사용자의 페르소나 목록을 조회합니다. (만든 것 또는 좋아요 한 것)
- * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
+ * 나의 페르소나 목록을 조회합니다.
+ * @param {string} userId - 조회할 사용자의 Clerk ID
  * @param {string} type - 조회할 타입 ('created' 또는 'liked')
  * @returns {Promise<Array<object>>} 가공된 페르소나 목록
  */
@@ -316,13 +316,15 @@ const getMyPersonas = async (userId, type = 'created') => {
 
     // 2. 결과를 최종 응답 형태로 가공한다.
     const personasWithExp = await Promise.all(myCreatedPersonas.map(async p => {
-      // ChatRoomParticipant에서 해당 유저-캐릭터 조합의 exp 조회
-      const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+      // 새로운 친밀도 시스템에서 해당 유저-캐릭터 조합의 친밀도 조회
+      const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
         where: {
-          clerkId: userId,
-          personaId: p.id,
+          clerkId_personaId: {
+            clerkId: userId,
+            personaId: p.id
+          }
         },
-        select: { exp: true }
+        select: { exp: true, friendship: true }
       });
 
       return {
@@ -336,8 +338,8 @@ const getMyPersonas = async (userId, type = 'created') => {
         usesCount: p.usesCount,
         likesCount: p.likesCount,
         liked: false, // 내가 만든 캐릭터는 찜하지 않음
-        friendship: 0, // 내가 만든 캐릭터는 friendship 없음
-        exp: participant ? participant.exp : 0, // 유저별/캐릭터별 친밀도
+        friendship: friendship ? friendship.friendship : 1, // 새로운 친밀도 시스템 사용
+        exp: friendship ? friendship.exp : 0, // 새로운 친밀도 시스템 사용
         isDeleted: p.isDeleted,
       };
     }));

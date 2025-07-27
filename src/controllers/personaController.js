@@ -247,17 +247,22 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
   const { userId } = req.auth;
 
-  // 멀티방 구조: chatRoomParticipant에서 clerkId와 personaId로 참여자 찾고, 그 참여자의 exp 반환
-  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+  // 새로운 친밀도 시스템에서 exp 조회
+  const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
     where: {
-      clerkId: userId,
-      personaId: personaId
+      clerkId_personaId: {
+        clerkId: userId,
+        personaId: personaId
+      }
     },
-    select: { exp: true }
+    select: { exp: true, friendship: true }
   });
+  
   let exp = 0;
-  if (participant && typeof participant.exp === 'number') {
-    exp = participant.exp;
+  let friendshipLevel = 1;
+  if (friendship) {
+    exp = friendship.exp;
+    friendshipLevel = friendship.friendship;
   }
   const persona = await PersonaService.getPersonaDetails({
     personaId,
@@ -367,5 +372,5 @@ export default {
   updatePersona,
   deletePersona,
   toggleLike,
-  incrementViewCount
+  incrementViewCount,
 };

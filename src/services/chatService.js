@@ -213,72 +213,73 @@ ${personaInfo.name}:`;
 };
 
 /**
- * AI 캐릭터가 자동으로 인사하는 메시지를 생성합니다.
- * @param {object} personaInfo - 페르소나 정보 { name, personality, tone, introduction }
- * @param {array} otherParticipants - 다른 AI 참여자들 정보
- * @returns {Promise<string>} AI가 생성한 인사 메시지
+ * 1대1 채팅을 위한 AI 응답 생성 (최적화된 버전)
+ * @param {string} userMessage - 사용자 메시지
+ * @param {object} personaInfo - AI 캐릭터 정보
+ * @param {string} chatHistory - 대화 기록
+ * @param {boolean} isFirstMessage - 첫 번째 메시지인지 여부
+ * @returns {Promise<string>} AI 응답
  */
-const generateAiGreeting = async (personaInfo, otherParticipants = []) => {
-  // 1. 내 정보 - AI로 성격, 말투, 특징 추출
-  const myDetails = await extractPersonaDetails(personaInfo);
+const generateAiChatResponseOneOnOne = async (
+  userMessage,
+  personaInfo,
+  chatHistory,
+  isFirstMessage = false
+) => {
+  let prompt;
   
-  const myInfo = `
+  if (isFirstMessage) {
+    // 첫 번째 메시지: 전체 프롬프트 사용 (extractPersonaDetails 사용하지 않음)
+    const myInfo = `
 [당신의 정보]
 이름: ${personaInfo.name}
-성격: ${myDetails.personality}
-말투: ${myDetails.tone}
-특징: ${myDetails.characteristics}
+성격: ${personaInfo.personality || personaInfo.introduction || '친근하고 도움이 되는 성격'}
+말투: ${personaInfo.tone || '친근하고 자연스러운 말투'}
 소개: ${personaInfo.introduction || ''}
+프롬프트: ${personaInfo.prompt || ''}
 `;
 
-  // 2. 상대 AI 정보
-  const othersInfo = await Promise.all(
-    otherParticipants
-      .filter(p => p.persona && p.persona.id !== personaInfo.id)
-      .map(async p => {
-        const otherDetails = await extractPersonaDetails(p.persona);
-        return `이름: ${p.persona.name} | 성격: ${otherDetails.personality} | 말투: ${otherDetails.tone} | 특징: ${otherDetails.characteristics} | 소개: ${p.persona.introduction || ''}`;
-      })
-  );
-  
-  const othersInfoText = othersInfo.join('\n');
-
-  // 3. 인사 전용 프롬프트
-  const greetingPrompt = `
+    prompt = `
 ${myInfo}
-[채팅방에 함께 있는 다른 AI 정보]
-${othersInfoText}
-
-너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
 
 중요 규칙:
-- 반드시 자신의 성격, 말투, 소개만 사용해서 인사할 것
-- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 창의적인 인사를 할 것
-- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
-- 각 AI의 이름을 정확히 사용해서 인사할 것
-- 채팅방에 처음 입장한 상황이므로, 다른 AI들과 사용자에게 자연스럽게 인사할 것
-- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 친근하게 인사할 것
-- 짧고 자연스러운 인사말을 할 것 (2-3문장 이내)
+- 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
+- 절대 다른 성격이나 말투를 따라하지 말고, 자신의 개성을 유지할 것
+- 사용자와 1대1 대화이므로 자연스럽고 친근하게 대화할 것
+- 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
 
-이제 당신의 성격과 말투에 맞게 채팅방에 인사해주세요:`;
+[최근 대화 기록]
+${chatHistory}
+---
+사용자: ${userMessage}
+${personaInfo.name}:`;
+  } else {
+    // 이후 메시지: 간단한 컨텍스트만 사용
+    prompt = `
+당신은 ${personaInfo.name}입니다. 사용자와 1대1 대화를 나누고 있습니다.
 
-  // 4. Google AI 호출
-  let aiGreetingText;
+[최근 대화 기록]
+${chatHistory}
+---
+사용자: ${userMessage}
+${personaInfo.name}:`;
+  }
+
+  // 3. Google AI 호출
+  let aiResponseText;
   try {
-    console.log('🤖 AI 자동 인사 생성 시도...');
-    console.log('📝 인사 프롬프트:', greetingPrompt.trim());
-    aiGreetingText = await gemini25.generateText(greetingPrompt.trim());
-    console.log('✅ AI 자동 인사 생성 성공:', aiGreetingText);
+    console.log('🤖 Google AI 호출 시도 (1대1 채팅)...');
+    console.log('📝 프롬프트:', prompt.trim());
+    aiResponseText = await gemini25.generateText(prompt.trim());
+    console.log('✅ Google AI 응답 성공 (1대1):', aiResponseText);
   } catch (error) {
-    console.error('❌ AI 자동 인사 생성 실패:', error.message);
-    aiGreetingText = `안녕하세요! 저는 ${personaInfo.name}입니다. 함께 대화할 수 있어서 기쁩니다! 😊`;
+    console.error('❌ Google AI 호출 실패 (1대1):', error.message);
+    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
   }
-  
-  if (!aiGreetingText || aiGreetingText.trim() === '') {
-    aiGreetingText = `안녕하세요! 저는 ${personaInfo.name}입니다. 함께 대화할 수 있어서 기쁩니다! 😊`;
+  if (!aiResponseText || aiResponseText.trim() === '') {
+    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
   }
-  
-  return aiGreetingText;
+  return aiResponseText;
 };
 
 /**
@@ -414,77 +415,43 @@ const createMultiChatRoom = async (participantIds) => {
   console.log('createMultiChatRoom service - userIds:', userIds);
   console.log('createMultiChatRoom service - personaIds:', personaIds);
   
-  // 2. 동일 참가자 조합의 방이 있는지 확인 (모든 참가자가 포함된 방)
-  const candidateRooms = await prismaConfig.prisma.chatRoom.findMany({
-    where: { isDeleted: false },
-    include: { participants: true }
+  // 항상 새 채팅방 생성 (기존 채팅방 재사용 제거)
+  console.log('createMultiChatRoom service - creating new room');
+  const foundRoom = await prismaConfig.prisma.chatRoom.create({ 
+    data: {}, 
+    include: { participants: true } 
   });
-  console.log('createMultiChatRoom service - candidateRooms count:', candidateRooms.length);
+  console.log('createMultiChatRoom service - created room id:', foundRoom.id);
   
-  let foundRoom = candidateRooms.find(room => {
-    // 해당 방의 모든 user-persona 조합 확인
-    const roomUserPersonaPairs = room.participants.map(p => ({ clerkId: p.clerkId, personaId: p.personaId }));
-    
-    // 요청된 모든 user-persona 조합이 방에 있는지 확인
-    const requestedPairs = [];
-    for (const userId of userIds) {
-      for (const personaId of personaIds) {
-        requestedPairs.push({ clerkId: userId, personaId: personaId });
-      }
+  // 참가자 추가 - 유저와 AI 조합으로만 생성 (친밀도 추적용)
+  for (const userId of userIds) {
+    for (const personaId of personaIds) {
+      await prismaConfig.prisma.chatRoomParticipant.create({ 
+        data: { 
+          chatroomId: foundRoom.id, 
+          clerkId: userId, 
+          personaId: personaId
+        } 
+      });
     }
-    
-    // 모든 요청된 조합이 방에 있고, 방의 조합이 요청된 조합과 정확히 일치하는지 확인
-    const allRequestedInRoom = requestedPairs.every(pair => 
-      roomUserPersonaPairs.some(roomPair => 
-        roomPair.clerkId === pair.clerkId && roomPair.personaId === pair.personaId
-      )
-    );
-    
-    const allRoomInRequested = roomUserPersonaPairs.every(roomPair => 
-      requestedPairs.some(pair => 
-        roomPair.clerkId === pair.clerkId && roomPair.personaId === pair.personaId
-      )
-    );
-    
-    return allRequestedInRoom && allRoomInRequested;
-  });
-  
-  console.log('createMultiChatRoom service - foundRoom:', foundRoom ? foundRoom.id : null);
-  
-  let isNewRoom = false;
-  if (!foundRoom) {
-    // 새로 생성
-    console.log('createMultiChatRoom service - creating new room');
-    isNewRoom = true;
-    foundRoom = await prismaConfig.prisma.chatRoom.create({ data: {}, include: { participants: true } });
-    console.log('createMultiChatRoom service - created room id:', foundRoom.id);
-    
-    // 참가자 추가 - 유저와 AI 조합으로만 생성 (친밀도 추적용)
-    for (const userId of userIds) {
-      for (const personaId of personaIds) {
-        await prismaConfig.prisma.chatRoomParticipant.create({ 
-          data: { 
-            chatroomId: foundRoom.id, 
-            clerkId: userId, 
-            personaId: personaId, 
-            exp: 0 
-          } 
-        });
-      }
-    }
-    // 다시 조회 (참가자 포함)
-    foundRoom = await prismaConfig.prisma.chatRoom.findUnique({ where: { id: foundRoom.id }, include: { participants: { include: { persona: true } } } });
-  } else {
-    // 참가자 정보 포함해서 다시 조회
-    foundRoom = await prismaConfig.prisma.chatRoom.findUnique({ where: { id: foundRoom.id }, include: { participants: { include: { persona: true } } } });
   }
+  
+  // 참가자 정보 포함해서 다시 조회
+  const foundRoomWithParticipants = await prismaConfig.prisma.chatRoom.findUnique({ 
+    where: { id: foundRoom.id }, 
+    include: { participants: { include: { persona: true } } } 
+  });
+  
   // 채팅 로그
-  const chatHistory = await prismaConfig.prisma.chatLog.findMany({ where: { chatroomId: foundRoom.id, isDeleted: false }, orderBy: { time: 'asc' } });
+  const chatHistory = await prismaConfig.prisma.chatLog.findMany({ 
+    where: { chatroomId: foundRoom.id, isDeleted: false }, 
+    orderBy: { time: 'asc' } 
+  });
   
   const result = {
     roomId: foundRoom.id,
-    isNewRoom,
-    participants: foundRoom.participants.map(p => ({
+    isNewRoom: true, // 항상 새 방
+    participants: foundRoomWithParticipants.participants.map(p => ({
       clerkId: p.clerkId,
       personaId: p.personaId,
       persona: p.persona ? { id: p.persona.id, name: p.persona.name, imageUrl: p.persona.imageUrl } : undefined
@@ -496,17 +463,287 @@ const createMultiChatRoom = async (participantIds) => {
   return result;
 };
 
+/**
+ * 1대1 채팅방 생성
+ * @param {string} userId - 사용자 ID
+ * @param {number} personaId - 캐릭터 ID
+ * @returns {Promise<object>} 생성된 채팅방 정보
+ */
+const createOneOnOneChatRoom = async (userId, personaId) => {
+  try {
+    console.log('createOneOnOneChatRoom - userId:', userId, 'personaId:', personaId);
+    
+    // 1. 새 채팅방 생성 (clerkId 없이)
+    const newRoom = await prismaConfig.prisma.chatRoom.create({
+      data: {
+        name: `1대1 채팅`,
+        isDeleted: false,
+      },
+    });
+
+    console.log('createOneOnOneChatRoom - 새 채팅방 생성:', newRoom.id);
+    
+    // 2. 사용자와 캐릭터를 참가자로 추가
+    await prismaConfig.prisma.chatRoomParticipant.create({
+      data: {
+        chatroomId: newRoom.id,
+        clerkId: userId,
+        personaId: personaId
+      },
+    });
+
+    // 3. 캐릭터 정보 조회
+    const persona = await prismaConfig.prisma.persona.findUnique({
+      where: { id: personaId },
+    });
+
+    if (!persona) {
+      throw new Error('캐릭터를 찾을 수 없습니다.');
+    }
+
+    console.log('createOneOnOneChatRoom - 새 1대1 채팅방 생성 완료:', newRoom.id);
+    
+    return {
+      roomId: newRoom.id,
+      character: persona,
+      chatHistory: [],
+      isNewRoom: true,
+    };
+  } catch (error) {
+    console.error('createOneOnOneChatRoom - 에러:', error);
+    throw new Error('1대1 채팅방 생성에 실패했습니다.');
+  }
+};
+
+/**
+ * 사용자-캐릭터 친밀도 증가
+ * @param {string} userId - 사용자 ID
+ * @param {number} personaId - 캐릭터 ID
+ * @param {number} expGain - 획득할 경험치
+ */
+const increaseFriendship = async (userId, personaId, expGain = 1) => {
+  try {
+    console.log(`🔍 친밀도 증가 시도: 사용자 ${userId}, 캐릭터 ${personaId}, 획득 경험치 ${expGain}`);
+    
+    // 기존 친밀도 조회 또는 생성
+    let friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+      where: {
+        clerkId_personaId: {
+          clerkId: userId,
+          personaId: personaId
+        }
+      }
+    });
+
+    console.log(`📊 기존 친밀도 정보:`, friendship);
+
+    if (!friendship) {
+      // 새로운 친밀도 레코드 생성
+      console.log(`🆕 새로운 친밀도 레코드 생성`);
+      friendship = await prismaConfig.prisma.userCharacterFriendship.create({
+        data: {
+          clerkId: userId,
+          personaId: personaId,
+          exp: expGain,
+          friendship: 1
+        }
+      });
+      console.log(`✅ 새 친밀도 레코드 생성 완료:`, friendship);
+    } else {
+      // 기존 친밀도 업데이트
+      const newExp = friendship.exp + expGain;
+      const newFriendshipLevel = Math.floor(newExp / 10) + 1; // 10경험치마다 레벨업
+      
+      console.log(`📈 친밀도 업데이트: ${friendship.exp} → ${newExp}, 레벨: ${friendship.friendship} → ${newFriendshipLevel}`);
+      
+      friendship = await prismaConfig.prisma.userCharacterFriendship.update({
+        where: {
+          clerkId_personaId: {
+            clerkId: userId,
+            personaId: personaId
+          }
+        },
+        data: {
+          exp: newExp,
+          friendship: newFriendshipLevel
+        }
+      });
+      console.log(`✅ 친밀도 업데이트 완료:`, friendship);
+    }
+
+    console.log(`🎉 친밀도 증가 완료: 사용자 ${userId}, 캐릭터 ${personaId}, 경험치 +${expGain}, 총 경험치: ${friendship.exp}, 친밀도: ${friendship.friendship}`);
+    return friendship;
+  } catch (error) {
+    console.error('❌ 친밀도 증가 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 사용자-캐릭터 친밀도 조회
+ * @param {string} userId - 사용자 ID
+ * @param {number} personaId - 캐릭터 ID
+ * @returns {Promise<object>} 친밀도 정보
+ */
+const getFriendship = async (userId, personaId) => {
+  try {
+    const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+      where: {
+        clerkId_personaId: {
+          clerkId: userId,
+          personaId: personaId
+        }
+      }
+    });
+
+    return friendship || { exp: 0, friendship: 1 };
+  } catch (error) {
+    console.error('친밀도 조회 실패:', error);
+    return { exp: 0, friendship: 1 };
+  }
+};
+
+/**
+ * 사용자의 모든 캐릭터 친밀도 조회
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<array>} 친밀도 목록
+ */
+const getUserFriendships = async (userId) => {
+  try {
+    const friendships = await prismaConfig.prisma.userCharacterFriendship.findMany({
+      where: { clerkId: userId },
+      include: {
+        persona: {
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true
+          }
+        }
+      }
+    });
+
+    return friendships;
+  } catch (error) {
+    console.error('사용자 친밀도 목록 조회 실패:', error);
+    return [];
+  }
+};
+
+/**
+ * 단체 채팅을 위한 AI 응답 생성 (최적화된 버전)
+ * @param {string} userMessage - 사용자 메시지
+ * @param {array} allPersonas - 모든 AI 캐릭터 정보 배열
+ * @param {string} chatHistory - 대화 기록
+ * @param {boolean} isFirstMessage - 첫 번째 메시지인지 여부
+ * @returns {Promise<array>} 각 AI의 응답 배열
+ */
+const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false) => {
+  console.log('🤖 단체 채팅 AI 응답 생성 시작:', allPersonas.length, '명의 AI');
+  
+  // 모든 AI의 정보를 한번에 준비
+  const personasInfo = await Promise.all(
+    allPersonas.map(async (persona, index) => {
+      const details = await extractPersonaDetails(persona);
+      return {
+        id: persona.id,
+        name: persona.name,
+        personality: details.personality,
+        tone: details.tone,
+        characteristics: details.characteristics,
+        introduction: persona.introduction || '',
+        prompt: persona.prompt || '',
+        index
+      };
+    })
+  );
+
+  // 각 AI별로 개별 응답 생성
+  const responses = await Promise.all(
+    personasInfo.map(async (persona) => {
+      let individualPrompt;
+      
+      if (isFirstMessage) {
+        // 첫 번째 메시지: 모든 AI 정보를 포함한 전체 프롬프트
+        const allPersonasInfo = personasInfo.map(p => `
+[AI ${p.index + 1} 정보]
+이름: ${p.name}
+성격: ${p.personality}
+말투: ${p.tone}
+특징: ${p.characteristics}
+소개: ${p.introduction}
+프롬프트: ${p.prompt}
+`).join('\n');
+
+        individualPrompt = `
+${allPersonasInfo}
+
+위의 정보 중에서 [AI ${persona.index + 1} 정보]에 해당하는 AI입니다.
+
+중요 규칙:
+- 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
+- 다른 AI들의 정보를 참고하되, 자신의 개성을 유지할 것
+- 사용자와 다른 AI들과 함께하는 단체 대화이므로 자연스럽게 대화할 것
+- 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
+- 다른 AI들과 상호작용하면서도 자신의 개성을 유지할 것
+
+[최근 대화 기록]
+${chatHistory}
+---
+사용자: ${userMessage}
+${persona.name}:`;
+      } else {
+        // 이후 메시지: 간단한 컨텍스트만 사용
+        individualPrompt = `
+당신은 ${persona.name}입니다. 사용자와 다른 AI들과 함께 단체 대화를 나누고 있습니다.
+
+[최근 대화 기록]
+${chatHistory}
+---
+사용자: ${userMessage}
+${persona.name}:`;
+      }
+
+      try {
+        console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
+        const response = await gemini25.generateText(individualPrompt.trim());
+        console.log(`✅ ${persona.name} AI 응답 완료`);
+        return {
+          personaId: persona.id,
+          personaName: persona.name,
+          content: response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`
+        };
+      } catch (error) {
+        console.error(`❌ ${persona.name} AI 응답 생성 실패:`, error.message);
+        return {
+          personaId: persona.id,
+          personaName: persona.name,
+          content: `안녕하세요! 저는 ${persona.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`
+        };
+      }
+    })
+  );
+
+  console.log('🎉 단체 채팅 AI 응답 생성 완료:', responses.length, '개의 응답');
+  return responses;
+};
+
 
 const chatService = {
   getMyChatList,
   generateAiChatResponse,
-  generateAiGreeting,
   deleteChatRoom, 
   makeVeo3Prompt,
   generateVideoWithVeo3,
   uploadVideoToGCS,
   checkAndGenerateVideoReward,
   createMultiChatRoom,
+  createOneOnOneChatRoom,
+  generateAiChatResponseOneOnOne,
+  increaseFriendship,
+  getFriendship,
+  getUserFriendships,
+  generateAiChatResponseGroup,
 };
 
 export default chatService;

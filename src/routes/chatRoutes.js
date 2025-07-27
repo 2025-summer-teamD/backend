@@ -70,12 +70,19 @@ router.post('/rooms',
     authMiddleware.requireAuth,
     chatController.createChatRoom);
 
-//ai 채팅 스트리밍 
+//ai 채팅 스트리밍 (1대다 채팅용 - WebSocket 방식)
 router.post('/rooms/:roomId',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     personaValidator.validateRoomIdParam,  // room_id 검증 추가!
     chatController.streamChatByRoom);
+
+// 1대1 채팅 전용 SSE 스트리밍
+router.post('/rooms/:roomId/sse',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.streamChatByRoom2);
 
 // TODO: enterChatRoom 함수가 삭제되었으므로 임시로 주석 처리
 // router.get('/rooms', 
@@ -89,15 +96,30 @@ router.get('/room-info',
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
 
+// 채팅방 이름 수정
+router.put('/rooms/:roomId/name',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.updateChatRoomName);
+
+// 친밀도 조회 라우트 추가
+router.get('/friendships',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getAllFriendships);
+
+router.get('/friendships/:personaId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getCharacterFriendship);
+
 // SSE 스트리밍 라우트 (GET)
 router.get('/stream/:roomId',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     personaValidator.validateRoomIdParam,
     chatController.streamChatByRoom);
-
-// AI 자동 인사 생성
-router.post('/rooms/:roomId/greetings', chatController.generateAiGreetings);
 
 // multer 설정: uploads 폴더에 저장, 파일 크기 제한(5MB)
 const upload = multer({
