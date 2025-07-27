@@ -1,6 +1,20 @@
 services:
+  # 앱과 데이터베이스 서비스 포함
+  app:
+    extends:
+      file: docker-compose.prod.yml
+      service: app
+
+  redis:
+    extends:
+      file: docker-compose.prod.yml
+      service: redis
+
   # Reverse Proxy & Load Balancer
   traefik:
+    extends:
+      file: docker-compose.prod.yml
+      service: traefik
     labels:
       # 모니터링용 설정
       - --tracing.otlp.http.endpoint=http://jaeger:4318/v1/traces
@@ -64,8 +78,8 @@ services:
     environment:
       LS_JAVA_OPTS: "-Xmx256m -Xms256m"
     volumes:
-      - ./logstash/pipeline:/usr/share/logstash/pipeline
-      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
     networks:
       - app-network
     depends_on:
@@ -111,7 +125,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     restart: unless-stopped
     networks:
       - app-network
@@ -193,4 +207,3 @@ volumes:
 
 networks:
   app-network:
-    external: true 

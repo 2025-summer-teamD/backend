@@ -64,102 +64,31 @@ const router = express.Router();
  *         description: 서버 오류
  */
 
-//ai 채팅 스트리밍
+// 채팅방 생성 (그룹 채팅 지원)
+router.post('/rooms',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.createChatRoom);
+
+//ai 채팅 스트리밍 (1대다 채팅용 - WebSocket 방식)
 router.post('/rooms/:roomId',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
     personaValidator.validateRoomIdParam,  // room_id 검증 추가!
     chatController.streamChatByRoom2);
 
-/**
- * @swagger
- * /chat/rooms:
- *   post:
- *     summary: 새로운 채팅방 생성
- *     description: 캐릭터당 채팅방은 하나만 생성됩니다. 이미 존재하는 경우 기존 방을 반환합니다.
- *     tags: [Chat]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               character_id:
- *                 type: integer
- *                 description: 채팅할 캐릭터 ID
- *                 example: 102
- *     responses:
- *       201:
- *         description: 채팅방 생성 성공
- *       200:
- *         description: 이미 존재하는 채팅방 반환
- *       400:
- *         description: 요청 형식 오류 또는 캐릭터 ID 누락
- *       500:
- *         description: 서버 내부 오류
- */
-// 새로운 캐릭터와의 대화 요청(채팅방 생성)
-router.post('/rooms',
+// 1대1 채팅 전용 SSE 스트리밍
+router.post('/rooms/:roomId/sse',
     authMiddleware.clerkAuthMiddleware,
     authMiddleware.requireAuth,
-    chatController.createChatRoom);
+    personaValidator.validateRoomIdParam,
+    chatController.streamChatByRoom2);
 
-//채팅방 입장
-
-/**
- * @swagger
- * /chat/rooms:
- *   get:
- *     summary: 대화한 캐릭터의 채팅방 입장
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: character_id
- *         required: true
- *         schema:
- *           type: string
- *         description: 캐릭터 ID
- *     responses:
- *       200:
- *         description: 입장 성공
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 room_id:
- *                   type: string
- *                   example: "chat-7891"
- *                 user_id:
- *                   type: integer
- *                   example: 15
- *                 persona_id:
- *                   type: integer
- *                   example: 101
- *                 created_at:
- *                   type: string
- *                   example: "2025-07-01T14:10:00Z"
- *                 count:
- *                   type: integer
- *                   example: 47
- *                 friendship:
- *                   type: integer
- *                   example: 82
- *                 exp:
- *                   type: integer
- *                   example: 430
- *       401:
- *         description: 입장 실패
- */
-
-router.get('/rooms',
-    authMiddleware.clerkAuthMiddleware,
-    authMiddleware.requireAuth,
-    chatController.enterChatRoom);
+// TODO: enterChatRoom 함수가 삭제되었으므로 임시로 주석 처리
+// router.get('/rooms', 
+//     authMiddleware.clerkAuthMiddleware,
+//     authMiddleware.requireAuth,
+//     chatController.enterChatRoom);
 
 // room_id로 채팅방 정보 조회 (하지만 query parameter이므로 별도 검증 필요)
 router.get('/room-info',
@@ -167,7 +96,32 @@ router.get('/room-info',
     authMiddleware.requireAuth,
     chatController.getRoomInfo);
 
-// 메모리 저장소를 사용하여 파일 버퍼를 직접 얻음 (GCS 업로드에 적합)
+// 채팅방 이름 수정
+router.put('/rooms/:roomId/name',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.updateChatRoomName);
+
+// 친밀도 조회 라우트 추가
+router.get('/friendships',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getAllFriendships);
+
+router.get('/friendships/:personaId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getCharacterFriendship);
+
+// SSE 스트리밍 라우트 (GET)
+router.get('/stream/:roomId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.streamChatByRoom);
+
+// multer 설정: uploads 폴더에 저장, 파일 크기 제한(5MB)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB 제한

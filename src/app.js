@@ -29,6 +29,20 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// WebSocket io 인스턴스를 저장할 변수
+let ioInstance = null;
+
+// io 인스턴스를 설정하는 함수
+app.setIo = (io) => {
+  ioInstance = io;
+  app.set('io', io);
+};
+
+// io 인스턴스를 가져오는 함수
+app.getIo = () => {
+  return ioInstance || app.get('io');
+};
+
 // 기본 미들웨어
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -94,6 +108,7 @@ app.get('/metrics', async (req, res) => {
 
 // 채팅방에서 이미지 보내기 폴더
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'))); // 추가: /api/uploads도 인증 없이 서빙
 
 // 기본 라우트 (인증 없이 접근 가능)
 app.get('/', (req, res) => {
