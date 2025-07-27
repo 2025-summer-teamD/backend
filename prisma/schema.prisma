@@ -30,7 +30,6 @@ model User {
   updatedAt DateTime? @map("updated_at")
   isDeleted Boolean   @default(false) @map("is_deleted")
   personas  Persona[]
-  friendships UserCharacterFriendship[]
 
   @@map("users")
 }
@@ -47,11 +46,12 @@ model Persona {
   prompt               Json
   usesCount            Int                   @default(0) @map("uses_count")
   likesCount           Int                   @default(0) @map("likes_count")
+  exp                  Int                   @default(0) // 사용자별 경험치 (총합)
+  friendship           Int                   @default(1) // 사용자별 친밀도 레벨
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime?             @map("updated_at")
   isDeleted            Boolean               @default(false) @map("is_deleted")
   chatRoomParticipants ChatRoomParticipant[] @relation("PersonaToParticipant")
-  friendships          UserCharacterFriendship[]
 
   @@index([clerkId])
 }
@@ -78,24 +78,6 @@ model ChatRoomParticipant {
   @@index([chatroomId])
   @@index([clerkId])
   @@index([personaId])
-}
-
-// 사용자-캐릭터 친밀도 관리 (채팅방과 독립적)
-model UserCharacterFriendship {
-  id         Int      @id @default(autoincrement())
-  clerkId    String   @map("clerk_id")
-  personaId  Int      @map("persona_id")
-  user       User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
-  persona    Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  exp        Int      @default(0) // 총 경험치 (모든 채팅방에서의 합계)
-  friendship Int      @default(1) // 친밀도 레벨
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  @@unique([clerkId, personaId]) // 사용자-캐릭터 조합은 유일해야 함
-  @@index([clerkId])
-  @@index([personaId])
-  @@map("user_character_friendships")
 }
 
 model ChatLog {

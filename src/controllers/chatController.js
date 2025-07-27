@@ -87,13 +87,14 @@ const streamChatByRoom2 = async (req, res, next) => {
   req.on('close', handleClientClose);
 
   try {
-    roomId = req.params.roomId;
-    userMessage = req.body.message;
-    const { sender, timestamp } = req.body;
+    // 1. 요청 데이터 파싱
+    const { message: userMessage, sender, userName } = req.body;
+    const roomId = req.params.roomId;
+    const userId = req.auth.userId;
 
     // 입력 검증
-    if (!userMessage || !sender || !timestamp) {
-      return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
+    if (!userMessage || !sender || !userName) {
+      return responseHandler.sendBadRequest(res, 'message, sender, userName 필드가 모두 필요합니다.');
     }
 
     // 1대1 채팅방인지 확인
@@ -102,8 +103,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       return responseHandler.sendBadRequest(res, '이 채팅방은 1대다 채팅방입니다. 1대1 채팅방에서만 SSE를 사용할 수 있습니다.');
     }
 
-    // 실제 채팅방 정보를 데이터베이스에서 조회 (ChatRoomParticipant를 통해)
-    const { userId } = req.auth;
+    // 실제 채팅방 정보를 데이터베이스에서 조회
     
     // 1. 사용자가 참여한 채팅방인지 확인
     const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
@@ -114,36 +114,39 @@ const streamChatByRoom2 = async (req, res, next) => {
       include: {
         chatRoom: {
           include: {
+            participants: {
+              include: {
+                persona: true
+              }
+            },
             ChatLogs: {
               where: { isDeleted: false },
               orderBy: { time: 'desc' },
               take: 10,
-              select: { text: true, speaker: true, time: true }
+              select: { text: true, senderType: true, senderId: true, time: true }
             }
-          }
-        },
-        persona: {
-          select: {
-            id: true,
-            name: true,
-            introduction: true,
-            prompt: true
           }
         }
       }
     });
 
-    if (!participant || !participant.persona) {
-      return responseHandler.sendNotFound(res, `채팅방 ID ${roomId}를 찾을 수 없거나 1대1 채팅방이 아닙니다.`);
+    if (!participant || !participant.chatRoom) {
+      return responseHandler.sendNotFound(res, `채팅방 ID ${roomId}를 찾을 수 없습니다.`);
+    }
+
+    // AI 참여자 찾기
+    const aiParticipant = participant.chatRoom.participants.find(p => p.personaId && p.persona);
+    if (!aiParticipant || !aiParticipant.persona) {
+      return responseHandler.sendNotFound(res, '1대1 채팅방에서 AI를 찾을 수 없습니다.');
     }
 
     const chatRoom = participant.chatRoom;
     personaInfo = {
-      id: participant.persona.id,
-      name: participant.persona.name,
-      personality: participant.persona.introduction || '친근하고 도움이 되는 성격',
+      id: aiParticipant.persona.id,
+      name: aiParticipant.persona.name,
+      personality: aiParticipant.persona.introduction || '친근하고 도움이 되는 성격',
       tone: '친근하고 자연스러운 말투',
-      prompt: participant.persona.prompt
+      prompt: aiParticipant.persona.prompt
     };
 
     // 실제 대화 기록을 문자열로 변환
@@ -151,15 +154,16 @@ const streamChatByRoom2 = async (req, res, next) => {
     if (chatRoom.ChatLogs.length > 0) {
       chatHistory = chatRoom.ChatLogs
         .reverse()
-        .map(log => `${log.speaker === 'user' ? '사용자' : personaInfo.name}: ${log.text}`)
+        .map(log => `${log.senderType === 'user' ? '사용자' : personaInfo.name}: ${log.text}`)
         .join('\n');
     } else {
       chatHistory = '아직 대화 기록이 없습니다.';
     }
 
     // 첫 번째 메시지인지 확인 (사용자 메시지가 1개 이하인 경우)
-    const userMessageCount = chatRoom.ChatLogs.filter(log => log.speaker === 'user').length;
-    const isFirstMessage = userMessageCount <= 1;
+    const userMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'user').length;
+    const aiMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'ai').length;
+    const isFirstMessage = userMessageCount <= 1 && aiMessageCount === 0;
 
     // 1. 먼저 사용자 메시지를 즉시 DB에 저장
     try {
@@ -168,8 +172,9 @@ const streamChatByRoom2 = async (req, res, next) => {
           chatroomId: parseInt(roomId, 10),
           text: userMessage,
           type: 'text',
-          speaker: 'user',
-          time: new Date(timestamp)
+          senderType: 'user',
+          senderId: String(userId),
+          time: new Date()
         }
       });
       logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
@@ -196,7 +201,8 @@ const streamChatByRoom2 = async (req, res, next) => {
         userMessage,
         personaInfo,
         chatHistory,
-        isFirstMessage
+        isFirstMessage,
+        userName // 사용자 이름 전달
       );
 
       // 응답을 한 번에 전송 (스트리밍 대신)
@@ -218,13 +224,38 @@ const streamChatByRoom2 = async (req, res, next) => {
           chatroomId: parseInt(roomId, 10),
           text: fullResponseText,
           type: 'text',
-          speaker: 'ai',
+          senderType: 'ai',
+          senderId: String(personaInfo.id),
           time: new Date()
         }
       });
       
       // AI 메시지 전송 시 친밀도 증가
-      await chatService.increaseFriendship(userId, personaInfo.id, 1);
+      const expIncrease = Math.max(1, Math.floor(fullResponseText.length / 10));
+      const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
+      
+      // WebSocket을 통해 친밀도 업데이트 이벤트 전송
+      const io = req.app.getIo ? req.app.getIo() : null;
+      if (io && friendshipResult) {
+        console.log(`🔔 1대1 채팅 expUpdated 이벤트 전송:`, {
+          roomId,
+          personaId: personaInfo.id,
+          personaName: personaInfo.name,
+          newExp: friendshipResult.exp,
+          newLevel: friendshipResult.friendship,
+          expIncrease,
+          userId
+        });
+        io.to(`room-${roomId}`).emit('expUpdated', {
+          roomId,
+          personaId: personaInfo.id,
+          personaName: personaInfo.name,
+          newExp: friendshipResult.exp,
+          newLevel: friendshipResult.friendship,
+          expIncrease,
+          userId
+        });
+      }
       
       logger.logUserActivity('AI_CHAT_MESSAGE_SAVED', 'AI', {
         roomId: roomId,
@@ -234,32 +265,6 @@ const streamChatByRoom2 = async (req, res, next) => {
     } catch (dbError) {
       logger.logError('AI 메시지 저장 실패', dbError, { roomId: roomId });
       // 저장 실패해도 클라이언트에는 이미 응답을 보냈으므로 에러 로그만 남김
-    }
-
-    // 비디오 보상 체크 (선택적)
-    const videoReward = await chatService.checkAndGenerateVideoReward(
-      parseInt(roomId, 10),
-      {
-        subject: `${personaInfo.name}와의 대화`,
-        style: '밝고 따뜻한 애니메이션',
-        mood: '즐겁고 에너지 넘치게',
-        action: `사용자와 AI가 대화를 나누는 장면. 최근 메시지: ${userMessage}`,
-        duration: '10초',
-        language: '한국어'
-      }
-    );
-
-    if (videoReward && videoReward.gcsUrl) {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: videoReward.gcsUrl,
-          type: 'video',
-          speaker: 'ai',
-          time: new Date()
-        }
-      });
-      res.write(`data: ${JSON.stringify({ type: 'video_url', url: videoReward.gcsUrl })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
@@ -428,19 +433,24 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const aiParticipants = chatRoom.participants.filter(p => p.personaId && p.persona);
   // 참여자 정보 가공 (새로운 친밀도 시스템 사용)
   const participants = await Promise.all(chatRoom.participants.map(async (p) => {
-    // 새로운 친밀도 시스템에서 exp 조회
-    const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+    // Persona에서 직접 exp와 friendship 조회
+    const persona = await prismaConfig.prisma.persona.findFirst({
       where: {
-        clerkId_personaId: {
-          clerkId: userId,
-          personaId: p.personaId
-        }
+        id: p.personaId,
+        clerkId: userId,
+        isDeleted: false
       },
-      select: { exp: true, friendship: true }
+      select: {
+        exp: true,
+        friendship: true,
+        name: true,
+        imageUrl: true,
+        introduction: true
+      }
     });
     
-    const exp = friendship ? friendship.exp : 0;
-    const friendshipLevel = friendship ? friendship.friendship : 1;
+    const exp = persona ? persona.exp : 0;
+    const friendshipLevel = persona ? persona.friendship : 1;
     
     return {
       personaId: p.persona.id,
@@ -474,6 +484,9 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     }
   });
 
+  // 1대1 채팅 여부 확인
+  const isOneOnOne = await isOneOnOneChat(parsedRoomId);
+
   return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
     roomId: chatRoom.id,
     character: persona ? {
@@ -483,7 +496,8 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
       imageUrl: persona.imageUrl
     } : null,
     participants,
-    chatHistory
+    chatHistory,
+    isOneOnOne // 1대1 채팅 여부 추가
   });
 });
 
@@ -631,7 +645,8 @@ const streamChatByRoom = async (req, res, next) => {
             chatroomId: parseInt(roomId, 10),
             text: response.content,
             type: 'text',
-            speaker: 'ai',
+            senderType: 'ai',
+            senderId: response.personaId,
             time: new Date(),
             isDeleted: false,
           }
