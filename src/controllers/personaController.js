@@ -316,10 +316,15 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
 const updatePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.characterId, 10);
-  const { introduction, personality, tone, tag } = req.body;
-  const updateData = { introduction, personality, tone, tag };
+  const { name, introduction, personality, tone, tag } = req.body;
+  const updateData = { name, introduction, personality, tone, tag };
 
   const updated = await PersonaService.updatePersona(personaId, userId, updateData);
+
+  // ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
+  const cacheKeyToDelete = `user:${userId}:characters:created`;
+  await redisClient.del(cacheKeyToDelete);
+  console.log(`🧹 Cache invalidated for key: ${cacheKeyToDelete}`);
 
   // 사용자 활동 로깅
   logger.logUserActivity('UPDATE_PERSONA', userId, {
