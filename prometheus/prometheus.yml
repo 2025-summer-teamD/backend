@@ -25,8 +25,8 @@ scrape_configs:
       - targets: ['cadvisor:8080']
     scrape_interval: 5s
 
-  # Redis 메트릭
-  - job_name: 'redis'
+  # Redis 메트릭 - Redis 자체와 Redis Exporter 분리
+  - job_name: 'redis-exporter'
     static_configs:
       - targets: ['redis-exporter:9121']
     scrape_interval: 5s
@@ -41,4 +41,11 @@ scrape_configs:
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
-    scrape_interval: 5s 
+    scrape_interval: 5s
+
+  # Traefik 메트릭 추가
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    scrape_interval: 5s
+    metrics_path: '/metrics' 

@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v3.0
+    image: traefik:latest
     container_name: "traefik"
     # --- 핵심 설정 부분 ---
     env_file:
@@ -89,9 +89,6 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-
-volumes:
-  pgdata:
 
 networks:
   app-network:

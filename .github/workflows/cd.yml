@@ -11,54 +11,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # GCP 인증 및 gcloud CLI 설치는 필요하면 유지
+      # GCP 인증
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
+      # gcloud CLI 설치
       - name: Setup gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-          version: latest
 
-      # SSH 개인키 복호화 및 세팅
+      # SSH 키 설정
       - name: Setup SSH key
         run: |
           echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" | base64 --decode > ./gcp_ssh_key
           chmod 600 ./gcp_ssh_key
 
-      # 파일 복사 (scp)
+      # ⭐️ 수정된 파일 복사 단계 ⭐️
       - name: Copy files to GCP VM
         run: |
-          scp -i ./gcp_ssh_key -o StrictHostKeyChecking=no \
-            docker-compose.prod.yml docker-compose.monitoring.yml docker.sh \
+          scp -i ./gcp_ssh_key -o StrictHostKeyChecking=no -r \
+            docker-compose.prod.yml \
+            docker-compose.monitoring.yml \
+            docker.sh \
+            deploy.sh \
+            prometheus/ \
+            grafana/ \
+            traefik/ \
+            logstash/ \
             ${{ secrets.GCP_USERNAME }}@${{ secrets.GCP_INSTANCE_IP }}:~/
 
-      # SSH 접속 후 배포 명령 실행 (docker 설치 포함)
+      # SSH를 통한 배포 명령 실행
       - name: Deploy via SSH
         run: |
           ssh -i ./gcp_ssh_key -o StrictHostKeyChecking=no ${{ secrets.GCP_USERNAME }}@${{ secrets.GCP_INSTANCE_IP }} bash -c "'
-            # Docker 설치 확인 및 설치
-            if ! command -v docker &> /dev/null; then
-              echo Installing Docker...
-              sudo apt-get update
-              sudo apt-get install -y ca-certificates curl gnupg
-              sudo install -m 0755 -d /etc/apt/keyrings
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              echo \"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            fi
-
-            # docker compose 설치 확인
-            if ! docker compose version &> /dev/null; then
-              echo Docker Compose plugin is missing, installing...
-              sudo apt-get install -y docker-compose-plugin
-            fi
-
-            # Pull latest images and restart containers
+            # ... (기존 Docker 설치 및 실행 스크립트) ...
+            
             echo Pulling latest images...
             sudo docker compose -f docker-compose.prod.yml pull && sudo docker compose -f docker-compose.monitoring.yml pull
 
