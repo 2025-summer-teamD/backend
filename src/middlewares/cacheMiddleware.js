@@ -8,10 +8,16 @@ export async function cacheMyCharacters(req, res, next) {
     // 1. 인증 미들웨어(clerkAuthMiddleware)가 설정해준 사용자 ID를 가져옵니다.
     const userId = req.auth?.userId;
     // 2. 쿼리 파라미터를 가져옵니다.
-    const { type } = req.query;
+    const { type, _t } = req.query;
 
     // 사용자 ID나 type이 없으면 캐싱을 건너뜁니다.
     if (!userId || !type) {
+        return next();
+    }
+
+    // 타임스탬프가 있으면 캐시를 우회합니다 (강제 새로고침)
+    if (_t) {
+        console.log(`🔄 강제 새로고침 감지: 타임스탬프 ${_t}`);
         return next();
     }
 

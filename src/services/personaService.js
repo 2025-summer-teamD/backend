@@ -274,34 +274,39 @@ const getMyPersonas = async (userId, type = 'created') => {
   if (type === 'liked') {
     // --- 내가 좋아요 한 페르소나 조회 로직 ---
 
-    // 1. 내가 좋아요 한 ChatRoom을 먼저 찾는다.
-    const likedChatRooms = await prismaConfig.prisma.chatRoom.findMany({
+    // 1. 내가 좋아요 한 페르소나를 ChatRoomParticipant를 통해 찾는다.
+    // 중복을 방지하기 위해 distinct를 사용하여 personaId별로 고유한 레코드만 가져온다.
+    const likedParticipants = await prismaConfig.prisma.chatRoomParticipant.findMany({
       where: {
         clerkId: userId,
-        likes: true,
+        personaId: {
+          not: null
+        },
         persona: {
           isDeleted: false,
         }
       },
       include: {
         persona: true,
-      }
+      },
+      distinct: ['personaId'] // personaId 기준으로 중복 제거
     });
 
     // 2. 결과를 최종 응답 형태로 가공한다.
-    return likedChatRooms.map(room => ({
-      id: room.persona.id,
-      clerkId: room.persona.clerkId, // clerkId 필드 추가
-      name: room.persona.name,
-      imageUrl: room.persona.imageUrl,
-      introduction: room.persona.introduction,
-      prompt: room.persona.prompt,
-      creatorName: room.persona.creatorName || room.persona.user?.name || room.persona.user?.firstName || room.persona.user?.clerkId || '알 수 없음',
-      usesCount: room.persona.usesCount,
-      likesCount: room.persona.likesCount,
+    return likedParticipants.map(participant => ({
+      id: participant.persona.id,
+      clerkId: participant.persona.clerkId, // clerkId 필드 추가
+      name: participant.persona.name,
+      imageUrl: participant.persona.imageUrl,
+      introduction: participant.persona.introduction,
+      prompt: participant.persona.prompt,
+      creatorName: participant.persona.creatorName || '알 수 없음',
+      usesCount: participant.persona.usesCount,
+      likesCount: participant.persona.likesCount,
       liked: true, // 이 목록은 항상 true
-      friendship: room.friendship, // friendship 필드 사용
-      isDeleted: room.persona.isDeleted,
+      friendship: participant.persona.friendship || 1, // friendship 필드 사용
+      exp: participant.persona.exp || 0, // exp 필드 사용
+      isDeleted: participant.persona.isDeleted,
     }));
   } else {
     // --- 내가 만든 페르소나 조회 로직 ('created') ---
@@ -316,17 +321,7 @@ const getMyPersonas = async (userId, type = 'created') => {
 
     // 2. 결과를 최종 응답 형태로 가공한다.
     const personasWithExp = await Promise.all(myCreatedPersonas.map(async p => {
-      // 새로운 친밀도 시스템에서 해당 유저-캐릭터 조합의 친밀도 조회
-      const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
-        where: {
-          clerkId_personaId: {
-            clerkId: userId,
-            personaId: p.id
-          }
-        },
-        select: { exp: true, friendship: true }
-      });
-
+      // Persona에서 직접 exp와 friendship 조회
       return {
         id: p.id,
         clerkId: p.clerkId, // clerkId 필드 추가 (내가 만든 캐릭터 구분용)
@@ -338,8 +333,8 @@ const getMyPersonas = async (userId, type = 'created') => {
         usesCount: p.usesCount,
         likesCount: p.likesCount,
         liked: false, // 내가 만든 캐릭터는 찜하지 않음
-        friendship: friendship ? friendship.friendship : 1, // 새로운 친밀도 시스템 사용
-        exp: friendship ? friendship.exp : 0, // 새로운 친밀도 시스템 사용
+        friendship: p.friendship || 1, // Persona의 friendship 필드 사용
+        exp: p.exp || 0, // Persona의 exp 필드 사용
         isDeleted: p.isDeleted,
       };
     }));

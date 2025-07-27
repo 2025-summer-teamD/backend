@@ -4,6 +4,7 @@ import veo3 from '../vertexai/veo3.js';
 import { uploadImageToGCS } from './gcsService.js';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
+import redisClient from '../config/redisClient.js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
@@ -147,7 +148,8 @@ const generateAiChatResponse = async (
   userMessage,
   personaInfo,
   chatHistory,
-  otherParticipants = []
+  otherParticipants = [],
+  userName = '사용자'
 ) => {
   // 1. 내 정보 - AI로 성격, 말투, 특징 추출
   const myDetails = await extractPersonaDetails(personaInfo);
@@ -188,13 +190,14 @@ ${othersInfoText}
 - 각 AI의 이름을 정확히 사용해서 대화할 것
 - 지금 채팅방에 처음 입장했다면, 각 상대 AI에게 한 명씩 인사할 것
 - 다른 AI들이 대화할 때도 그들의 이름과 특성을 인지하고 반응할 것
-- 사용자가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
+- 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
+- 사용자의 이름(${userName})을 기억하고 언급할 것
 
 [최근 대화 기록]
 ${chatHistory}
 ---
-사용자: ${userMessage}
+${userName}: ${userMessage}
 ${personaInfo.name}:`;
 
   // 4. Google AI 호출
@@ -226,7 +229,8 @@ const generateAiChatResponseOneOnOne = async (
   userMessage,
   personaInfo,
   chatHistory,
-  isFirstMessage = false
+  isFirstMessage = false,
+  userName = '사용자'
 ) => {
   let prompt;
   
@@ -247,23 +251,28 @@ ${myInfo}
 중요 규칙:
 - 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
 - 절대 다른 성격이나 말투를 따라하지 말고, 자신의 개성을 유지할 것
-- 사용자와 1대1 대화이므로 자연스럽고 친근하게 대화할 것
+- 사용자(${userName})와 1대1 대화이므로 자연스럽고 친근하게 대화할 것
 - 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
+- 사용자의 이름(${userName})을 기억하고 언급할 것
 
 [최근 대화 기록]
 ${chatHistory}
 ---
-사용자: ${userMessage}
+${userName}: ${userMessage}
 ${personaInfo.name}:`;
   } else {
     // 이후 메시지: 간단한 컨텍스트만 사용
     prompt = `
-당신은 ${personaInfo.name}입니다. 사용자와 1대1 대화를 나누고 있습니다.
+당신은 ${personaInfo.name}입니다. 사용자(${userName})와 1대1 대화를 나누고 있습니다.
+
+중요 규칙:
+- 사용자의 이름(${userName})을 기억하고 언급할 것
+- 자신의 개성을 유지하면서 자연스럽게 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
 ---
-사용자: ${userMessage}
+${userName}: ${userMessage}
 ${personaInfo.name}:`;
   }
 
@@ -628,54 +637,60 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
   try {
     console.log(`🔍 친밀도 증가 시도: 사용자 ${userId}, 캐릭터 ${personaId}, 획득 경험치 ${expGain}`);
     
-    // 기존 친밀도 조회 또는 생성
-    let friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+    // 해당 사용자가 소유한 Persona인지 확인
+    const persona = await prismaConfig.prisma.persona.findFirst({
       where: {
-        clerkId_personaId: {
-          clerkId: userId,
-          personaId: personaId
-        }
+        id: personaId,
+        clerkId: userId,
+        isDeleted: false
       }
     });
 
-    console.log(`📊 기존 친밀도 정보:`, friendship);
-
-    if (!friendship) {
-      // 새로운 친밀도 레코드 생성
-      console.log(`🆕 새로운 친밀도 레코드 생성`);
-      friendship = await prismaConfig.prisma.userCharacterFriendship.create({
-        data: {
-          clerkId: userId,
-          personaId: personaId,
-          exp: expGain,
-          friendship: 1
-        }
-      });
-      console.log(`✅ 새 친밀도 레코드 생성 완료:`, friendship);
-    } else {
-      // 기존 친밀도 업데이트
-      const newExp = friendship.exp + expGain;
-      const newFriendshipLevel = Math.floor(newExp / 10) + 1; // 10경험치마다 레벨업
-      
-      console.log(`📈 친밀도 업데이트: ${friendship.exp} → ${newExp}, 레벨: ${friendship.friendship} → ${newFriendshipLevel}`);
-      
-      friendship = await prismaConfig.prisma.userCharacterFriendship.update({
-        where: {
-          clerkId_personaId: {
-            clerkId: userId,
-            personaId: personaId
-          }
-        },
-        data: {
-          exp: newExp,
-          friendship: newFriendshipLevel
-        }
-      });
-      console.log(`✅ 친밀도 업데이트 완료:`, friendship);
+    if (!persona) {
+      console.log(`❌ 사용자 ${userId}가 소유하지 않은 캐릭터 ${personaId}`);
+      return null;
     }
 
-    console.log(`🎉 친밀도 증가 완료: 사용자 ${userId}, 캐릭터 ${personaId}, 경험치 +${expGain}, 총 경험치: ${friendship.exp}, 친밀도: ${friendship.friendship}`);
-    return friendship;
+    console.log(`📊 기존 친밀도 정보: exp=${persona.exp}, friendship=${persona.friendship}`);
+
+    // 새로운 경험치와 친밀도 계산
+    const newExp = persona.exp + expGain;
+    const newFriendshipLevel = Math.floor(newExp / 10) + 1; // 10경험치마다 레벨업
+    
+    console.log(`📈 친밀도 업데이트: ${persona.exp} → ${newExp}, 레벨: ${persona.friendship} → ${newFriendshipLevel}`);
+    
+    // Persona 업데이트
+    const updatedPersona = await prismaConfig.prisma.persona.update({
+      where: {
+        id: personaId
+      },
+      data: {
+        exp: newExp,
+        friendship: newFriendshipLevel
+      }
+    });
+    
+    // 캐시 무효화 - 사용자의 캐릭터 목록 캐시 삭제
+    try {
+      const createdCacheKey = `user:${userId}:characters:created`;
+      const likedCacheKey = `user:${userId}:characters:liked`;
+      
+      await redisClient.del(createdCacheKey);
+      await redisClient.del(likedCacheKey);
+      
+      console.log(`🗑️ 캐시 무효화 완료: ${createdCacheKey}, ${likedCacheKey}`);
+    } catch (cacheError) {
+      console.error('❌ 캐시 무효화 실패:', cacheError);
+      // 캐시 무효화 실패는 치명적이지 않으므로 계속 진행
+    }
+    
+    console.log(`✅ 친밀도 업데이트 완료:`, updatedPersona);
+    console.log(`🎉 친밀도 증가 완료: 사용자 ${userId}, 캐릭터 ${personaId}, 경험치 +${expGain}, 총 경험치: ${updatedPersona.exp}, 친밀도: ${updatedPersona.friendship}`);
+    
+    return {
+      exp: updatedPersona.exp,
+      friendship: updatedPersona.friendship
+    };
   } catch (error) {
     console.error('❌ 친밀도 증가 실패:', error);
     throw error;
@@ -690,16 +705,19 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
  */
 const getFriendship = async (userId, personaId) => {
   try {
-    const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+    const persona = await prismaConfig.prisma.persona.findFirst({
       where: {
-        clerkId_personaId: {
-          clerkId: userId,
-          personaId: personaId
-        }
+        id: personaId,
+        clerkId: userId,
+        isDeleted: false
+      },
+      select: {
+        exp: true,
+        friendship: true
       }
     });
 
-    return friendship || { exp: 0, friendship: 1 };
+    return persona || { exp: 0, friendship: 1 };
   } catch (error) {
     console.error('친밀도 조회 실패:', error);
     return { exp: 0, friendship: 1 };
@@ -713,20 +731,27 @@ const getFriendship = async (userId, personaId) => {
  */
 const getUserFriendships = async (userId) => {
   try {
-    const friendships = await prismaConfig.prisma.userCharacterFriendship.findMany({
-      where: { clerkId: userId },
-      include: {
-        persona: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true
-          }
-        }
+    const personas = await prismaConfig.prisma.persona.findMany({
+      where: { 
+        clerkId: userId,
+        isDeleted: false
+      },
+      select: {
+        id: true,
+        name: true,
+        imageUrl: true,
+        exp: true,
+        friendship: true
       }
     });
 
-    return friendships;
+    return personas.map(persona => ({
+      personaId: persona.id,
+      name: persona.name,
+      imageUrl: persona.imageUrl,
+      exp: persona.exp,
+      friendship: persona.friendship
+    }));
   } catch (error) {
     console.error('사용자 친밀도 목록 조회 실패:', error);
     return [];
@@ -741,8 +766,10 @@ const getUserFriendships = async (userId) => {
  * @param {boolean} isFirstMessage - 첫 번째 메시지인지 여부
  * @returns {Promise<array>} 각 AI의 응답 배열
  */
-const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false) => {
+const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자') => {
   console.log('🤖 단체 채팅 AI 응답 생성 시작:', allPersonas.length, '명의 AI');
+  console.log('📝 첫 번째 메시지 여부:', isFirstMessage);
+  console.log('👤 사용자 이름:', userName);
   
   // 모든 AI의 정보를 한번에 준비
   const personasInfo = await Promise.all(
@@ -760,6 +787,8 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
       };
     })
   );
+
+  console.log('👥 참여 AI 목록:', personasInfo.map(p => p.name));
 
   // 각 AI별로 개별 응답 생성
   const responses = await Promise.all(
@@ -786,31 +815,49 @@ ${allPersonasInfo}
 중요 규칙:
 - 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
 - 다른 AI들의 정보를 참고하되, 자신의 개성을 유지할 것
-- 사용자와 다른 AI들과 함께하는 단체 대화이므로 자연스럽게 대화할 것
+- 사용자(${userName})와 다른 AI들과 함께하는 단체 대화이므로 자연스럽게 대화할 것
 - 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
 - 다른 AI들과 상호작용하면서도 자신의 개성을 유지할 것
+- 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
+- 첫 번째 메시지이므로 다른 AI들과 인사를 나누거나 서로를 소개하는 방식으로 시작할 것
+- 자신의 특성을 보여주면서도 다른 AI들과의 협력적인 분위기를 만들어갈 것
+- 다른 AI들의 이름을 정확히 기억하고 언급할 것 (${personasInfo.map(p => p.name).join(', ')})
+- 사용자의 이름(${userName})을 기억하고 언급할 것
 
 [최근 대화 기록]
 ${chatHistory}
 ---
-사용자: ${userMessage}
+${userName}: ${userMessage}
 ${persona.name}:`;
       } else {
-        // 이후 메시지: 간단한 컨텍스트만 사용
+        // 이후 메시지: 간단한 컨텍스트만 사용하되 다른 AI 정보도 포함
+        const otherPersonas = personasInfo.filter(p => p.id !== persona.id);
+        const otherPersonasInfo = otherPersonas.map(p => `${p.name}`).join(', ');
+        
         individualPrompt = `
-당신은 ${persona.name}입니다. 사용자와 다른 AI들과 함께 단체 대화를 나누고 있습니다.
+당신은 ${persona.name}입니다. 사용자(${userName})와 다른 AI들(${otherPersonasInfo})과 함께 단체 대화를 나누고 있습니다.
+
+중요 규칙:
+- 다른 AI들의 이름을 정확히 기억하고 언급할 것 (${personasInfo.map(p => p.name).join(', ')})
+- 사용자의 이름(${userName})을 기억하고 언급할 것
+- 자신의 개성을 유지하면서도 다른 AI들과 자연스럽게 대화할 것
+- 다른 AI들의 말에 반응하고 상호작용할 것
+- 대화 기록에서 다른 AI들의 이름을 확인하고 그들의 말에 직접적으로 반응할 것
+- 다른 AI들이 언급한 내용에 대해 의견을 제시하거나 질문할 것
+- 단체 대화의 맥락을 유지하면서 자신의 개성을 드러낼 것
 
 [최근 대화 기록]
 ${chatHistory}
 ---
-사용자: ${userMessage}
+${userName}: ${userMessage}
 ${persona.name}:`;
       }
 
       try {
         console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
+        console.log(`📝 ${persona.name} 프롬프트 (첫 200자):`, individualPrompt.trim().substring(0, 200) + '...');
         const response = await gemini25.generateText(individualPrompt.trim());
-        console.log(`✅ ${persona.name} AI 응답 완료`);
+        console.log(`✅ ${persona.name} AI 응답 완료:`, response.substring(0, 100) + '...');
         return {
           personaId: persona.id,
           personaName: persona.name,

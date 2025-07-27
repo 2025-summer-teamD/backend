@@ -233,22 +233,25 @@ const getCommunityPersonaDetails = errorHandler.asyncHandler(async (req, res) =>
  */
 const getMyPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  const { type } = req.query;
+  const { type, _t } = req.query;
 
   const personas = await PersonaService.getMyPersonas(userId, type);
 
-  // ★★★ 중요: 조회된 데이터를 Redis에 저장 ★★★
-  // 1. 미들웨어와 동일한 규칙으로 캐시 키를 생성합니다.
-  const cacheKey = `user:${userId}:characters:${type}`;
+  // 타임스탬프가 있으면 캐시를 건너뜁니다 (강제 새로고침)
+  if (!_t) {
+    // ★★★ 중요: 조회된 데이터를 Redis에 저장 ★★★
+    // 1. 미들웨어와 동일한 규칙으로 캐시 키를 생성합니다.
+    const cacheKey = `user:${userId}:characters:${type}`;
 
-
-
-  // 2. Redis에 데이터를 저장합니다. JSON.stringify()로 문자열 변환이 필수입니다.
-  //    'EX' 옵션으로 만료 시간(초)을 설정하는 것을 강력히 권장합니다. (예: 1시간)
-  await redisClient.set(cacheKey, JSON.stringify(personas), {
-    EX: 3600, // 1시간(3600초) 후 자동 삭제
-  });
-  console.log(`💾 Data cached for key: ${cacheKey}`);
+    // 2. Redis에 데이터를 저장합니다. JSON.stringify()로 문자열 변환이 필수입니다.
+    //    'EX' 옵션으로 만료 시간(초)을 설정하는 것을 강력히 권장합니다. (예: 1시간)
+    await redisClient.set(cacheKey, JSON.stringify(personas), {
+      EX: 3600, // 1시간(3600초) 후 자동 삭제
+    });
+    console.log(`💾 Data cached for key: ${cacheKey}`);
+  } else {
+    console.log(`🔄 강제 새로고침으로 인한 캐시 건너뛰기`);
+  }
 
   return responseHandler.sendSuccess(res, 200, '나의 페르소나 목록을 조회했습니다.', personas, {
     totalElements: personas.length
@@ -266,35 +269,40 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
   const personaId = parseInt(req.params.characterId, 10);
   const { userId } = req.auth;
 
-  // 새로운 친밀도 시스템에서 exp 조회
-  const friendship = await prismaConfig.prisma.userCharacterFriendship.findUnique({
+  // Persona에서 직접 exp와 friendship 조회
+  const persona = await prismaConfig.prisma.persona.findFirst({
     where: {
-      clerkId_personaId: {
-        clerkId: userId,
-        personaId: personaId
-      }
+      id: personaId,
+      clerkId: userId,
+      isDeleted: false
     },
-    select: { exp: true, friendship: true }
+    select: {
+      exp: true,
+      friendship: true
+    }
   });
   
   let exp = 0;
   let friendshipLevel = 1;
-  if (friendship) {
-    exp = friendship.exp;
-    friendshipLevel = friendship.friendship;
+  if (persona) {
+    exp = persona.exp;
+    friendshipLevel = persona.friendship;
   }
-  const persona = await PersonaService.getPersonaDetails({
+  
+  const personaDetails = await PersonaService.getPersonaDetails({
     personaId,
     ownerId: userId,
     currentUserId: userId,
   });
 
-  if (!persona) {
+  if (!personaDetails) {
     return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
   }
-  persona.exp = exp;
+  
+  personaDetails.exp = exp;
+  personaDetails.friendship = friendshipLevel;
 
-  return responseHandler.sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', persona);
+  return responseHandler.sendSuccess(res, 200, '나의 페르소나 정보를 조회했습니다.', personaDetails);
 });
 
 
