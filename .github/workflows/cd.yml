@@ -13,6 +13,7 @@ jobs:
 
       # GCP 인증
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
@@ -22,6 +23,10 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # GOOGLE_APPLICATION_CREDENTIALS 환경 변수 설정
+      - name: Set Google Application Credentials
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=${{ steps.auth.outputs.credentials_file_path }}" >> $GITHUB_ENV
 
       # SSH 키 설정
       - name: Setup SSH key
@@ -33,6 +38,7 @@ jobs:
       - name: Copy files to GCP VM
         run: |
           scp -i ./gcp_ssh_key -o StrictHostKeyChecking=no -r \
+            Dockerfile \
             docker-compose.prod.yml \
             docker-compose.monitoring.yml \
             docker.sh \
