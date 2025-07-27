@@ -16,6 +16,13 @@ import prismaConfig from '../config/prisma.js';
 import responseHandler from '../utils/responseHandler.js';
 import logger from '../utils/logger.js';
 import errorHandler from '../middlewares/errorHandler.js';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+
+const elevenlabs = new ElevenLabsClient({
+
+  apiKey: process.env.XI_API_KEY,
+
+});
 
 /**
  * 채팅 EXP 계산 함수
@@ -51,7 +58,7 @@ const getLevel = (exp) => {
 const isOneOnOneChat = async (roomId) => {
   // ChatRoomParticipant를 통해 1대1 채팅인지 확인
   const participants = await prismaConfig.prisma.chatRoomParticipant.findMany({
-    where: { 
+    where: {
       chatroomId: parseInt(roomId, 10),
       personaId: { not: null } // AI 참가자가 있는 경우만
     },
@@ -59,14 +66,14 @@ const isOneOnOneChat = async (roomId) => {
       persona: true
     }
   });
-  
+
   // 1대1 채팅: AI 참가자가 1명이고, personaId가 있는 경우
   return participants.length === 1 && participants[0].personaId !== null;
 };
 
 /**
  * 1대1 채팅 전용 SSE 스트리밍 응답 생성
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -104,7 +111,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     }
 
     // 실제 채팅방 정보를 데이터베이스에서 조회
-    
+
     // 1. 사용자가 참여한 채팅방인지 확인
     const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
       where: {
@@ -208,7 +215,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       // 응답을 한 번에 전송 (스트리밍 대신)
       fullResponseText = aiResponseText;
       res.write(`data: ${JSON.stringify({ type: 'text_chunk', content: aiResponseText })}\n\n`);
-      
+
     } catch (aiError) {
       logger.logError('AI 응답 생성 중 오류 발생', aiError, { roomId: roomId });
       res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 생성 중 오류가 발생했습니다.' })}\n\n`);
@@ -229,11 +236,11 @@ const streamChatByRoom2 = async (req, res, next) => {
           time: new Date()
         }
       });
-      
+
       // AI 메시지 전송 시 친밀도 증가
       const expIncrease = Math.max(1, Math.floor(fullResponseText.length / 10));
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
-      
+
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
       const io = req.app.getIo ? req.app.getIo() : null;
       if (io && friendshipResult) {
@@ -256,7 +263,7 @@ const streamChatByRoom2 = async (req, res, next) => {
           userId
         });
       }
-      
+
       logger.logUserActivity('AI_CHAT_MESSAGE_SAVED', 'AI', {
         roomId: roomId,
         personaName: personaInfo.name,
@@ -311,19 +318,19 @@ const getMyChats = errorHandler.asyncHandler(async (req, res) => {
 const createMultiChatRoom = errorHandler.asyncHandler(async (req, res) => {
   const { participantIds } = req.body;
   const { userId } = req.auth;
-  
+
   console.log('createMultiChatRoom - participantIds:', participantIds);
   console.log('createMultiChatRoom - userId:', userId);
-  
+
   if (!Array.isArray(participantIds) || participantIds.length < 1) {
     console.log('createMultiChatRoom - validation failed: participantIds is not array or empty');
     return responseHandler.sendBadRequest(res, '참가자 배열이 1명 이상 필요합니다.');
   }
-  
+
   // 현재 사용자도 참가자로 추가
   const allParticipantIds = [userId, ...participantIds];
   console.log('createMultiChatRoom - allParticipantIds:', allParticipantIds);
-  
+
   // 이미 동일한 참가자 조합의 방이 있으면 반환, 없으면 새로 생성
   const result = await chatService.createMultiChatRoom(allParticipantIds);
   console.log('createMultiChatRoom - result:', result);
@@ -338,11 +345,11 @@ const createMultiChatRoom = errorHandler.asyncHandler(async (req, res) => {
 const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
   const { participantIds, personaId } = req.body;
   const { userId } = req.auth;
-  
+
   console.log('createChatRoom - participantIds:', participantIds);
   console.log('createChatRoom - personaId:', personaId);
   console.log('createChatRoom - userId:', userId);
-  
+
   // 1대1 채팅인 경우 (personaId가 있는 경우)
   if (personaId) {
     console.log('createChatRoom - 1대1 채팅 생성');
@@ -350,26 +357,26 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
     console.log('createChatRoom - 1대1 채팅 결과:', result);
     return responseHandler.sendSuccess(res, 201, '1대1 채팅방이 생성되었습니다.', result);
   }
-  
+
   // 단체 채팅인 경우 (participantIds가 있는 경우)
   if (!Array.isArray(participantIds) || participantIds.length < 1) {
     console.log('createChatRoom - validation failed: participantIds is not array or empty');
     return responseHandler.sendBadRequest(res, '참가자 배열이 1명 이상 필요합니다.');
   }
-  
+
   // 현재 사용자도 참가자로 추가
   const allParticipantIds = [userId, ...participantIds];
   console.log('createChatRoom - allParticipantIds:', allParticipantIds);
-  
+
   // 이미 동일한 참가자 조합의 방이 있으면 반환, 없으면 새로 생성
   const result = await chatService.createMultiChatRoom(allParticipantIds);
   console.log('createChatRoom - result:', result);
-  
+
   // 새로 생성된 채팅방인 경우 프론트엔드에서 자동 인사 처리
   if (result.isNewRoom) {
     console.log('🎉 새로운 채팅방 생성됨 - 프론트엔드에서 자동 인사 처리 예정');
   }
-  
+
   return responseHandler.sendSuccess(res, 201, '채팅방이 생성되었습니다.', result);
 });
 
@@ -448,10 +455,10 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
         introduction: true
       }
     });
-    
+
     const exp = persona ? persona.exp : 0;
     const friendshipLevel = persona ? persona.friendship : 1;
-    
+
     return {
       personaId: p.persona.id,
       clerkId: userId,
@@ -543,7 +550,7 @@ const updateChatRoomName = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 1대다 채팅용 스트리밍 채팅 응답 생성 (기존 WebSocket 방식)
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -569,27 +576,27 @@ const streamChatByRoom = async (req, res, next) => {
       // 채팅방 정보 및 모든 참여자(AI 포함) 조회
       const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
         where: { id: parseInt(roomId, 10) },
-        include: { 
-          participants: { 
+        include: {
+          participants: {
             include: { persona: true } // persona 정보도 함께 가져오기
-          } 
+          }
         },
       });
-      
+
       // 모든 AI(페르소나) 참여자 목록 - personaId가 있는 참여자들만 필터링하고 중복 제거
       const aiParticipants = chatRoom.participants
         .filter(p => p.personaId && p.persona)
-        .filter((p, idx, arr) => 
+        .filter((p, idx, arr) =>
           arr.findIndex(x => x.personaId === p.personaId) === idx
         );
-      
+
       console.log(`📋 채팅방 ${roomId}의 AI 참여자들:`, aiParticipants.map(p => ({
         id: p.persona.id,
         name: p.persona.name,
         personality: p.persona.personality,
         tone: p.persona.tone
       })));
-      
+
       // 최근 10개 메시지 조회
       const recentLogs = await prismaConfig.prisma.chatLog.findMany({
         where: { chatroomId: chatRoom.id, isDeleted: false },
@@ -597,17 +604,17 @@ const streamChatByRoom = async (req, res, next) => {
         take: 10,
         select: { text: true, senderType: true, senderId: true, time: true }
       });
-      
+
       // 대화 기록을 문자열로 변환
       const chatHistory = recentLogs
         .reverse()
         .map(log => `${log.senderType === 'user' ? '사용자' : `AI(${log.senderId})`}: ${log.text}`)
         .join('\n');
-      
+
       // 첫 번째 메시지인지 확인 (사용자 메시지가 1개 이하인 경우)
       const userMessageCount = recentLogs.filter(log => log.senderType === 'user').length;
       const isFirstMessage = userMessageCount <= 1;
-      
+
       // 1. 사용자 메시지 저장
       await prismaConfig.prisma.chatLog.create({
         data: {
@@ -619,14 +626,14 @@ const streamChatByRoom = async (req, res, next) => {
           time: new Date(timestamp)
         }
       });
-      
+
       // 2. 모든 AI(페르소나)마다 한 번씩 응답 생성/저장
       // 단체 채팅: 모든 AI가 동시에 응답
       console.log('💬 단체 채팅 AI 응답 생성 시작');
-      
+
       // 모든 AI 정보 수집
       const allPersonas = aiParticipants.map(p => p.persona);
-      
+
       // 새로운 최적화된 단체 채팅 함수 사용
       const aiResponses = await chatService.generateAiChatResponseGroup(
         message,
@@ -634,9 +641,9 @@ const streamChatByRoom = async (req, res, next) => {
         chatHistory,
         isFirstMessage
       );
-      
+
       console.log('✅ 단체 채팅 AI 응답 생성 완료:', aiResponses.length, '개의 응답');
-      
+
       // 각 AI 응답을 DB에 저장하고 친밀도 증가
       for (const response of aiResponses) {
         // AI 응답을 DB에 저장
@@ -651,19 +658,19 @@ const streamChatByRoom = async (req, res, next) => {
             isDeleted: false,
           }
         });
-        
+
         // 새로운 친밀도 시스템으로 증가
         const expIncrease = calculateExp(response.content);
         console.log(`🔍 ${response.personaName} 친밀도 증가 시도: 경험치 +${expIncrease}`);
         await chatService.increaseFriendship(userId, response.personaId, expIncrease);
-        
+
         // 현재 친밀도 정보 조회
         const friendship = await chatService.getFriendship(userId, response.personaId);
         const newExp = friendship.exp;
         const newLevel = friendship.friendship;
-         
+
         console.log(`✅ AI ${response.personaName} 친밀도 ${expIncrease} 증가. 총 경험치: ${newExp}, 레벨: ${newLevel}`);
-         
+
         // 소켓으로 친밀도 업데이트 정보 전송
         const io = req.app.get && req.app.get('io') ? req.app.get('io') : null;
         if (io) {
@@ -731,7 +738,7 @@ const getCharacterFriendship = async (req, res, next) => {
     const { userId } = req.auth;
 
     const friendship = await chatService.getFriendship(userId, parseInt(personaId, 10));
-    
+
     return responseHandler.sendSuccess(res, 200, '친밀도 조회 성공', friendship);
   } catch (error) {
     logger.logError('친밀도 조회 실패', error, { personaId: req.params.personaId });
@@ -747,11 +754,97 @@ const getAllFriendships = async (req, res, next) => {
     const { userId } = req.auth;
 
     const friendships = await chatService.getUserFriendships(userId);
-    
+
     return responseHandler.sendSuccess(res, 200, '친밀도 목록 조회 성공', friendships);
   } catch (error) {
     logger.logError('친밀도 목록 조회 실패', error);
     return responseHandler.sendServerError(res, '친밀도 목록 조회에 실패했습니다.');
+  }
+};
+
+/**
+ * AI 채팅을 TTS로 변경
+ *
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const getTts = async (req, res, next) => {
+  try {
+    const { userId } = req.auth;
+    const { roomId, chatLogId } = req.params;
+
+    console.log('DEBUG: In getTts - roomId:', roomId);
+    console.log('DEBUG: In getTts - chatLogId:', chatLogId);
+    console.log('DEBUG: In getTts - typeof chatLogId:', typeof chatLogId);
+
+    const chatLog = await chatService.getChatLog(chatLogId);
+
+    if (!chatLog) {
+      return res.status(404).json({ error: '해당 chatLogId를 찾을 수 없습니다.' });
+    }
+
+    // if (chatLog.senderType !== 'ai') {
+    //   return res.status(403).json({ error: 'TTS는 AI가 보낸 메시지에 대해서만 요청할 수 있습니다.' });
+    // }
+
+    const textToConvert = chatLog.text;
+
+    if (!textToConvert || textToConvert.trim().length === 0) {
+        return res.status(400).json({ error: 'TTS 변환할 텍스트가 비어있거나 유효하지 않습니다.' });
+    }
+
+    // 6. Eleven Labs API 호출하여 TTS 스트림 받기 (웹 표준 ReadableStream)
+    const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert("JBFqnCBsd6RMkjVDRZzb", {
+      outputFormat: "mp3_44100_128", // MP3 형식임을 명시
+      text: textToConvert,
+      modelId: "eleven_multilingual_v2"
+    });
+
+    // **핵심 변경 부분:**
+    // 웹 표준 ReadableStream을 Node.js Buffer로 변환합니다.
+    // 이는 `stream.Readable.from()` 또는 `new Response(stream).arrayBuffer()` 등을 사용할 수 있습니다.
+    // 가장 간단한 방법은 `Response` 객체를 사용하여 `arrayBuffer()`로 변환하는 것입니다.
+    let ttsAudioBuffer;
+    if (elevenLabsResponseStream instanceof ReadableStream) {
+        // 웹 표준 ReadableStream을 ArrayBuffer로 변환
+        const response = new Response(elevenLabsResponseStream);
+        const arrayBuffer = await response.arrayBuffer();
+        ttsAudioBuffer = Buffer.from(arrayBuffer); // ArrayBuffer를 Node.js Buffer로 변환
+    } else if (Buffer.isBuffer(elevenLabsResponseStream)) {
+        // 혹시 모를 경우를 대비하여 이미 Buffer인 경우 처리
+        ttsAudioBuffer = elevenLabsResponseStream;
+    } else {
+        // 예상치 못한 반환값인 경우
+        console.error('CRITICAL ERROR: Eleven Labs API가 예상된 ReadableStream 또는 Buffer를 반환하지 않았습니다. 실제 반환값:', elevenLabsResponseStream);
+        return res.status(500).json({ error: '음성 데이터를 생성하는 데 실패했습니다. (API 반환 타입 문제)' });
+    }
+
+    // 변환된 ttsAudioBuffer가 유효한지 확인
+    if (!ttsAudioBuffer || !Buffer.isBuffer(ttsAudioBuffer) || ttsAudioBuffer.length === 0) {
+        console.error('ERROR: Eleven Labs API 응답을 유효한 오디오 버퍼로 변환하지 못했습니다. 실제 버퍼:', ttsAudioBuffer);
+        return res.status(500).json({ error: '음성 데이터를 생성하는 데 실패했습니다. (버퍼 변환 문제)' });
+    }
+
+    // 7. TTS 오디오 Buffer를 클라이언트로 응답 (단일 파일 전송 방식)
+    res.writeHead(200, {
+      'Content-Type': 'audio/mpeg', // MP3 MIME 타입 지정
+      'Content-Length': ttsAudioBuffer.length, // 버퍼의 실제 길이 지정
+      'Cache-Control': 'no-cache', // 캐싱 방지 (필요에 따라 설정)
+    });
+
+    res.end(ttsAudioBuffer); // 버퍼 데이터를 직접 응답으로 전송
+
+    console.log(`TTS for chatLogId ${chatLogId} successfully sent as MP3.`);
+
+  } catch (error) {
+    console.error('TTS 변환 중 치명적인 오류 발생:', error);
+    if (!res.headersSent) {
+        res.status(500).json({ error: '음성 생성에 실패했습니다.' });
+    } else {
+        console.warn('TTS 응답 도중 에러가 발생했으나, 이미 헤더가 전송되었습니다.');
+        res.end();
+    }
   }
 };
 
@@ -766,4 +859,5 @@ export default {
   updateChatRoomName,
   getCharacterFriendship,
   getAllFriendships,
+  getTts
 };
