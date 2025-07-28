@@ -37,6 +37,8 @@ services:
       - app-network
     env_file:
       - .env
+    ports:
+      - "3001:3001"
     labels:
       - "traefik.enable=true"
       # 백엔드 라우터 (api.anima.io.kr)

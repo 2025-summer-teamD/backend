@@ -233,6 +233,27 @@ const generateAiChatResponseOneOnOne = async (
   isFirstMessage = false,
   userName = '사용자'
 ) => {
+  // 1. 이미지 메시지 여부 확인 ([이미지] {url}) 패턴)
+  const imageRegex = /^\[이미지\]\s+(.+)/;
+  const imageMatch = userMessage.match(imageRegex);
+
+  // 이미지 메시지인 경우 → 멀티모달 호출
+  if (imageMatch) {
+    const imageUrl = imageMatch[1].trim();
+    try {
+      console.log('🖼️ Gemini 멀티모달 호출 (image + text)...', imageUrl);
+
+      // 캐릭터 설정을 포함한 프롬프트
+      const promptText = `당신은 "${personaInfo.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.\n- 성격: ${personaInfo.personality}\n- 말투: ${personaInfo.tone}`;
+
+      const aiResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
+      return aiResponse;
+    } catch (error) {
+      console.error('❌ Gemini 이미지 응답 실패:', error.message);
+      return `죄송해요, 이미지를 읽는 데 문제가 발생했습니다. 다른 이미지를 보내주시겠어요?`;
+    }
+  }
+
   // 게임 모드 감지
   const gameMode = detectGameMode(userMessage);
   
@@ -715,7 +736,13 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
 
     // 새로운 경험치와 친밀도 계산
     const newExp = persona.exp + expGain;
-    const newFriendshipLevel = Math.floor(newExp / 10) + 1; // 10경험치마다 레벨업
+    
+    // 30레벨 시스템: 공식으로 계산
+    let newFriendshipLevel = 1;
+    if (newExp >= 10) {
+      newFriendshipLevel = Math.floor((-1 + Math.sqrt(1 + 8 * newExp / 10)) / 2) + 1;
+      newFriendshipLevel = Math.min(newFriendshipLevel, 30); // 최대 30레벨
+    }
 
     console.log(`📈 친밀도 업데이트: ${persona.exp} → ${newExp}, 레벨: ${persona.friendship} → ${newFriendshipLevel}`);
 
@@ -871,6 +898,46 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
   console.log('🤖 단체 채팅 AI 응답 생성 시작:', allPersonas.length, '명의 AI');
   console.log('📝 첫 번째 메시지 여부:', isFirstMessage);
   console.log('👤 사용자 이름:', userName);
+
+  // 1. 이미지 메시지 여부 확인 ([이미지] {url}) 패턴)
+  const imageRegex = /^\[이미지\]\s+(.+)/;
+  const imageMatch = userMessage.match(imageRegex);
+
+  // 이미지 메시지인 경우 → 멀티모달 호출
+  if (imageMatch) {
+    const imageUrl = imageMatch[1].trim();
+    console.log(`🖼️ 단체 채팅 이미지 감지: ${imageUrl}`);
+    
+    // 각 AI가 이미지에 대해 개별적으로 반응
+    const imageResponses = await Promise.all(
+      allPersonas.map(async (persona) => {
+        try {
+          console.log(`🖼️ ${persona.name} 이미지 처리 시작`);
+          
+          // 캐릭터 설정을 포함한 프롬프트
+          const promptText = `당신은 "${persona.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.\n- 성격: ${persona.personality || '친근하고 활발한'}\n- 말투: ${persona.tone || '친근하고 자연스러운'}`;
+
+          const imageResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
+          console.log(`✅ ${persona.name} 이미지 응답:`, imageResponse);
+          
+          return {
+            personaId: persona.id,
+            personaName: persona.name,
+            content: imageResponse
+          };
+        } catch (error) {
+          console.error(`❌ ${persona.name} 이미지 처리 실패:`, error.message);
+          return {
+            personaId: persona.id,
+            personaName: persona.name,
+            content: `죄송해요, 이미지를 읽는 데 문제가 발생했습니다. 다른 이미지를 보내주시겠어요?`
+          };
+        }
+      })
+    );
+    
+    return imageResponses;
+  }
 
   // 일반 대화 모드
   const personasInfo = await Promise.all(
