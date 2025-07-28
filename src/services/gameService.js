@@ -4,6 +4,7 @@
  */
 
 import gemini25 from '../vertexai/gemini25.js';
+import crypto from 'crypto';
 
 /**
  * 끝말잇기 게임 모드 감지
@@ -71,7 +72,7 @@ const generateTwentyQuestionsStartPrompt = (personaInfo) => {
   
   // 다양한 주제들
   const topics = ['동물', '음식', '직업', '나라', '도시', '영화', '책', '운동', '색깔', '음악'];
-  const randomTopic = topics[Math.floor(Math.random() * topics.length)];
+  const randomTopic = topics[crypto.randomInt(0, topics.length)];
   
   return `
 당신은 ${personaName}입니다. 스무고개 게임을 시작하려고 합니다.
