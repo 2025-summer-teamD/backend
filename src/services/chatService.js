@@ -233,6 +233,7 @@ const generateAiChatResponseOneOnOne = async (
   isFirstMessage = false,
   userName = '사용자'
 ) => {
+
   // 게임 모드 감지
   const gameMode = detectGameMode(userMessage);
   
@@ -715,7 +716,13 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
 
     // 새로운 경험치와 친밀도 계산
     const newExp = persona.exp + expGain;
-    const newFriendshipLevel = Math.floor(newExp / 10) + 1; // 10경험치마다 레벨업
+    
+    // 30레벨 시스템: 공식으로 계산
+    let newFriendshipLevel = 1;
+    if (newExp >= 10) {
+      newFriendshipLevel = Math.floor((-1 + Math.sqrt(1 + 8 * newExp / 10)) / 2) + 1;
+      newFriendshipLevel = Math.min(newFriendshipLevel, 30); // 최대 30레벨
+    }
 
     console.log(`📈 친밀도 업데이트: ${persona.exp} → ${newExp}, 레벨: ${persona.friendship} → ${newFriendshipLevel}`);
 
