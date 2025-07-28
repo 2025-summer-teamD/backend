@@ -11,7 +11,7 @@ ARG NODE_ENV=production
 ENV NODE_ENV=$NODE_ENV
 
 # 의존성 설치 (보안 강화 + 안정적인 방법)
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Prisma 클라이언트 생성을 위해 prisma 스키마 먼저 복사
 COPY prisma ./prisma
