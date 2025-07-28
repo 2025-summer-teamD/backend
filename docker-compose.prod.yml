@@ -1,103 +1,74 @@
 services:
   traefik:
-    image: traefik:latest
+    image: traefik:v3.0
     container_name: "traefik"
-    # --- 핵심 설정 부분 ---
     env_file:
-    - .env  
+      - .env
     command:
-      # Docker를 서비스 제공자(Provider)로 사용하겠다고 선언
-      - --providers.docker=true
-      # 보안을 위해 기본적으로 생성되는 라우터를 비활성화
-      - --providers.docker.exposedbydefault=false
-      # 웹 대시보드를 활성화하고, 8080 포트로 접근하게 함
-      - --api.insecure=true
-      - --api.dashboard=true
-      # HTTP(80)와 HTTPS(443) 요청을 받을 진입점(EntryPoints) 설정
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      # (선택) HTTP 요청을 HTTPS로 리디렉션
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      # (HTTPS용) Let's Encrypt 설정
-      - --certificatesresolvers.myresolver.acme.httpchallenge=true
-      - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}
-      - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/etc/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--log.level=INFO"
     ports:
-      # 호스트의 80 포트를 컨테이너의 80 포트로 매핑 (HTTP)
       - "80:80"
-      # 호스트의 443 포트를 컨테이너의 443 포트로 매핑 (HTTPS)
       - "443:443"
-      # 호스트의 8080 포트를 컨테이너의 8080 포트로 매핑 (Traefik 대시보드)
       - "8080:8080"
     volumes:
-      # Docker 소켓을 마운트하여 Traefik이 다른 컨테이너의 이벤트를 감지하게 함
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      # Let's Encrypt 인증서를 저장할 볼륨 (서버 재시작 시에도 유지)
-      - "./letsencrypt:/letsencrypt"
-      # Traefik 설정 파일들 마운트
-      - "./traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
-      - "./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
+      - "./letsencrypt:/etc/letsencrypt"
     networks:
       - app-network
     restart: unless-stopped
 
-  app:
+  app: # 백엔드 API 서비스
     build: .
     image: ${DOCKER_HUB_USERNAME}/your-repo-name:main
     container_name: express_app
-    ports:
-      - 3001:3001
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      PORT: 3001
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      redis:
-        condition: service_started
-    restart: unless-stopped
     networks:
       - app-network
+    env_file:
+      - .env
     labels:
-      # 이 서비스에 대한 라우팅을 활성화
-      - traefik.enable=true
-      
-      # --- HTTP 라우터 설정 (모든 경로) ---
-      - traefik.http.routers.api-router.rule=Host(`api.${DOMAIN}`)
-      - traefik.http.routers.api-router.entrypoints=web
-      - traefik.http.routers.api-router.service=api-service
-      
-      # --- HTTPS 라우터 설정 (모든 경로) ---
-      - traefik.http.routers.api-router-secure.rule=Host(`api.${DOMAIN}`)
-      - traefik.http.routers.api-router-secure.entrypoints=websecure
-      - traefik.http.routers.api-router-secure.tls=true
-      - traefik.http.routers.api-router-secure.tls.certresolver=myresolver
-      - traefik.http.routers.api-router-secure.service=api-service
-      
-      # --- 서비스 설정 ---
-      - traefik.http.services.api-service.loadbalancer.server.port=3001
-      
-      # --- 미들웨어 설정 (CORS 등) ---
-      - traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE,PATCH
-      - traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*
-      - traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=*
-      - traefik.http.middlewares.api-cors.headers.accesscontrolmaxage=100
-      - traefik.http.middlewares.api-cors.headers.addvaryheader=true
-      
-      # --- 라우터에 미들웨어 적용 ---
-      - traefik.http.routers.api-router.middlewares=api-cors
-      - traefik.http.routers.api-router-secure.middlewares=api-cors
+      - "traefik.enable=true"
+      # 백엔드 라우터 (api.anima.io.kr)
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=myresolver"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      # CORS 미들웨어 설정
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://anima.io.kr,http://localhost:5173"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.routers.api.middlewares=cors"
     command: npm run start
+
+  # frontend: # 프론트엔드 서비스 (예시, 실제 서비스명에 맞게 수정)
+  #   image: your-frontend-image:latest
+  #   container_name: frontend_app
+  #   networks:
+  #     - app-network
+  #   labels:
+  #     - "traefik.enable=true"
+  #     # 프론트엔드 라우터 (anima.io.kr)
+  #     - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+  #     - "traefik.http.routers.frontend.entrypoints=websecure"
+  #     - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+  #     - "traefik.http.services.frontend.loadbalancer.server.port=80" # 프론트엔드 컨테이너 포트
 
   redis:
     image: redis:7
     container_name: redis_server
     ports:
-      - 6379:6379
+      - "6379:6379"
     restart: unless-stopped
     networks:
       - app-network
