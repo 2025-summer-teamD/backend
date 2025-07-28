@@ -114,19 +114,7 @@ async function generateCharacterWithPerplexity(characterName) {
           },
          {
            role: 'user',
-           content: `${characterName}에 대해 검색해서 알려주세요. 이 인물/캐릭터가 누구인지, 어떤 특징이 있는지 자세히 설명해주세요. 아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요
-
-아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요:
-
-{
- "description": "${characterName}에 대한 상세하고 디테일한 캐릭터적 소개를 검색하여 요약. 특히 주목해야할 특징위주로 (3-4문장)",
- "prompt": {
-   "tone": "${characterName}의 대표적인 말투 혹은 유행어",
-   "personality": "${characterName}의 성격을 아주 디테일하고 자세하게 묘사",
-   "tag": "${characterName}를 대표하는 해시태그 4가지 (직업, 성별, 성격, 특징) (쉼표로 구분, # 제외)",
-   "ImageUrl": []
- }
-}`
+           content: `${characterName}에 대해 검색해서 알려주세요. 이 인물/캐릭터가 누구인지, 어떤 특징이 있는지 자세히 설명해주세요. 아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요\n\n아래 JSON 형식에 맞춰 ${characterName}의 실제 정보로 상세 설정을 한국어로 생성해주세요:\n\n{\n \"description\": \"${characterName}에 대한 상세하고 디테일한 캐릭터적 소개를 검색하여 요약. 특히 주목해야할 특징위주로 (3-4문장)\",\n \"prompt\": {\n   \"tone\": \"${characterName}의 대표적인 말투 혹은 유행어\",\n   \"personality\": \"${characterName}의 성격을 아주 디테일하고 자세하게 묘사\",\n   \"tag\": \"${characterName}를 대표하는 해시태그 4가지 (직업, 성별, 성격, 특징) (쉼표로 구분, # 제외)\",\n   \"ImageUrl\": []\n }\n}`
          }
        ],
        search_recency_filter: 'year',
@@ -180,11 +168,9 @@ async function generateCharacterWithPerplexity(characterName) {
  */
 const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 보고 자세히 설명해줘') => {
   try {
-    // 이미지 파일을 다운로드해 base64로 인코딩 (inlineData 사용)
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
 
-    // 간단한 MIME 타입 추정
     let mimeType = 'image/jpeg';
     if (imageUrl.endsWith('.png')) mimeType = 'image/png';
     else if (imageUrl.endsWith('.webp')) mimeType = 'image/webp';
@@ -217,7 +203,6 @@ const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 �
   }
 };
 
-
 export default {
   generateText,
   generatePersonaDetailsWithGemini,
@@ -225,6 +210,3 @@ export default {
   generateCharacterWithPerplexity,
   generateTextWithImage,
 };
-
-
-

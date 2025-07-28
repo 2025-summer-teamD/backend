@@ -1,9 +1,9 @@
 /**
  * 채팅 컨트롤러
- *
+ * 
  * 사용 위치:
  * - chatRoutes.js에서 라우터 연결
- *
+ * 
  * 기능:
  * - 채팅방 관리
  * - AI 채팅 응답 생성
@@ -25,29 +25,65 @@ const elevenlabs = new ElevenLabsClient({
 });
 
 /**
- * 채팅 EXP 계산 함수
- * 기본 1점 + 70자 이상이면 +1점 + 이모티콘 하나당 0.1점
+ * 이모지 감지 함수
+ * @param {string} text - 검사할 텍스트
+ * @returns {number} 이모지 개수
  */
-const calculateExp = (message) => {
-  // 메시지 전송 시 해당 AI와의 친밀도 1씩 증가
-  return 1;
+const countEmojis = (text) => {
+  // 이모지 정규식 (유니코드 이모지 범위)
+  const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F018}-\u{1F270}]|[\u{238C}-\u{2454}]|[\u{20D0}-\u{20FF}]|[\u{FE00}-\u{FE0F}]|[\u{1FAB0}-\u{1FABF}]|[\u{1FAC0}-\u{1FAFF}]|[\u{1FAD0}-\u{1FAFF}]|[\u{1FAE0}-\u{1FAFF}]|[\u{1FAF0}-\u{1FAFF}]/gu;
+  const matches = text.match(emojiRegex);
+  return matches ? matches.length : 0;
 };
 
-// 레벨 계산 함수 (프론트엔드와 동일한 로직 - 10레벨 시스템)
+/**
+ * 게임 상태 확인 함수
+ * @param {string} message - 사용자 메시지
+ * @returns {boolean} 게임 중 여부
+ */
+const isGameActive = (message) => {
+  const gameKeywords = [
+    '[GAME:끝말잇기]', '[GAME:스무고개]', '[GAME:밸런스게임]'
+  ];
+  
+  return gameKeywords.some(keyword => message.includes(keyword));
+};
+
+/**
+ * 채팅 EXP 계산 함수
+ * 기본 1점 + 50자 이상이면 2점 + 100자 이상이면 3점 + 이모지 하나당 0.2점 + 게임 중이면 5점 추가
+ */
+const calculateExp = (message) => {
+  // 기본 1점
+  let exp = 1;
+  
+  // 글자 수에 따른 추가 경험치
+  if (message.length >= 100) {
+    exp = 3;
+  } else if (message.length >= 50) {
+    exp = 2;
+  }
+  
+  // 이모지 추가 경험치 (이모지 하나당 0.2점)
+  const emojiCount = countEmojis(message);
+  const emojiExp = emojiCount * 0.2;
+  exp += emojiExp;
+  
+  // 게임 중이면 5점 추가
+  if (isGameActive(message)) {
+    exp += 5;
+  }
+  
+  return Math.round(exp * 10) / 10; // 소수점 첫째자리까지 반올림
+};
+
+// 레벨 계산 함수 (30레벨 시스템)
 const getLevel = (exp) => {
-  // 10레벨 시스템: 각 레벨업에 필요한 경험치가 1씩 증가
-  // 1레벨: 0exp, 2레벨: 1exp, 3레벨: 3exp, 4레벨: 6exp, 5레벨: 10exp
-  // 6레벨: 15exp, 7레벨: 21exp, 8레벨: 28exp, 9레벨: 36exp, 10레벨: 45exp
-  if (exp >= 45) return 10;
-  if (exp >= 36) return 9;
-  if (exp >= 28) return 8;
-  if (exp >= 21) return 7;
-  if (exp >= 15) return 6;
-  if (exp >= 10) return 5;
-  if (exp >= 6) return 4;
-  if (exp >= 3) return 3;
-  if (exp >= 1) return 2;
-  return 1; // exp가 0일 때 레벨 1
+  // 30레벨 시스템: 첫 레벨업은 10exp, 그 다음부터는 10씩 증가
+  // 공식: 레벨 = Math.floor((-1 + Math.sqrt(1 + 8 * exp / 10)) / 2) + 1
+  if (exp < 10) return 1;
+  const level = Math.floor((-1 + Math.sqrt(1 + 8 * exp / 10)) / 2) + 1;
+  return Math.min(level, 30); // 최대 30레벨
 };
 
 /**
@@ -73,7 +109,7 @@ const isOneOnOneChat = async (roomId) => {
 
 /**
  * 1대1 채팅 전용 SSE 스트리밍 응답 생성
- *
+ * 
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -114,7 +150,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 1. 사용자가 참여한 채팅방인지 확인
     const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-      where: {
+      where: { 
         chatroomId: parseInt(roomId, 10),
         clerkId: userId,
       },
@@ -124,11 +160,11 @@ const streamChatByRoom2 = async (req, res, next) => {
             participants: {
               include: {
                 persona: true
-              }
-            },
-            ChatLogs: {
-              where: { isDeleted: false },
-              orderBy: { time: 'desc' },
+          }
+        },
+        ChatLogs: {
+          where: { isDeleted: false },
+          orderBy: { time: 'desc' },
               take: 10,
               select: { text: true, senderType: true, senderId: true, time: true }
             }
@@ -206,11 +242,11 @@ const streamChatByRoom2 = async (req, res, next) => {
       // 1대1 채팅에서는 최적화된 함수 사용
       const aiResponseText = await chatService.generateAiChatResponseOneOnOne(
         userMessage,
-        personaInfo,
+      personaInfo,
         chatHistory,
         isFirstMessage,
         userName // 사용자 이름 전달
-      );
+    );
 
       // 응답을 한 번에 전송 (스트리밍 대신)
       fullResponseText = aiResponseText;
@@ -237,8 +273,8 @@ const streamChatByRoom2 = async (req, res, next) => {
         }
       });
 
-      // AI 메시지 전송 시 친밀도 증가
-      const expIncrease = Math.max(1, Math.floor(fullResponseText.length / 10));
+      // 사용자 메시지 길이에 따른 친밀도 증가
+      const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
 
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
@@ -290,7 +326,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
- *
+ * 
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -383,7 +419,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 채팅방 삭제
- *
+ * 
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -407,15 +443,15 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { roomId } = req.query;
   const { userId } = req.auth;
-
+  
   if (!roomId) {
     return responseHandler.sendBadRequest(res, 'roomId 쿼리 파라미터가 필요합니다.');
   }
   const parsedRoomId = parseInt(roomId);
-      if (isNaN(parsedRoomId)) {
+  if (isNaN(parsedRoomId)) {
       return responseHandler.sendBadRequest(res, 'roomId는 숫자여야 합니다.');
-    }
-
+  }
+  
   // 내가 참여한 방인지 확인
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: { chatroomId: parsedRoomId, clerkId: userId },
@@ -481,8 +517,8 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     orderBy: {
       time: 'asc'
     },
-    select: {
-      id: true,
+        select: {
+          id: true,
       text: true,
       senderType: true,
       senderId: true,
@@ -644,7 +680,7 @@ const streamChatByRoom = async (req, res, next) => {
 
       console.log('✅ 단체 채팅 AI 응답 생성 완료:', aiResponses.length, '개의 응답');
 
-      // 각 AI 응답을 DB에 저장하고 친밀도 증가
+      // 각 AI 응답을 DB에 저장
       for (const response of aiResponses) {
         // AI 응답을 DB에 저장
         await prismaConfig.prisma.chatLog.create({
@@ -658,10 +694,14 @@ const streamChatByRoom = async (req, res, next) => {
             isDeleted: false,
           }
         });
+      }
 
-        // 새로운 친밀도 시스템으로 증가
-        const expIncrease = calculateExp(response.content);
-        console.log(`🔍 ${response.personaName} 친밀도 증가 시도: 경험치 +${expIncrease}`);
+      // 단체 채팅에서는 모든 AI에게 각각 친밀도 증가
+      const expIncrease = calculateExp(message);
+      console.log(`🔍 단체 채팅 경험치 계산: 메시지 "${message}" -> +${expIncrease}점`);
+      
+      for (const response of aiResponses) {
+        console.log(`🔍 단체 채팅 ${response.personaName} 친밀도 증가 시도: 경험치 +${expIncrease}`);
         await chatService.increaseFriendship(userId, response.personaId, expIncrease);
 
         // 현재 친밀도 정보 조회
@@ -669,12 +709,12 @@ const streamChatByRoom = async (req, res, next) => {
         const newExp = friendship.exp;
         const newLevel = friendship.friendship;
 
-        console.log(`✅ AI ${response.personaName} 친밀도 ${expIncrease} 증가. 총 경험치: ${newExp}, 레벨: ${newLevel}`);
+        console.log(`✅ 단체 채팅 AI ${response.personaName} 친밀도 ${expIncrease} 증가. 총 경험치: ${newExp}, 레벨: ${newLevel}`);
 
         // 소켓으로 친밀도 업데이트 정보 전송
         const io = req.app.get && req.app.get('io') ? req.app.get('io') : null;
         if (io) {
-          console.log(`🔔 expUpdated 이벤트 전송:`, {
+          console.log(`🔔 단체 채팅 expUpdated 이벤트 전송:`, {
             roomId,
             personaId: response.personaId,
             personaName: response.personaName,
