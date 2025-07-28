@@ -1,19 +1,16 @@
 services:
-  # 백엔드 API 서버 (메인 앱)
   app:
     build: .
-    container_name: express_app_dev
+    container_name: express_app
     ports:
       - 3001:3001
     volumes:
       - ./google-credentials:/app/google-credentials:ro
-      - ./src:/app/src  # 개발 시 소스 코드 변경 감지
     env_file:
       - .env
     environment:
       NODE_ENV: development
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
-
     depends_on:
       db:
         condition: service_healthy
@@ -22,12 +19,11 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    command: npm run dev
+    command: npm run start
 
-  # PostgreSQL 데이터베이스
   db:
     image: postgres:16
-    container_name: postgres_db_dev
+    container_name: postgres_db
     env_file:
       - .env
     environment:
@@ -42,22 +38,20 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - pgdata_dev:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
       - app-network
 
-  # Redis (캐싱 및 세션 스토리지)
   redis:
     image: redis:7
-    container_name: redis_server_dev
+    container_name: redis_server
     ports:
       - 6379:6379
     restart: unless-stopped
     networks:
       - app-network
 
-  # 개발용 Prisma 마이그레이션 (안전한 버전)
   migrate:
     build: .
     env_file:
@@ -69,14 +63,10 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: development
     command: >
-      sh -c "
-          npx prisma migrate deploy && npx prisma generate
-      "
-    networks:
-      - app-network
+      sh -c "npx prisma migrate reset --force && npx prisma migrate dev --name init"
 
 volumes:
-  pgdata_dev:
+  pgdata:
 
 networks:
   app-network: 
