@@ -85,7 +85,7 @@ router.post('/rooms/:roomId/sse',
     chatController.streamChatByRoom2);
 
 // TODO: enterChatRoom 함수가 삭제되었으므로 임시로 주석 처리
-// router.get('/rooms', 
+// router.get('/rooms',
 //     authMiddleware.clerkAuthMiddleware,
 //     authMiddleware.requireAuth,
 //     chatController.enterChatRoom);
@@ -129,5 +129,11 @@ const upload = multer({
 
 // 채팅 이미지 업로드 라우트
 router.post('/upload-image', upload.single('image'), uploadImage);
+
+router.get('/tts/:roomId/:chatLogId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateTTSParam,
+    chatController.getTts);
 
 export default router;
