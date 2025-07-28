@@ -49,7 +49,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS 설정
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'], // 프론트엔드 주소들
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://api.${DOMAIN}',
+    'https://${DOMAIN}'
+  ], // 프론트엔드 주소들
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-trace-id'], // 추적 ID 헤더 추가

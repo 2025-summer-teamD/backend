@@ -57,9 +57,9 @@ http:
 
   # 라우터 설정 (예시)
   routers:
-    # API 라우터
+    # API 라우터 - 모든 경로 허용
     api:
-      rule: "Host(`api.localhost`) && PathPrefix(`/api`)"
+      rule: "Host(`api.${DOMAIN}`)"
       service: backend-api
       middlewares:
         - cors
@@ -84,9 +84,9 @@ http:
     backend-api:
       loadBalancer:
         servers:
-          - url: "http://backend:3001"
+          - url: "http://express_app:3001"
         healthCheck:
-          path: "/health"
+          path: "/"
           interval: "30s"
 
     frontend:
