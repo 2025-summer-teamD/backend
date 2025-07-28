@@ -40,7 +40,7 @@ tracing:
   otlp:
     http:
       endpoint: "http://jaeger:4318/v1/traces"
-      dialTimeout: 10s # 'timeout' 대신 'dialTimeout' 사용
+      # dialTimeout: 10s # 'timeout' 대신 'dialTimeout' 사용
 
 # 메트릭 설정 (Prometheus)
 metrics:
