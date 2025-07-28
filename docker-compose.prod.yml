@@ -36,6 +36,9 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       # Let's Encrypt 인증서를 저장할 볼륨 (서버 재시작 시에도 유지)
       - "./letsencrypt:/letsencrypt"
+      # Traefik 설정 파일들 마운트
+      - "./traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
     networks:
       - app-network
     restart: unless-stopped
@@ -62,24 +65,33 @@ services:
     labels:
       # 이 서비스에 대한 라우팅을 활성화
       - traefik.enable=true
-      # --- HTTP 라우터 설정 ---
-      # 'api-router'라는 이름의 HTTP 라우터 생성
+      
+      # --- HTTP 라우터 설정 (모든 경로) ---
       - traefik.http.routers.api-router.rule=Host(`api.${DOMAIN}`)
-      # 이 라우터는 'web' 진입점(HTTP/80)을 사용
       - traefik.http.routers.api-router.entrypoints=web
-      # --- HTTPS 라우터 설정 ---
-      # 'api-router-secure'라는 이름의 HTTPS 라우터 생성
+      - traefik.http.routers.api-router.service=api-service
+      
+      # --- HTTPS 라우터 설정 (모든 경로) ---
       - traefik.http.routers.api-router-secure.rule=Host(`api.${DOMAIN}`)
-      # 이 라우터는 'websecure' 진입점(HTTPS/443)을 사용
       - traefik.http.routers.api-router-secure.entrypoints=websecure
-      # TLS(SSL) 활성화 및 Let's Encrypt 해석기 지정
       - traefik.http.routers.api-router-secure.tls=true
       - traefik.http.routers.api-router-secure.tls.certresolver=myresolver
-      # --- 서비스 연결 설정 ---
-      # 이 라우터가 어떤 서비스로 요청을 보낼지 지정
+      - traefik.http.routers.api-router-secure.service=api-service
+      
+      # --- 서비스 설정 ---
       - traefik.http.services.api-service.loadbalancer.server.port=3001
-      # (Express 앱이 컨테이너 내부에서 3001 포트로 실행된다고 가정)
-    command: npm run start # 여기서 prisma migrate 제거
+      
+      # --- 미들웨어 설정 (CORS 등) ---
+      - traefik.http.middlewares.api-cors.headers.accesscontrolallowmethods=GET,OPTIONS,PUT,POST,DELETE,PATCH
+      - traefik.http.middlewares.api-cors.headers.accesscontrolallowheaders=*
+      - traefik.http.middlewares.api-cors.headers.accesscontrolalloworiginlist=*
+      - traefik.http.middlewares.api-cors.headers.accesscontrolmaxage=100
+      - traefik.http.middlewares.api-cors.headers.addvaryheader=true
+      
+      # --- 라우터에 미들웨어 적용 ---
+      - traefik.http.routers.api-router.middlewares=api-cors
+      - traefik.http.routers.api-router-secure.middlewares=api-cors
+    command: npm run start
 
   redis:
     image: redis:7
