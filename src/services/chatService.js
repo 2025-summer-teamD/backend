@@ -1,6 +1,6 @@
 import prismaConfig from '../config/prisma.js';
 import gemini25 from '../vertexai/gemini25.js';
-import veo3 from '../vertexai/veo3.js';
+import runwayVideo from '../vertexai/runwayVideo.js';
 import { uploadImageToGCS } from './gcsService.js';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
@@ -340,17 +340,23 @@ ${language}로 아래 조건에 맞는 짧은 영상을 만들어 주세요.
 }
 
 /**
- * Veo3를 이용해 비디오 생성 요청을 보냅니다.
- * @param {object} options - 프롬프트 옵션 { subject, style, mood, action, duration, language }
+ * Stable Video Diffusion을 사용하여 비디오를 생성합니다.
+ * @param {object} options - 비디오 생성 옵션
  * @returns {Promise<object>} 생성된 비디오 정보
  */
-const generateVideoWithVeo3 = async (options) => {
+const generateVideoWithStableVideo = async (options) => {
   try {
     const prompt = makeVeo3Prompt(options);
-    const videoResult = await veo3.generateVideo(prompt);
+    console.log('🎬 Stable Video 생성 시작...');
+    console.log('📝 프롬프트:', prompt);
+    
+    const stableVideo = await import('../vertexai/stableVideo.js');
+    const videoResult = await stableVideo.default.generateVideo(prompt);
+    console.log('✅ Stable Video 생성 완료!');
     return videoResult;
   } catch (error) {
-    throw new Error(error.message || 'Veo3 비디오 생성 중 오류가 발생했습니다.');
+    console.error('❌ Stable Video 생성 실패:', error);
+    throw error;
   }
 };
 
@@ -628,7 +634,192 @@ const createOneOnOneChatRoom = async (userId, personaId) => {
 };
 
 /**
- * 사용자-캐릭터 친밀도 증가
+ * 친밀도 레벨 5 달성 시 영상 생성을 위한 최근 채팅 메시지 조회
+ * @param {number} personaId - 캐릭터 ID
+ * @param {string} userId - 사용자 ID
+ * @param {number} limit - 조회할 메시지 수 (기본값: 10)
+ * @returns {Promise<array>} 최근 채팅 메시지 배열
+ */
+const getRecentChatMessages = async (personaId, userId, limit = 10) => {
+  try {
+    // 해당 사용자와 캐릭터가 참여한 채팅방 조회
+    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+      where: {
+        participants: {
+          some: {
+            clerkId: userId,
+            persona: {
+              id: personaId
+            }
+          }
+        },
+        isDeleted: false
+      },
+      include: {
+        ChatLogs: {
+          where: {
+            isDeleted: false
+          },
+          orderBy: {
+            time: 'desc'
+          },
+          take: limit
+        }
+      }
+    });
+
+    if (!chatRoom) {
+      console.log(`❌ 채팅방을 찾을 수 없음: 사용자 ${userId}, 캐릭터 ${personaId}`);
+      return [];
+    }
+
+    // 최신순으로 정렬된 메시지 반환
+    return chatRoom.ChatLogs.reverse();
+  } catch (error) {
+    console.error('❌ 최근 채팅 메시지 조회 실패:', error);
+    return [];
+  }
+};
+
+/**
+ * 사용자와 캐릭터의 프로필 이미지 URL 조회
+ * @param {string} userId - 사용자 ID
+ * @param {number} personaId - 캐릭터 ID
+ * @returns {Promise<object>} 프로필 이미지 정보
+ */
+const getProfileImages = async (userId, personaId) => {
+  try {
+    // 사용자 정보 조회 (Clerk에서 가져와야 할 수도 있음)
+    const user = await prismaConfig.prisma.user.findUnique({
+      where: { clerkId: userId },
+      select: { clerkId: true }
+    });
+
+    // 캐릭터 정보 조회
+    const persona = await prismaConfig.prisma.persona.findUnique({
+      where: { id: personaId },
+      select: { imageUrl: true, name: true }
+    });
+
+    return {
+      userImageUrl: user ? `https://api.clerk.com/v1/users/${userId}/profile_image` : null,
+      personaImageUrl: persona?.imageUrl || null,
+      personaName: persona?.name || '캐릭터'
+    };
+  } catch (error) {
+    console.error('❌ 프로필 이미지 조회 실패:', error);
+    return {
+      userImageUrl: null,
+      personaImageUrl: null,
+      personaName: '캐릭터'
+    };
+  }
+};
+
+/**
+ * 친밀도 레벨 5 달성 시 영상 생성
+ * @param {string} userId - 사용자 ID
+ * @param {number} personaId - 캐릭터 ID
+ * @returns {Promise<object|null>} 생성된 영상 정보 또는 null
+ */
+const generateFriendshipVideo = async (userId, personaId) => {
+  try {
+    console.log(`🎬 친밀도 영상 생성 시작: 사용자 ${userId}, 캐릭터 ${personaId}`);
+
+    // 최근 10개 채팅 메시지 조회
+    const recentMessages = await getRecentChatMessages(personaId, userId, 10);
+    if (recentMessages.length === 0) {
+      console.log('❌ 채팅 메시지가 없어 영상 생성 불가');
+      return null;
+    }
+
+    // 프로필 이미지 정보 조회
+    const profileImages = await getProfileImages(userId, personaId);
+
+    // 채팅 내용을 텍스트로 변환
+    const chatText = recentMessages.map(msg => 
+      `${msg.senderType === 'user' ? '사용자' : profileImages.personaName}: ${msg.text}`
+    ).join('\n');
+
+    // Veo3 프롬프트 생성
+    const videoOptions = {
+      subject: `${profileImages.personaName}와 사용자의 특별한 순간`,
+      style: '따뜻하고 친근한 애니메이션 스타일',
+      mood: '기쁨과 친밀감이 가득한 분위기',
+      action: `최근 대화 내용: ${chatText.substring(0, 200)}...`,
+      duration: '10초',
+      language: '한국어'
+    };
+
+    console.log('📝 영상 생성 프롬프트:', videoOptions);
+
+    // Stable Video로 영상 생성
+    console.log('🎬 Stable Video로 영상 생성 시작...');
+    
+    // API 연결 테스트
+    try {
+      const stableVideo = await import('../vertexai/stableVideo.js');
+      await stableVideo.default.testConnection();
+      console.log('✅ Stable Video API 연결 성공');
+    } catch (error) {
+      console.error('❌ Stable Video API 연결 테스트 실패:', error);
+      return null;
+    }
+    
+    // 실제 영상 생성
+    const videoResult = await generateVideoWithStableVideo(videoOptions);
+    
+    if (!videoResult || !videoResult.videoUrl) {
+      console.log('❌ 영상 생성 실패');
+      return null;
+    }
+
+    // GCS에 업로드
+    console.log('📤 GCS에 영상 업로드 중...');
+    const gcsUrl = await uploadVideoToGCS(videoResult);
+    
+    console.log(`✅ 친밀도 영상 생성 완료: ${gcsUrl}`);
+
+    // 채팅 로그에 영상 메시지 추가
+    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+      where: {
+        participants: {
+          some: {
+            clerkId: userId,
+            persona: {
+              id: personaId
+            }
+          }
+        }
+      }
+    });
+
+    if (chatRoom) {
+      await prismaConfig.prisma.chatLog.create({
+        data: {
+          chatroomId: chatRoom.id,
+          senderType: 'ai',
+          senderId: personaId.toString(),
+          text: gcsUrl,
+          type: 'video',
+          time: new Date()
+        }
+      });
+    }
+
+    return {
+      gcsUrl,
+      message: '친밀도 레벨 5 달성을 축하합니다! 특별한 영상이 생성되었습니다.'
+    };
+
+  } catch (error) {
+    console.error('❌ 친밀도 영상 생성 실패:', error);
+    return null;
+  }
+};
+
+/**
+ * 친밀도 증가 및 레벨 5 달성 시 영상 생성
  * @param {string} userId - 사용자 ID
  * @param {number} personaId - 캐릭터 ID
  * @param {number} expGain - 획득할 경험치
@@ -669,6 +860,23 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
         friendship: newFriendshipLevel
       }
     });
+
+    // 친밀도 레벨 5 달성 시 영상 생성 (Stable Video 사용)
+    if (newFriendshipLevel >= 5 && persona.friendship < 5) {
+      console.log(`🎬 친밀도 레벨 ${newFriendshipLevel} 달성! Stable Video로 영상 생성 시작...`);
+      
+      // 환경 변수로 비디오 생성 기능 제어 (기본값: 활성화)
+      const enableVideoGeneration = process.env.ENABLE_VIDEO_GENERATION !== 'false';
+      
+      if (enableVideoGeneration) {
+        // 비동기로 영상 생성 (사용자 응답을 지연시키지 않기 위해)
+        generateFriendshipVideo(userId, personaId).catch(error => {
+          console.error('❌ 영상 생성 중 오류:', error);
+        });
+      } else {
+        console.log('⚠️ 비디오 생성 기능이 비활성화되어 있습니다. (ENABLE_VIDEO_GENERATION=false)');
+      }
+    }
     
     // 캐시 무효화 - 사용자의 캐릭터 목록 캐시 삭제
     try {
@@ -818,7 +1026,7 @@ ${allPersonasInfo}
 - 사용자(${userName})와 다른 AI들과 함께하는 단체 대화이므로 자연스럽게 대화할 것
 - 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
 - 다른 AI들과 상호작용하면서도 자신의 개성을 유지할 것
-- 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
+- 다른 AI들의 이름을 언급하면서도 자연스럽게 대화할 것
 - 첫 번째 메시지이므로 다른 AI들과 인사를 나누거나 서로를 소개하는 방식으로 시작할 것
 - 자신의 특성을 보여주면서도 다른 AI들과의 협력적인 분위기를 만들어갈 것
 - 다른 AI들의 이름을 정확히 기억하고 언급할 것 (${personasInfo.map(p => p.name).join(', ')})
@@ -878,13 +1086,299 @@ ${persona.name}:`;
   return responses;
 };
 
+/**
+ * 채팅방의 영상 목록을 조회합니다.
+ * @param {number} roomId - 채팅방 ID
+ * @param {object} pagination - 페이지네이션 옵션 { skip, take }
+ * @returns {Promise<object>} { videos, totalElements, totalPages }
+ */
+const getChatRoomVideos = async (roomId, pagination = { skip: 0, take: 20 }) => {
+  try {
+    const { skip, take } = pagination;
+
+    // 영상 타입의 채팅 로그 조회
+    const totalElements = await prismaConfig.prisma.chatLog.count({
+      where: {
+        chatroomId: roomId,
+        type: 'video',
+        isDeleted: false,
+      },
+    });
+
+    const videos = await prismaConfig.prisma.chatLog.findMany({
+      where: {
+        chatroomId: roomId,
+        type: 'video',
+        isDeleted: false,
+      },
+      orderBy: {
+        time: 'desc',
+      },
+      skip,
+      take,
+      include: {
+        chatRoom: {
+          include: {
+            participants: {
+              include: {
+                persona: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const totalPages = Math.ceil(totalElements / take);
+
+    return {
+      videos,
+      totalElements,
+      totalPages,
+    };
+  } catch (error) {
+    console.error('채팅방 영상 목록 조회 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 특정 영상의 상세 정보를 조회합니다.
+ * @param {number} videoId - 영상 로그 ID
+ * @returns {Promise<object>} 영상 상세 정보
+ */
+const getVideoDetails = async (videoId) => {
+  try {
+    const video = await prismaConfig.prisma.chatLog.findUnique({
+      where: {
+        id: videoId,
+        type: 'video',
+        isDeleted: false,
+      },
+      include: {
+        chatRoom: {
+          include: {
+            participants: {
+              include: {
+                persona: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!video) {
+      throw new Error('영상을 찾을 수 없습니다.');
+    }
+
+    return video;
+  } catch (error) {
+    console.error('영상 상세 정보 조회 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 사용자가 참여한 모든 채팅방의 영상 목록을 조회합니다.
+ * @param {string} userId - 사용자 ID
+ * @param {object} pagination - 페이지네이션 옵션 { skip, take }
+ * @returns {Promise<object>} { videos, totalElements, totalPages }
+ */
+const getUserVideos = async (userId, pagination = { skip: 0, take: 20 }) => {
+  try {
+    const { skip, take } = pagination;
+
+    // 사용자가 참여한 채팅방 ID 목록
+    const userRooms = await prismaConfig.prisma.chatRoomParticipant.findMany({
+      where: { clerkId: userId },
+      select: { chatroomId: true },
+    });
+
+    const roomIds = userRooms.map(r => r.chatroomId);
+
+    if (roomIds.length === 0) {
+      return { videos: [], totalElements: 0, totalPages: 0 };
+    }
+
+    // 영상 타입의 채팅 로그 조회
+    const totalElements = await prismaConfig.prisma.chatLog.count({
+      where: {
+        chatroomId: { in: roomIds },
+        type: 'video',
+        isDeleted: false,
+      },
+    });
+
+    const videos = await prismaConfig.prisma.chatLog.findMany({
+      where: {
+        chatroomId: { in: roomIds },
+        type: 'video',
+        isDeleted: false,
+      },
+      orderBy: {
+        time: 'desc',
+      },
+      skip,
+      take,
+      include: {
+        chatRoom: {
+          include: {
+            participants: {
+              include: {
+                persona: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const totalPages = Math.ceil(totalElements / take);
+
+    return {
+      videos,
+      totalElements,
+      totalPages,
+    };
+  } catch (error) {
+    console.error('사용자 영상 목록 조회 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 채팅방의 캐릭터 이미지와 최근 채팅을 활용해서 비디오 생성
+ * @param {number} roomId - 채팅방 ID
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<object|null>} 생성된 비디오 정보 또는 null
+ */
+const generateChatRoomVideo = async (roomId, userId) => {
+  try {
+    console.log(`🎬 채팅방 비디오 생성 시작: 채팅방 ${roomId}, 사용자 ${userId}`);
+
+    // 채팅방 정보 조회 (참가자들과 캐릭터 정보 포함)
+    const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
+      where: { id: roomId },
+      include: {
+        participants: {
+          include: {
+            persona: true
+          }
+        },
+        ChatLogs: {
+          where: {
+            isDeleted: false
+          },
+          orderBy: {
+            time: 'desc'
+          },
+          take: 5 // 최근 5개 메시지만 사용
+        }
+      }
+    });
+
+    if (!chatRoom) {
+      console.log('❌ 채팅방을 찾을 수 없음');
+      return null;
+    }
+
+    // AI 캐릭터들 필터링
+    const aiParticipants = chatRoom.participants.filter(p => p.personaId !== null);
+    
+    if (aiParticipants.length === 0) {
+      console.log('❌ AI 캐릭터가 없는 채팅방');
+      return null;
+    }
+
+    // 첫 번째 AI 캐릭터의 이미지 사용 (여러 명이면 첫 번째)
+    const mainCharacter = aiParticipants[0];
+    const characterImageUrl = mainCharacter.persona?.imageUrl;
+
+    if (!characterImageUrl) {
+      console.log('❌ 캐릭터 이미지가 없음');
+      return null;
+    }
+
+    // 최근 채팅 메시지를 프롬프트로 변환
+    const recentMessages = chatRoom.ChatLogs.reverse(); // 시간순으로 정렬
+    let chatPrompt = '';
+    
+    if (recentMessages.length > 0) {
+      // 최근 메시지들을 하나의 프롬프트로 결합
+      const messageTexts = recentMessages.map(msg => {
+        const senderName = msg.senderType === 'user' ? '사용자' : mainCharacter.persona?.name || '캐릭터';
+        return `${senderName}: ${msg.text}`;
+      });
+      
+      chatPrompt = messageTexts.join('\n');
+      console.log('💬 채팅 프롬프트:', chatPrompt.substring(0, 100) + '...');
+    } else {
+      // 채팅이 없으면 기본 프롬프트 사용
+      chatPrompt = `${mainCharacter.persona?.name || '캐릭터'}와 사용자가 대화하는 따뜻한 분위기`;
+    }
+
+    // RunwayML API 호출
+    console.log('🎬 RunwayML 비디오 생성 시작...');
+    console.log('🖼️ 캐릭터 이미지:', characterImageUrl);
+    console.log('💬 채팅 프롬프트:', chatPrompt);
+
+    const videoResult = await runwayVideo.generateVideo(chatPrompt, characterImageUrl);
+    
+    if (!videoResult) {
+      console.log('❌ 비디오 생성 실패');
+      return null;
+    }
+
+    // 비디오를 GCS에 업로드
+    console.log('📤 GCS 업로드 시작...');
+    const uploadResult = await uploadVideoToGCS(videoResult);
+    
+    if (!uploadResult) {
+      console.log('❌ GCS 업로드 실패');
+      return null;
+    }
+
+    // 데이터베이스에 비디오 정보 저장
+    const videoData = {
+      chatroomId: roomId,
+      videoUrl: uploadResult.videoUrl,
+      thumbnailUrl: uploadResult.thumbnailUrl || uploadResult.videoUrl,
+      prompt: chatPrompt,
+      duration: 5, // RunwayML 기본 5초
+      createdAt: new Date()
+    };
+
+    const savedVideo = await prismaConfig.prisma.video.create({
+      data: videoData
+    });
+
+    console.log('✅ 채팅방 비디오 생성 완료!');
+    console.log('🆔 비디오 ID:', savedVideo.id);
+    console.log('🔗 비디오 URL:', savedVideo.videoUrl);
+
+    return {
+      id: savedVideo.id,
+      videoUrl: savedVideo.videoUrl,
+      thumbnailUrl: savedVideo.thumbnailUrl,
+      prompt: savedVideo.prompt,
+      duration: savedVideo.duration,
+      createdAt: savedVideo.createdAt
+    };
+
+  } catch (error) {
+    console.error('❌ 채팅방 비디오 생성 실패:', error);
+    return null;
+  }
+};
+
 
 const chatService = {
   getMyChatList,
   generateAiChatResponse,
   deleteChatRoom, 
   makeVeo3Prompt,
-  generateVideoWithVeo3,
+  generateVideoWithStableVideo,
   uploadVideoToGCS,
   checkAndGenerateVideoReward,
   createMultiChatRoom,
@@ -894,6 +1388,13 @@ const chatService = {
   getFriendship,
   getUserFriendships,
   generateAiChatResponseGroup,
+  getRecentChatMessages,
+  getProfileImages,
+  generateFriendshipVideo,
+  getChatRoomVideos,
+  getVideoDetails,
+  getUserVideos,
+  generateChatRoomVideo,
 };
 
 export default chatService;

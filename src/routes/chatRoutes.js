@@ -114,6 +114,30 @@ router.get('/friendships/:personaId',
     authMiddleware.requireAuth,
     chatController.getCharacterFriendship);
 
+// 영상 갤러리 관련 라우트
+router.get('/rooms/:roomId/videos',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.getChatRoomVideos);
+
+// 채팅방 비디오 생성 라우트 추가
+router.post('/rooms/:roomId/videos',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.generateChatRoomVideo);
+
+router.get('/videos/:videoId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getVideoDetails);
+
+router.get('/videos',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getUserVideos);
+
 // SSE 스트리밍 라우트 (GET)
 router.get('/stream/:roomId',
     authMiddleware.clerkAuthMiddleware,

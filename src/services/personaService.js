@@ -239,13 +239,15 @@ const getPersonaDetails = async (options) => {
   // 2. 'liked' 상태를 계산
   let liked = false;
   if (currentUserId) {
-    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
       where: {
         clerkId: currentUserId,
-        characterId: personaId,
+        persona: {
+          id: personaId
+        }
       },
     });
-    liked = chatRoom ? chatRoom.likes : false;
+    liked = participant ? true : false;
   }
 
   // 3. 최종 응답 객체 조립 (필드명 일치)
@@ -279,9 +281,6 @@ const getMyPersonas = async (userId, type = 'created') => {
     const likedParticipants = await prismaConfig.prisma.chatRoomParticipant.findMany({
       where: {
         clerkId: userId,
-        personaId: {
-          not: null
-        },
         persona: {
           isDeleted: false,
         }
@@ -476,7 +475,9 @@ const toggleLike = async (personaId, userId) => {
   let participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: {
       clerkId: userId,
-      personaId: personaId
+      persona: {
+        id: personaId
+      }
     },
     include: {
       chatRoom: true
@@ -493,7 +494,11 @@ const toggleLike = async (personaId, userId) => {
         participants: {
           create: {
             clerkId: userId,
-            personaId: personaId,
+            persona: {
+              connect: {
+                id: personaId
+              }
+            },
             exp: 0
           }
         }
@@ -525,7 +530,9 @@ const toggleLike = async (personaId, userId) => {
   // 4. 페르소나의 총 좋아요 수 업데이트 (ChatRoomParticipant 개수)
   const totalLikes = await prismaConfig.prisma.chatRoomParticipant.count({
     where: {
-      personaId: personaId
+      persona: {
+        id: personaId
+      }
     }
   });
   

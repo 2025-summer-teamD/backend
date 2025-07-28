@@ -232,7 +232,14 @@ const streamChatByRoom2 = async (req, res, next) => {
       
       // AI 메시지 전송 시 친밀도 증가
       const expIncrease = Math.max(1, Math.floor(fullResponseText.length / 10));
-      const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
+      console.log(`🎯 친밀도 증가 시도: userId=${userId}, personaId=${personaInfo.id}, expIncrease=${expIncrease}`);
+      let friendshipResult = null;
+      try {
+        friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
+        console.log(`✅ 친밀도 증가 결과:`, friendshipResult);
+      } catch (error) {
+        console.error(`❌ 친밀도 증가 실패:`, error);
+      }
       
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
       const io = req.app.getIo ? req.app.getIo() : null;
@@ -755,6 +762,134 @@ const getAllFriendships = async (req, res, next) => {
   }
 };
 
+/**
+ * 채팅방의 영상 목록을 조회합니다.
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const getChatRoomVideos = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.roomId, 10);
+    const userId = req.auth.userId;
+    const { page = 1, size = 20 } = req.query;
+
+    // 페이지네이션 계산
+    const skip = (parseInt(page, 10) - 1) * parseInt(size, 10);
+    const take = parseInt(size, 10);
+
+    // 사용자가 해당 채팅방에 참여하고 있는지 확인
+    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+      where: {
+        chatroomId: roomId,
+        clerkId: userId,
+      },
+    });
+
+    if (!participant) {
+      return responseHandler.sendForbidden(res, '해당 채팅방에 접근할 권한이 없습니다.');
+    }
+
+    const result = await chatService.getChatRoomVideos(roomId, { skip, take });
+
+    responseHandler.sendSuccess(res, 200, '채팅방 영상 목록 조회 성공', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 특정 영상의 상세 정보를 조회합니다.
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const getVideoDetails = async (req, res, next) => {
+  try {
+    const videoId = parseInt(req.params.videoId, 10);
+    const userId = req.auth.userId;
+
+    const video = await chatService.getVideoDetails(videoId);
+
+    // 사용자가 해당 채팅방에 참여하고 있는지 확인
+    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+      where: {
+        chatroomId: video.chatroomId,
+        clerkId: userId,
+      },
+    });
+
+    if (!participant) {
+      return responseHandler.sendForbidden(res, '해당 영상에 접근할 권한이 없습니다.');
+    }
+
+    responseHandler.sendSuccess(res, 200, '영상 상세 정보 조회 성공', { video });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 사용자가 참여한 모든 채팅방의 영상 목록을 조회합니다.
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const getUserVideos = async (req, res, next) => {
+  try {
+    const userId = req.auth.userId;
+    const { page = 1, size = 20 } = req.query;
+
+    // 페이지네이션 계산
+    const skip = (parseInt(page, 10) - 1) * parseInt(size, 10);
+    const take = parseInt(size, 10);
+
+    const result = await chatService.getUserVideos(userId, { skip, take });
+
+    responseHandler.sendSuccess(res, 200, '사용자 영상 목록 조회 성공', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * 채팅방의 캐릭터 이미지와 최근 채팅을 활용해서 비디오를 생성합니다.
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const generateChatRoomVideo = async (req, res, next) => {
+  try {
+    const roomId = parseInt(req.params.roomId, 10);
+    const userId = req.auth.userId;
+
+    // 사용자가 해당 채팅방에 참여하고 있는지 확인
+    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+      where: {
+        chatroomId: roomId,
+        clerkId: userId,
+      },
+    });
+
+    if (!participant) {
+      return responseHandler.sendForbidden(res, '해당 채팅방에 접근할 권한이 없습니다.');
+    }
+
+    console.log(`🎬 채팅방 비디오 생성 요청: 채팅방 ${roomId}, 사용자 ${userId}`);
+
+    // 비디오 생성 실행
+    const videoResult = await chatService.generateChatRoomVideo(roomId, userId);
+
+    if (!videoResult) {
+      return responseHandler.sendBadRequest(res, '비디오 생성에 실패했습니다. 채팅방에 AI 캐릭터가 있는지 확인해주세요.');
+    }
+
+    responseHandler.sendSuccess(res, 200, '채팅방 비디오 생성 성공', { video: videoResult });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   streamChatByRoom,
   streamChatByRoom2,
@@ -766,4 +901,8 @@ export default {
   updateChatRoomName,
   getCharacterFriendship,
   getAllFriendships,
+  getChatRoomVideos,
+  getVideoDetails,
+  getUserVideos,
+  generateChatRoomVideo,
 };

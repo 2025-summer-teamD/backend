@@ -142,8 +142,4 @@ app.use(errorHandler.notFoundHandler);
 // 전역 에러 핸들러 (마지막에 배치)
 app.use(errorHandler.errorHandler);
 
-// mainRouter는 '/api' 접두사로 마운트됩니다.
-// 따라서 uploadRouter의 '/uploads/:filename' 경로는 최종적으로 '/api/uploads/:filename'이 됩니다.
-app.use('/api', mainRouter);
-
 export default app;
