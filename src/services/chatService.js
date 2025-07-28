@@ -5,6 +5,7 @@ import { uploadImageToGCS } from './gcsService.js';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
 import redisClient from '../config/redisClient.js';
+import { detectGameMode, generateGameResponse } from './gameService.js';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
@@ -96,7 +97,7 @@ const getMyChatList = async (userId, pagination) => {
       participants: { include: { persona: true } },
       ChatLogs: {
         orderBy: { time: 'desc' },
-        take: 1,
+        take: 1, 
         select: { text: true, time: true },
       },
     },
@@ -232,6 +233,28 @@ const generateAiChatResponseOneOnOne = async (
   isFirstMessage = false,
   userName = '사용자'
 ) => {
+  // 게임 모드 감지
+  const gameMode = detectGameMode(userMessage);
+  
+  if (gameMode) {
+    // 게임 모드인 경우 게임 서비스 사용
+    console.log(`🎮 게임 모드 감지: ${gameMode}`);
+    
+    // 게임별 필요한 매개변수 설정
+    let gameResponse;
+    if (gameMode === 'wordchain') {
+      gameResponse = await generateGameResponse(gameMode, personaInfo, userMessage, [], chatHistory);
+    } else if (gameMode === 'twentyquestions') {
+      gameResponse = await generateGameResponse(gameMode, personaInfo, userMessage, [], chatHistory, '', 1);
+    } else if (gameMode === 'balancegame') {
+      gameResponse = await generateGameResponse(gameMode, personaInfo, userMessage, [], chatHistory, '', 1, 1, []);
+    }
+    
+    if (gameResponse) {
+      return gameResponse;
+    }
+  }
+
   let prompt;
 
   if (isFirstMessage) {
@@ -302,7 +325,7 @@ ${personaInfo.name}:`;
 const deleteChatRoom = async (roomId, userId) => {
   // 1. 본인 참여 채팅방인지 확인 (ChatRoomParticipant 기준)
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-    where: {
+    where: { 
       chatroomId: parseInt(roomId, 10),
       clerkId: userId,
     },
@@ -844,12 +867,12 @@ const getUserFriendships = async (userId) => {
  * @param {boolean} isFirstMessage - 첫 번째 메시지인지 여부
  * @returns {Promise<array>} 각 AI의 응답 배열
  */
-const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자') => {
+const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자', roomId = null) => {
   console.log('🤖 단체 채팅 AI 응답 생성 시작:', allPersonas.length, '명의 AI');
   console.log('📝 첫 번째 메시지 여부:', isFirstMessage);
   console.log('👤 사용자 이름:', userName);
 
-  // 모든 AI의 정보를 한번에 준비
+  // 일반 대화 모드
   const personasInfo = await Promise.all(
     allPersonas.map(async (persona, index) => {
       const details = await extractPersonaDetails(persona);
@@ -960,7 +983,7 @@ ${persona.name}:`;
 const chatService = {
   getMyChatList,
   generateAiChatResponse,
-  deleteChatRoom,
+  deleteChatRoom, 
   makeVeo3Prompt,
   generateVideoWithVeo3,
   uploadVideoToGCS,
