@@ -349,19 +349,16 @@ const generateBalanceGameResponse = async (personaInfo, userMessage, round = 1, 
 const detectGameMode = (userMessage) => {
   const message = userMessage.toLowerCase().trim();
   
-  if (message.includes('끝말잇기') || message.includes('끝말 잇기') || message.includes('[game:끝말잇기]')) {
-    return 'wordchain';
+  switch (message) {
+    case '[game:끝말잇기]':
+      return 'wordchain';
+    case '[game:스무고개]':
+      return 'twentyquestions';
+    case '[game:밸런스게임]':
+      return 'balancegame';
+    default:
+      return null;
   }
-  
-  if (message.includes('스무고개') || message.includes('20고개') || message.includes('[game:스무고개]')) {
-    return 'twentyquestions';
-  }
-  
-  if (message.includes('밸런스') || message.includes('밸런스게임') || message.includes('[game:밸런스게임]')) {
-    return 'balancegame';
-  }
-  
-  return null;
 };
 
 /**
