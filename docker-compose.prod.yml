@@ -5,18 +5,17 @@ services:
     env_file:
       - .env
     command:
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--certificatesresolvers.myresolver.acme.email=${LETSENCRYPT_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/etc/letsencrypt/acme.json"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--log.level=INFO"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
     ports:
       - "80:80"
       - "443:443"
@@ -24,6 +23,8 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./letsencrypt:/etc/letsencrypt"
+      - "./traefik/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./traefik/dynamic.yml:/etc/traefik/dynamic/dynamic.yml:ro"
     networks:
       - app-network
     restart: unless-stopped
@@ -44,10 +45,10 @@ services:
       - "traefik.http.routers.api.tls.certresolver=myresolver"
       - "traefik.http.services.api.loadbalancer.server.port=3001"
       # CORS 미들웨어 설정
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
-      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://anima.io.kr,http://localhost:5173"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=https://anima.io.kr,http://localhost:5173"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      # - "traefik.http.middlewares.cors.headers.accesscontrolallowcredentials=true"
       - "traefik.http.routers.api.middlewares=cors"
     command: npm run start
 

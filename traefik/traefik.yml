@@ -9,12 +9,12 @@ api:
 entryPoints:
   web:
     address: ":80"
-    # 80 포트로 들어온 모든 요청을 443(https)으로 리디렉션
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-          scheme: https
+    # # 80 포트로 들어온 모든 요청을 443(https)으로 리디렉션
+    # http:
+    #   redirections:
+    #     entryPoint:
+    #       to: websecure
+    #       scheme: https
   websecure:
     address: ":443"
 
