@@ -103,6 +103,12 @@ router.put('/rooms/:roomId/name',
     personaValidator.validateRoomIdParam,
     chatController.updateChatRoomName);
 
+// 공개 채팅방 조회
+router.get('/public-rooms',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getPublicChatRooms);
+
 // 친밀도 조회 라우트 추가
 router.get('/friendships',
     authMiddleware.clerkAuthMiddleware,
