@@ -119,8 +119,9 @@ const streamChatByRoom2 = async (req, res, next) => {
 
   try {
     // 1. 요청 데이터 파싱
-    const { message: userMessage, sender, userName } = req.body;
-    const roomId = req.params.roomId;
+    const { message, sender, userName } = req.body;
+    roomId = req.params.roomId;  // 외부 변수에 할당
+    userMessage = message;       // 외부 변수에 할당
     const userId = req.auth.userId;
 
     // 입력 검증
@@ -188,7 +189,7 @@ const streamChatByRoom2 = async (req, res, next) => {
         messageLength: userMessage.length
       });
     } catch (dbError) {
-      logger.logError('사용자 메시지 저장 실패', dbError, { roomId: roomId });
+      logger.logError('사용자 메시지 저장 실패', dbError, { roomId });
       return responseHandler.sendServerError(res, '메시지 저장에 실패했습니다.');
     }
 
