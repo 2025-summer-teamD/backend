@@ -17,6 +17,7 @@ import responseHandler from '../utils/responseHandler.js';
 import logger from '../utils/logger.js';
 import errorHandler from '../middlewares/errorHandler.js';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import { warnOnce } from '@prisma/client/runtime/library';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -836,11 +837,30 @@ const getTts = async (req, res, next) => {
         return res.status(400).json({ error: 'TTS 변환할 텍스트가 비어있거나 유효하지 않습니다.' });
     }
 
+    const manVoice = 'zQzvQBubVkDWYuqJYMFn'; // Eleven Labs에서 제공하는 남성 음성 ID
+    const womanVoice = '8jHHF8rMqMlg8if2mOUe'; // Eleven Labs에서 제공하는 여성 음성 ID
+
+    const persona = await prismaConfig.prisma.persona.findFirst({
+      where: {
+        id: parseInt(chatLog.senderId, 10),
+        isDeleted: false
+      },
+      select: {
+        name: true,
+        prompt: true,
+      }
+    });
+
+    console.log('DEBUG: persona:', persona?.prompt.tag);
+    let voiceId = womanVoice; // 기본적으로 여성 음성 사용
+    if (persona.prompt.tag.includes('남성')) {
+      voiceId = manVoice; // 남성 태그가 포함된 경우 남성 음성 사용
+    }
     // 6. Eleven Labs API 호출하여 TTS 스트림 받기 (웹 표준 ReadableStream)
-    const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert("JBFqnCBsd6RMkjVDRZzb", {
+    const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert(voiceId, {
       outputFormat: "mp3_44100_128", // MP3 형식임을 명시
       text: textToConvert,
-      modelId: "eleven_multilingual_v2"
+      modelId: "eleven_flash_v2_5"
     });
 
     // **핵심 변경 부분:**
