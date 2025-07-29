@@ -16,11 +16,15 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const gcsConfig = {
+  projectId: isDevelopment ? process.env.GOOGLE_CLOUD_PROJECT : undefined,
+  keyFilename: isDevelopment ? process.env.GOOGLE_APPLICATION_CREDENTIALS : undefined,
+};
+
 // ✅ GCS 클라이언트 초기화
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+const storage = new Storage(gcsConfig);
 
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
