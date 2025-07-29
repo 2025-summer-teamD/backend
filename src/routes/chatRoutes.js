@@ -84,6 +84,82 @@ router.post('/rooms/:roomId/sse',
     personaValidator.validateRoomIdParam,
     chatController.streamChatByRoom2);
 
+/**
+ * @swagger
+ * /chat/rooms/{roomId}/group-sse:
+ *   post:
+ *     summary: 그룹 채팅 SSE 스트리밍
+ *     description: 그룹 채팅에서 메시지를 보내고 BullMQ를 통해 처리된 AI 응답을 SSE로 실시간 수신합니다.
+ *     tags: [Chat]
+ *     parameters:
+ *       - in: path
+ *         name: roomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 채팅방 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *               - sender
+ *               - userName
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: 사용자가 보낸 메시지
+ *                 example: "안녕하세요!"
+ *               sender:
+ *                 type: string
+ *                 description: 메시지 보낸 사람 ID
+ *                 example: "user_123"
+ *               userName:
+ *                 type: string
+ *                 description: 사용자 이름
+ *                 example: "김민정"
+ *     responses:
+ *       '200':
+ *         description: SSE 스트림이 성공적으로 시작됨
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: string
+ *               example: |
+ *                 data: {"type": "user_message", "content": "안녕하세요!", "sender": "김민정"}
+ *                 
+ *                 data: {"type": "ai_response", "content": "안녕하세요! 반가워요!", "aiName": "AI캐릭터"}
+ *                 
+ *                 data: {"type": "exp_updated", "personaId": 1, "newExp": 150, "newLevel": 2}
+ *                 
+ *                 data: {"type": "complete"}
+ *                 
+ *                 data: [DONE]
+ *       '400':
+ *         description: 잘못된 요청 (필수 필드 누락 또는 1대1 채팅방)
+ *       '404':
+ *         description: 채팅방을 찾을 수 없음
+ *       '500':
+ *         description: 서버 오류
+ */
+
+// 그룹 채팅 전용 SSE 스트리밍 (BullMQ 연동)
+router.post('/rooms/:roomId/group-sse',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.streamGroupChatByRoom);
+
+// 🎯 통합 채팅 메시지 전송 API (권장)
+router.post('/rooms/:roomId/send',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.sendChatMessage);
+
 // TODO: enterChatRoom 함수가 삭제되었으므로 임시로 주석 처리
 // router.get('/rooms',
 //     authMiddleware.clerkAuthMiddleware,
