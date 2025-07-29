@@ -380,19 +380,21 @@ const createMultiChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * 채팅방 생성 (그룹 채팅 지원)
  * @route POST /chat/rooms
  * @body { participantIds: number[] } (personaId 배열) 또는 { personaId: number } (1대1 채팅)
+ * @body { isPublic: boolean } (공개 여부, 기본값: true)
  */
 const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { participantIds, personaId } = req.body;
+  const { participantIds, personaId, isPublic = true } = req.body;
   const { userId } = req.auth;
 
   console.log('createChatRoom - participantIds:', participantIds);
   console.log('createChatRoom - personaId:', personaId);
+  console.log('createChatRoom - isPublic:', isPublic);
   console.log('createChatRoom - userId:', userId);
 
   // 1대1 채팅인 경우 (personaId가 있는 경우)
   if (personaId) {
     console.log('createChatRoom - 1대1 채팅 생성');
-    const result = await chatService.createOneOnOneChatRoom(userId, personaId);
+    const result = await chatService.createOneOnOneChatRoom(userId, personaId, isPublic);
     console.log('createChatRoom - 1대1 채팅 결과:', result);
     return responseHandler.sendSuccess(res, 201, '1대1 채팅방이 생성되었습니다.', result);
   }
@@ -408,7 +410,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
   console.log('createChatRoom - allParticipantIds:', allParticipantIds);
 
   // 이미 동일한 참가자 조합의 방이 있으면 반환, 없으면 새로 생성
-  const result = await chatService.createMultiChatRoom(allParticipantIds);
+  const result = await chatService.createMultiChatRoom(allParticipantIds, isPublic);
   console.log('createChatRoom - result:', result);
 
   // 새로 생성된 채팅방인 경우 프론트엔드에서 자동 인사 처리
@@ -910,6 +912,90 @@ const getTts = async (req, res, next) => {
   }
 };
 
+/**
+ * 채팅방 공개 설정 변경
+ * @route PUT /chat/rooms/:roomId/public
+ */
+const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
+  const { roomId } = req.params;
+  const { isPublic } = req.body;
+  const { userId } = req.auth;
+
+  if (typeof isPublic !== 'boolean') {
+    return responseHandler.sendBadRequest(res, 'isPublic은 boolean 값이어야 합니다.');
+  }
+
+  // 내가 참여한 방인지 확인
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    where: { chatroomId: parseInt(roomId), clerkId: userId },
+  });
+  
+  if (!participant) {
+    return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
+  }
+
+  // 채팅방 공개 설정 업데이트
+  const updatedRoom = await prismaConfig.prisma.chatRoom.update({
+    where: { id: parseInt(roomId) },
+    data: { isPublic: isPublic }
+  });
+
+  return responseHandler.sendSuccess(res, 200, '채팅방 공개 설정이 성공적으로 변경되었습니다.', {
+    roomId: updatedRoom.id,
+    isPublic: updatedRoom.isPublic
+  });
+});
+
+/**
+ * 공개 채팅방 목록 조회
+ * @route GET /chat/public-rooms
+ */
+const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  
+  try {
+    // 공개된 채팅방만 조회
+    const publicRooms = await prismaConfig.prisma.chatRoom.findMany({
+      where: {
+        isPublic: true,
+        isDeleted: false,
+      },
+      include: {
+        participants: {
+          include: {
+            persona: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 50 // 최대 50개까지만 조회
+    });
+
+    // 응답 데이터 가공
+    const formattedRooms = publicRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      isPublic: room.isPublic,
+      createdAt: room.createdAt,
+      participants: room.participants.map(p => ({
+        personaId: p.personaId,
+        persona: p.persona ? {
+          id: p.persona.id,
+          name: p.persona.name,
+          imageUrl: p.persona.imageUrl
+        } : null
+      }))
+    }));
+
+    return responseHandler.sendSuccess(res, 200, '공개 채팅방 목록을 성공적으로 조회했습니다.', formattedRooms);
+  } catch (error) {
+    console.error('공개 채팅방 조회 실패:', error);
+    return responseHandler.sendInternalServerError(res, '공개 채팅방 조회에 실패했습니다.');
+  }
+});
+
 export default {
   streamChatByRoom,
   streamChatByRoom2,
@@ -919,7 +1005,9 @@ export default {
   deleteChatRoom,
   getRoomInfo,
   updateChatRoomName,
+  updateChatRoomPublic,
   getCharacterFriendship,
   getAllFriendships,
-  getTts
+  getTts,
+  getPublicChatRooms
 };
