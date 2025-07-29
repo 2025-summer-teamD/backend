@@ -15,3 +15,7 @@ export * from './expCalculator.js';
 export * from './loggingHelpers.js';
 export * from './redisHelpers.js';
 export * from './businessLogicHelpers.js';
+export * from './redisMessageHandlers.js';
+export * from './chatValidationHelpers.js';
+export * from './queueHelpers.js';
+export * from './chatTypeUtils.js';

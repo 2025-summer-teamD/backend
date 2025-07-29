@@ -65,6 +65,17 @@ import {
   generateAndSaveAiResponse,
   generateAndSaveGroupAiResponses
 } from '../utils/businessLogicHelpers.js';
+import { createRedisMessageHandler } from '../utils/redisMessageHandlers.js';
+import {
+  validateCompleteChat,
+  validateChatRoomAndAI,
+  validateChatRoomType
+} from '../utils/chatValidationHelpers.js';
+import {
+  createAndProcessGroupChatJob,
+  setupGroupChatTimeout
+} from '../utils/queueHelpers.js';
+import { isOneOnOneChat } from '../utils/chatTypeUtils.js';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -73,27 +84,6 @@ const elevenlabs = new ElevenLabsClient({
 });
 
 
-
-/**
- * 1대1 채팅방인지 확인하는 함수
- * @param {number} roomId - 채팅방 ID
- * @returns {Promise<boolean>} 1대1 채팅방 여부
- */
-const isOneOnOneChat = async (roomId) => {
-  // ChatRoomParticipant를 통해 1대1 채팅인지 확인
-  const participants = await prismaConfig.prisma.chatRoomParticipant.findMany({
-    where: {
-      chatroomId: parseInt(roomId, 10),
-      personaId: { not: null } // AI 참가자가 있는 경우만
-    },
-    include: {
-      persona: true
-    }
-  });
-
-  // 1대1 채팅: AI 참가자가 1명이고, personaId가 있는 경우
-  return participants.length === 1 && participants[0].personaId !== null;
-};
 
 /**
  * 1대1 채팅 전용 SSE 스트리밍 응답 생성
@@ -135,7 +125,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     
     // 🔄 그룹 채팅인 경우 기존 그룹 채팅 로직으로 위임
     if (!isOneOnOne) {
-      console.log('📡 그룹 채팅 → streamGroupChatByRoom 호출');
+      logInfo('📡 그룹 채팅 → streamGroupChatByRoom 호출');
       return await streamGroupChatByRoom(req, res, next);
     }
 
@@ -211,6 +201,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       sendSSETextChunk(res, aiResponseText);
 
     } catch (aiError) {
+      logError('AI 응답 생성 실패', aiError);
       logger.logError('AI 응답 생성 중 오류 발생', aiError, { roomId: roomId });
       sendSSEErrorAndClose(res, 'AI 응답 생성 중 오류가 발생했습니다.');
       return;
@@ -249,6 +240,7 @@ const streamChatByRoom2 = async (req, res, next) => {
         messageLength: fullResponseText.length
       });
     } catch (dbError) {
+      logError('AI 메시지 저장 실패', dbError);
       logger.logError('AI 메시지 저장 실패', dbError, { roomId: roomId });
       // 저장 실패해도 클라이언트에는 이미 응답을 보냈으므로 에러 로그만 남김
     }
@@ -705,42 +697,25 @@ const streamGroupChatByRoom = async (req, res, next) => {
 
     logProgress('그룹 채팅 SSE 요청 수신', { roomId, userId, messageLength: message?.length });
 
-    // 입력 검증
-    const inputValidation = validateChatInput({ message, sender, userName });
-    if (!inputValidation.isValid) {
-      console.log('❌ 입력 검증 실패:', { message: !!message, sender: !!sender, userName: !!userName });
-      return responseHandler.sendBadRequest(res, inputValidation.error);
-    }
+    // 2. 완전한 채팅 검증 (입력, 인증, 권한)
+    const chatValidation = await validateCompleteChat({ 
+      message, sender, userName, roomId, userId, res 
+    });
+    if (!chatValidation.isValid) return;
 
-    // 2. 그룹 채팅방인지 확인
-    const isOneOnOne = await isOneOnOneChat(roomId);
-    if (isOneOnOne) {
-      console.log('❌ 1대1 채팅방에서 그룹 SSE 호출:', { roomId });
-      return responseHandler.sendBadRequest(res, '이 채팅방은 1대1 채팅방입니다. 그룹 채팅 전용 엔드포인트입니다.');
-    }
+    // 3. 채팅방 타입 검증
+    const typeValidation = await validateChatRoomType({ 
+      roomId, expectedType: 'group', res 
+    });
+    if (!typeValidation.isValid) return;
 
-    // 3. 채팅방 정보 및 참여 권한 확인
-    try {
-      await validateChatRoomParticipant(roomId, userId);
-    } catch (error) {
-      console.log('❌ 채팅방 참여 권한 없음:', { roomId, userId });
-      return responseHandler.sendNotFound(res, error.message);
-    }
+    // 4. 채팅방 정보 및 AI 참여자 검증
+    const roomValidation = await validateChatRoomAndAI({ 
+      roomId, userId, isGroupChat: true, res 
+    });
+    if (!roomValidation.isValid) return;
 
-    const chatRoom = await getChatRoomWithParticipants(roomId);
-    if (!chatRoom) {
-      console.log('❌ 채팅방 없음:', { roomId });
-      return responseHandler.sendNotFound(res, `채팅방 ID ${roomId}를 찾을 수 없습니다.`);
-    }
-    
-    // AI 참여자들 확인
-    const aiParticipants = findAiParticipants(chatRoom.participants);
-    if (aiParticipants.length === 0) {
-      console.log('❌ AI 참여자 없음:', { roomId });
-      return responseHandler.sendBadRequest(res, '이 채팅방에는 AI 참여자가 없습니다.');
-    }
-
-    console.log('✅ 그룹 채팅방 검증 완료:', { roomId, aiParticipantsCount: aiParticipants.length });
+    const { chatRoom, aiParticipants } = roomValidation;
 
     // 4. 사용자 메시지를 즉시 DB에 저장
     try {
@@ -758,9 +733,10 @@ const streamGroupChatByRoom = async (req, res, next) => {
         aiParticipantsCount: aiParticipants.length
       });
     } catch (dbError) {
-      console.error('❌ 사용자 메시지 저장 실패:', dbError);
-      logger.logError('그룹 채팅 사용자 메시지 저장 실패', dbError, { roomId: roomId });
-      return responseHandler.sendServerError(res, '메시지 저장에 실패했습니다.');
+      logError('사용자 메시지 저장 실패', dbError);
+      logErrorWithContext.groupChatUserMessageSaveFailed(dbError, { roomId: roomId });
+      sendSSEError(res, '메시지 저장에 실패했습니다.');
+      return;
     }
 
     // 5. SSE 헤더 설정
@@ -779,122 +755,47 @@ const streamGroupChatByRoom = async (req, res, next) => {
     console.log('✅ 사용자 메시지 SSE 전송 완료');
 
     // 7. BullMQ에 AI 처리 작업 추가
-    const responseChannel = `group-chat-response:${roomId}:${userId}:${Date.now()}`;
-    const jobData = {
-      roomId,
-      message,
-      senderId: userId,
-      userName,
-      isGroupChat: true,
-      responseChannel
-    };
+    const queueResult = await createAndProcessGroupChatJob({
+      roomId, message, senderId: userId, userName, userId, res
+    });
+    if (!queueResult.success) return;
 
-    console.log('🔄 BullMQ 작업 추가 준비:', { responseChannel });
+    const { responseChannel } = queueResult;
 
+    // 6. Redis Pub/Sub으로 AI 응답 대기
     try {
-      const job = await addAiChatJob(jobData);
+      pubSubClient = redisClient.duplicate();
+      await pubSubClient.connect();
+      logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
       
-      logSuccess('BullMQ 작업 추가 완료', { jobId: job.id });
+      // 구독 설정
+      const messageHandler = createRedisMessageHandler(res, responseChannel, pubSubClient);
+      await pubSubClient.subscribe(responseChannel, messageHandler);
+
+      logSuccess('Redis 구독 설정 완료', { responseChannel });
       
-      logUserActivity.groupChatJobQueued(userId, {
-        roomId: roomId,
-        jobId: job.id,
-        responseChannel: responseChannel
-      });
-
-      // 8. Redis Pub/Sub으로 AI 응답 대기
-      try {
-        pubSubClient = redisClient.duplicate();
-        await pubSubClient.connect();
-        
-        logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
-
-        // 구독 설정
-        await pubSubClient.subscribe(responseChannel, (message) => {
-          try {
-            const responseData = JSON.parse(message);
-            console.log('📨 Redis 메시지 수신:', { 
-              type: responseData.type,
-              responseChannel: responseChannel,
-              aiName: responseData.aiName,
-              contentLength: responseData.content?.length
-            });
-            
-            if (responseData.type === 'ai_response') {
-              // AI 응답을 SSE로 전송
-              console.log('📤 클라이언트로 AI 응답 전송:', {
-                aiName: responseData.aiName,
-                aiId: responseData.aiId,
-                personaId: responseData.personaId
-              });
-              
-              res.write(`data: ${JSON.stringify({
-                type: 'ai_response',
-                content: responseData.content,
-                aiName: responseData.aiName,
-                aiId: responseData.aiId,
-                personaId: responseData.personaId,
-                timestamp: responseData.timestamp
-              })}\n\n`);
-            } else if (responseData.type === 'exp_updated') {
-              // 친밀도 업데이트를 SSE로 전송
-              res.write(`data: ${JSON.stringify({
-                type: 'exp_updated',
-                personaId: responseData.personaId,
-                personaName: responseData.personaName,
-                newExp: responseData.newExp,
-                newLevel: responseData.newLevel,
-                expIncrease: responseData.expIncrease,
-                userId: responseData.userId
-              })}\n\n`);
-            } else if (responseData.type === 'complete') {
-              // 모든 AI 응답 완료
-              res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
-              res.write('data: [DONE]\n\n');
-              pubSubClient.unsubscribe(responseChannel);
-              pubSubClient.disconnect();
-              res.end();
-            }
-          } catch (error) {
-            console.error('❌ Redis 메시지 파싱 실패:', error);
-            logger.logError('Redis Pub/Sub 메시지 파싱 실패', error, { 
-              roomId: roomId, 
-              responseChannel: responseChannel 
-            });
+      // 타임아웃 설정 (30초)
+      setTimeout(() => {
+        if (!res.writableEnded) {
+          logProgress('그룹 채팅 SSE 타임아웃');
+          logger.logWarn('그룹 채팅 SSE 타임아웃', { roomId: roomId, userId: userId });
+          res.write(`data: ${JSON.stringify({ type: 'timeout', message: 'AI 응답 대기 시간이 초과되었습니다.' })}\n\n`);
+          res.write('data: [DONE]\n\n');
+          if (pubSubClient) {
+            pubSubClient.unsubscribe(responseChannel);
+            pubSubClient.disconnect();
           }
-        });
-
-        console.log('✅ Redis 구독 설정 완료:', { responseChannel });
-
-        // 타임아웃 설정 (30초)
-        setTimeout(() => {
-          if (!res.writableEnded) {
-            console.log('⏰ 그룹 채팅 SSE 타임아웃');
-            logger.logWarn('그룹 채팅 SSE 타임아웃', { roomId: roomId, userId: userId });
-            res.write(`data: ${JSON.stringify({ type: 'timeout', message: 'AI 응답 대기 시간이 초과되었습니다.' })}\n\n`);
-            res.write('data: [DONE]\n\n');
-            if (pubSubClient) {
-              pubSubClient.unsubscribe(responseChannel);
-              pubSubClient.disconnect();
-            }
-            res.end();
-          }
-        }, 30000);
-
-      } catch (redisError) {
-        logError('Redis Pub/Sub 설정 실패', redisError);
-        logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
-        sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
-        return;
-      }
-
-    } catch (queueError) {
-      logError('BullMQ 작업 추가 실패', queueError);
-      logErrorWithContext.groupChatQueueFailed(queueError, { roomId: roomId });
-      sendSSEErrorAndClose(res, 'AI 응답 처리 중 오류가 발생했습니다.');
+          res.end();
+        }
+      }, 30000);
+      
+    } catch (redisError) {
+      logError('Redis Pub/Sub 설정 실패', redisError);
+      logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
+      sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
       return;
     }
-
+    
   } catch (error) {
     logError('그룹 채팅 SSE 전체 에러', error);
     logErrorWithContext.chatFlowError(error, { roomId: req.params.roomId }, '그룹 채팅 SSE 스트리밍');
@@ -1079,31 +980,31 @@ const sendChatMessage = async (req, res, next) => {
     }
     
     if (!userId) {
-      console.log('❌ 사용자 인증 실패');
+      logError('사용자 인증 실패');
       return responseHandler.sendUnauthorized(res, '사용자 인증이 필요합니다.');
     }
     
     // 2. 채팅방 타입 자동 감지
-    console.log('🔍 채팅방 타입 확인 중...');
+    logProgress('채팅방 타입 확인 중...');
     const isOneOnOne = await isOneOnOneChat(roomId);
     
-    console.log(`✅ 채팅방 타입 확인 완료: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
+    logSuccess(`채팅방 타입 확인 완료: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
     
     // 3. 공통 SSE 헤더 설정
     setupSSEHeaders(res);
-    console.log('✅ SSE 헤더 설정 완료');
+    logSuccess('SSE 헤더 설정 완료');
     
     // 4. 타입에 따른 내부 처리 분기
     if (isOneOnOne) {
-      console.log('🔄 1대1 채팅 플로우 시작');
+      logProgress('1대1 채팅 플로우 시작');
       await handleOneOnOneChatFlow(req, res, next);
     } else {
-      console.log('🔄 그룹 채팅 플로우 시작');
+      logProgress('그룹 채팅 플로우 시작');
       await handleGroupChatFlow(req, res, next);
     }
     
   } catch (error) {
-    console.error('❌ 통합 채팅 API 에러:', error);
+    logError('통합 채팅 API 에러', error);
     logger.logError('통합 채팅 메시지 처리 실패', error, { 
       roomId, 
       userId, 
@@ -1169,16 +1070,16 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
         senderType: 'user',
         senderId: userId
       });
-      console.log('✅ 사용자 메시지 DB 저장 완료');
+      logSuccess('사용자 메시지 DB 저장 완료');
     } catch (dbError) {
-      console.error('❌ 사용자 메시지 저장 실패:', dbError);
+      logError('사용자 메시지 저장 실패', dbError);
       sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
     
     // 4. 사용자 메시지 즉시 전송
     sendSSEUserMessage(res, { message: userMessage, userName, userId });
-    console.log('✅ 사용자 메시지 SSE 전송 완료');
+    logSuccess('사용자 메시지 SSE 전송 완료');
     
     // 5. AI 응답 생성 및 전송
     let fullResponseText = "";
@@ -1231,7 +1132,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       }
       
     } catch (dbError) {
-      console.error('❌ AI 메시지 저장 실패:', dbError);
+      logError('AI 메시지 저장 실패', dbError);
       logger.logError('AI 메시지 저장 실패', dbError, { roomId: roomId });
       sendSSEError(res, 'AI 응답 저장에 실패했습니다.');
       return;
@@ -1242,7 +1143,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
     console.log('✅ 1대1 채팅 플로우 완료');
     
   } catch (error) {
-    console.error('❌ 1대1 채팅 플로우 에러:', error);
+    logError('1대1 채팅 플로우 에러', error);
     logger.logError('1대1 채팅 플로우 에러', error, { roomId, userId });
     res.write(`data: ${JSON.stringify({ type: 'error', message: '1대1 채팅 처리 중 오류가 발생했습니다.' })}\n\n`);
     res.write('data: [DONE]\n\n');
@@ -1262,7 +1163,7 @@ const handleGroupChatFlow = async (req, res, next) => {
   
   // 클라이언트 연결 종료 처리
   const handleClientClose = () => {
-    console.log('🔌 그룹 채팅 클라이언트 연결 종료');
+    logInfo('그룹 채팅 클라이언트 연결 종료');
     if (pubSubClient) {
       pubSubClient.disconnect();
     }
@@ -1275,33 +1176,23 @@ const handleGroupChatFlow = async (req, res, next) => {
   res.on('close', handleClientClose);
   
   try {
-    console.log('🔄 그룹 채팅 처리 시작:', { roomId, userId, messageLength: message?.length });
+    logProgress('그룹 채팅 처리 시작', { roomId, userId, messageLength: message?.length });
     
-    // 1. 채팅방 정보 조회 및 검증
-    const chatRoom = await getChatRoomWithParticipants(roomId);
+    // 1. 완전한 채팅 검증 (입력, 인증, 권한)
+    const chatValidation = await validateCompleteChat({ 
+      message, sender, userName, roomId, userId, res 
+    });
+    if (!chatValidation.isValid) return;
+
+    // 2. 채팅방 정보 및 AI 참여자 검증  
+    const roomValidation = await validateChatRoomAndAI({ 
+      roomId, userId, isGroupChat: true, res 
+    });
+    if (!roomValidation.isValid) return;
+
+    const { chatRoom, aiParticipants } = roomValidation;
     
-    if (!chatRoom) {
-      sendSSEError(res, '채팅방을 찾을 수 없습니다.');
-      return;
-    }
-    
-    // 사용자가 이 채팅방의 참여자인지 확인
-    const isParticipant = chatRoom.participants.some(p => p.userId === userId);
-    if (!isParticipant) {
-      sendSSEError(res, '이 채팅방에 접근할 권한이 없습니다.');
-      return;
-    }
-    
-    // AI 참여자들 찾기
-    const aiParticipants = findAiParticipants(chatRoom.participants, userId);
-    if (aiParticipants.length === 0) {
-      sendSSEError(res, '이 채팅방에는 AI 참여자가 없습니다.');
-      return;
-    }
-    
-    console.log('✅ 그룹 채팅방 검증 완료:', { roomId, aiParticipantsCount: aiParticipants.length });
-    
-    // 2. 사용자 메시지를 DB에 저장
+    // 3. 사용자 메시지를 DB에 저장
     try {
       await saveChatMessage({
         roomId,
@@ -1323,132 +1214,54 @@ const handleGroupChatFlow = async (req, res, next) => {
       return;
     }
     
-    // 3. 사용자 메시지 즉시 전송
+    // 4. 사용자 메시지 즉시 전송
     sendSSEUserMessage(res, { message, userName, userId });
-    console.log('✅ 사용자 메시지 SSE 전송 완료');
+    logSuccess('사용자 메시지 SSE 전송 완료');
     
-    // 4. BullMQ에 AI 처리 작업 추가
-    const responseChannel = `group-chat-response:${roomId}:${userId}:${Date.now()}`;
-    const jobData = {
-      roomId,
-      message,
-      senderId: userId,
-      userName,
-      isGroupChat: true,
-      responseChannel
-    };
-    
-    logProgress('BullMQ 작업 추가 준비', { responseChannel });
-    
+    // 5. BullMQ에 AI 처리 작업 추가
+    const queueResult = await createAndProcessGroupChatJob({
+      roomId, message, senderId: userId, userName, userId, res
+    });
+    if (!queueResult.success) return;
+
+    const { responseChannel } = queueResult;
+
+    // 6. Redis Pub/Sub으로 AI 응답 대기
     try {
-      const job = await addAiChatJob(jobData);
-      logSuccess('BullMQ 작업 추가 완료', { jobId: job.id });
+      pubSubClient = redisClient.duplicate();
+      await pubSubClient.connect();
+      logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
       
-      logUserActivity.groupChatJobQueued(userId, {
-        roomId: roomId,
-        jobId: job.id,
-        responseChannel: responseChannel
-      });
+      // 구독 설정
+      const messageHandler = createRedisMessageHandler(res, responseChannel, pubSubClient);
+      await pubSubClient.subscribe(responseChannel, messageHandler);
+
+      logSuccess('Redis 구독 설정 완료', { responseChannel });
       
-      // 5. Redis Pub/Sub으로 AI 응답 대기
-      try {
-        pubSubClient = redisClient.duplicate();
-        await pubSubClient.connect();
-        logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
-        
-        // 구독 설정
-        await pubSubClient.subscribe(responseChannel, (message) => {
-          try {
-            const responseData = JSON.parse(message);
-            console.log('📨 Redis 메시지 수신:', { 
-              type: responseData.type,
-              responseChannel: responseChannel,
-              aiName: responseData.aiName,
-              contentLength: responseData.content?.length
-            });
-            
-            if (responseData.type === 'ai_response') {
-              // AI 응답을 SSE로 전송
-              console.log('📤 클라이언트로 AI 응답 전송:', {
-                aiName: responseData.aiName,
-                aiId: responseData.aiId,
-                personaId: responseData.personaId
-              });
-              
-              res.write(`data: ${JSON.stringify({
-                type: 'ai_response',
-                content: responseData.content,
-                aiName: responseData.aiName,
-                aiId: responseData.aiId,
-                personaId: responseData.personaId,
-                timestamp: responseData.timestamp
-              })}\n\n`);
-            } else if (responseData.type === 'exp_updated') {
-              // 친밀도 업데이트를 SSE로 전송
-              res.write(`data: ${JSON.stringify({
-                type: 'exp_updated',
-                personaId: responseData.personaId,
-                personaName: responseData.personaName,
-                newExp: responseData.newExp,
-                newLevel: responseData.newLevel,
-                expIncrease: responseData.expIncrease,
-                userId: responseData.userId
-              })}\n\n`);
-            } else if (responseData.type === 'complete') {
-              // 모든 AI 응답 완료
-              res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
-              res.write('data: [DONE]\n\n');
-              pubSubClient.unsubscribe(responseChannel);
-              pubSubClient.disconnect();
-              res.end();
-              console.log('✅ 그룹 채팅 플로우 완료');
-            }
-          } catch (error) {
-            console.error('❌ Redis 메시지 파싱 실패:', error);
-            logger.logError('Redis Pub/Sub 메시지 파싱 실패', error, { 
-              roomId: roomId, 
-              responseChannel: responseChannel 
-            });
+      // 타임아웃 설정 (30초)
+      setTimeout(() => {
+        if (!res.writableEnded) {
+          logProgress('그룹 채팅 SSE 타임아웃');
+          logger.logWarn('그룹 채팅 SSE 타임아웃', { roomId: roomId, userId: userId });
+          res.write(`data: ${JSON.stringify({ type: 'timeout', message: 'AI 응답 대기 시간이 초과되었습니다.' })}\n\n`);
+          res.write('data: [DONE]\n\n');
+          if (pubSubClient) {
+            pubSubClient.unsubscribe(responseChannel);
+            pubSubClient.disconnect();
           }
-        });
-        
-        console.log('✅ Redis 구독 설정 완료:', { responseChannel });
-        
-        // 타임아웃 설정 (30초)
-        setTimeout(() => {
-          if (!res.writableEnded) {
-            console.log('⏰ 그룹 채팅 SSE 타임아웃');
-            logger.logWarn('그룹 채팅 SSE 타임아웃', { roomId: roomId, userId: userId });
-            res.write(`data: ${JSON.stringify({ type: 'timeout', message: 'AI 응답 대기 시간이 초과되었습니다.' })}\n\n`);
-            res.write('data: [DONE]\n\n');
-            if (pubSubClient) {
-              pubSubClient.unsubscribe(responseChannel);
-              pubSubClient.disconnect();
-            }
-            res.end();
-          }
-        }, 30000);
-        
-      } catch (redisError) {
-        console.error('❌ Redis Pub/Sub 설정 실패:', redisError);
-        logger.logError('Redis Pub/Sub 설정 실패', redisError, { roomId: roomId });
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Redis 연결에 실패했습니다.' })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
-      }
+          res.end();
+        }
+      }, 30000);
       
-    } catch (queueError) {
-      console.error('❌ BullMQ 작업 추가 실패:', queueError);
-      logger.logError('그룹 채팅 큐 작업 추가 실패', queueError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 처리 중 오류가 발생했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+    } catch (redisError) {
+      logError('Redis Pub/Sub 설정 실패', redisError);
+      logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
+      sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
       return;
     }
     
   } catch (error) {
-    console.error('❌ 그룹 채팅 플로우 에러:', error);
+    logError('그룹 채팅 플로우 에러', error);
     logger.logError('그룹 채팅 플로우 에러', error, { roomId, userId });
     res.write(`data: ${JSON.stringify({ type: 'error', message: '그룹 채팅 처리 중 오류가 발생했습니다.' })}\n\n`);
     res.write('data: [DONE]\n\n');
