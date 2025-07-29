@@ -76,6 +76,16 @@ import {
   setupGroupChatTimeout
 } from '../utils/queueHelpers.js';
 import { isOneOnOneChat } from '../utils/chatTypeUtils.js';
+import { saveAndSendUserMessage } from '../utils/messageProcessingHelpers.js';
+import { 
+  processCompleteFriendshipUpdate,
+  processGroupChatFriendshipUpdates 
+} from '../utils/friendshipProcessingHelpers.js';
+import { setupCompleteRedisSubscription } from '../utils/redisFlowHelpers.js';
+import { 
+  processOneOnOneAiResponse,
+  processGroupAiResponses 
+} from '../utils/aiResponseHelpers.js';
 
 const elevenlabs = new ElevenLabsClient({
 

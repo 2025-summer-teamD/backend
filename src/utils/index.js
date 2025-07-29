@@ -19,3 +19,7 @@ export * from './redisMessageHandlers.js';
 export * from './chatValidationHelpers.js';
 export * from './queueHelpers.js';
 export * from './chatTypeUtils.js';
+export * from './messageProcessingHelpers.js';
+export * from './friendshipProcessingHelpers.js';
+export * from './redisFlowHelpers.js';
+export * from './aiResponseHelpers.js';
