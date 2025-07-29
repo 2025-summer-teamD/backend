@@ -3,12 +3,20 @@
 import { Storage } from '@google-cloud/storage';
 import crypto from 'crypto';
 
+// 환경에 따른 설정 분리
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 // ✅ 환경변수 유효성 검사
+// 공통 필수 환경 변수
 const requiredEnvVars = [
   'GOOGLE_CLOUD_PROJECT',
   'GCS_BUCKET_NAME',
-  'GOOGLE_APPLICATION_CREDENTIALS',
 ];
+
+// 개발 환경에서만 GOOGLE_APPLICATION_CREDENTIALS 필수
+if (isDevelopment) {
+  requiredEnvVars.push('GOOGLE_APPLICATION_CREDENTIALS');
+}
 
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
@@ -16,11 +24,17 @@ requiredEnvVars.forEach(varName => {
   }
 });
 
-// ✅ GCS 클라이언트 초기화
-const storage = new Storage({
+const gcsConfig = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+};
+
+// 개발 환경에서만 keyFilename 설정 (배포 환경에서는 ADC 사용)
+if (isDevelopment) {
+  gcsConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+}
+
+// ✅ GCS 클라이언트 초기화
+const storage = new Storage(gcsConfig);
 
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 

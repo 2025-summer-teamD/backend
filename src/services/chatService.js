@@ -560,8 +560,9 @@ async function checkAndGenerateVideoReward(roomId, options) {
  * @param {string[]} participantIds - 유저/AI의 clerkId 또는 personaId 배열
  * @returns {Promise<object>} 생성/조회된 채팅방 정보
  */
-const createMultiChatRoom = async (participantIds) => {
+const createMultiChatRoom = async (participantIds, isPublic = true) => {
   console.log('createMultiChatRoom service - participantIds:', participantIds);
+  console.log('createMultiChatRoom service - isPublic:', isPublic);
 
   // 1. 참가자 배열을 clerkId/personaId로 분리
   // participantIds는 [userId, personaId1, personaId2, ...] 형태
@@ -574,7 +575,9 @@ const createMultiChatRoom = async (participantIds) => {
   // 항상 새 채팅방 생성 (기존 채팅방 재사용 제거)
   console.log('createMultiChatRoom service - creating new room');
   const foundRoom = await prismaConfig.prisma.chatRoom.create({
-    data: {},
+    data: {
+      isPublic: isPublic
+    },
     include: { participants: true }
   });
   console.log('createMultiChatRoom service - created room id:', foundRoom.id);
@@ -607,6 +610,7 @@ const createMultiChatRoom = async (participantIds) => {
   const result = {
     roomId: foundRoom.id,
     isNewRoom: true, // 항상 새 방
+    isPublic: foundRoom.isPublic,
     participants: foundRoomWithParticipants.participants.map(p => ({
       clerkId: p.clerkId,
       personaId: p.personaId,
@@ -623,12 +627,12 @@ const createMultiChatRoom = async (participantIds) => {
  * 1대1 채팅방 생성
  * @param {string} userId - 사용자 ID
  * @param {number} personaId - 캐릭터 ID
+ * @param {boolean} isPublic - 공개 여부
  * @returns {Promise<object>} 생성된 채팅방 정보
  */
-const createOneOnOneChatRoom = async (userId, personaId) => {
+const createOneOnOneChatRoom = async (userId, personaId, isPublic = true) => {
   try {
-    console.log('createOneOnOneChatRoom - userId:', userId, 'personaId:', personaId);
-
+    console.log('createOneOnOneChatRoom - userId:', userId, 'personaId:', personaId, 'isPublic:', isPublic);
 
     // 1. 먼저 기존 채팅방이 있는지 확인
     const existingParticipant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
@@ -663,6 +667,7 @@ const createOneOnOneChatRoom = async (userId, personaId) => {
         character: persona,
         chatHistory: [], // 빈 배열로 보내서 깔끔하게 시작
         isNewRoom: false,
+        isPublic: existingParticipant.chatRoom.isPublic,
       };
     }
 
@@ -670,6 +675,7 @@ const createOneOnOneChatRoom = async (userId, personaId) => {
     const newRoom = await prismaConfig.prisma.chatRoom.create({
       data: {
         name: `1대1 채팅`,
+        isPublic: isPublic,
         isDeleted: false,
       },
     });
@@ -701,6 +707,7 @@ const createOneOnOneChatRoom = async (userId, personaId) => {
       character: persona,
       chatHistory: [],
       isNewRoom: true,
+      isPublic: newRoom.isPublic,
     };
   } catch (error) {
     console.error('createOneOnOneChatRoom - 에러:', error);

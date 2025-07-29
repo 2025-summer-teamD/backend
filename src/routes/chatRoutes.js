@@ -179,6 +179,19 @@ router.put('/rooms/:roomId/name',
     personaValidator.validateRoomIdParam,
     chatController.updateChatRoomName);
 
+// 채팅방 공개 설정 변경
+router.put('/rooms/:roomId/public',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.updateChatRoomPublic);
+
+// 공개 채팅방 조회
+router.get('/public-rooms',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    chatController.getPublicChatRooms);
+
 // 친밀도 조회 라우트 추가
 router.get('/friendships',
     authMiddleware.clerkAuthMiddleware,

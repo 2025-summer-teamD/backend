@@ -1,9 +1,9 @@
 /**
  * 채팅 컨트롤러
- * 
+ *
  * 사용 위치:
  * - chatRoutes.js에서 라우터 연결
- * 
+ *
  * 기능:
  * - 채팅방 관리
  * - AI 채팅 응답 생성
@@ -19,6 +19,7 @@ import errorHandler from '../middlewares/errorHandler.js';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import redisClient from '../config/redisClient.js'; // BullMQ 및 Redis Pub/Sub을 위한 클라이언트
 import { addAiChatJob } from '../services/queueService.js';
+import { warnOnce } from '@prisma/client/runtime/library';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -46,7 +47,7 @@ const isGameActive = (message) => {
   const gameKeywords = [
     '[GAME:끝말잇기]', '[GAME:스무고개]', '[GAME:밸런스게임]'
   ];
-  
+
   return gameKeywords.some(keyword => message.includes(keyword));
 };
 
@@ -57,24 +58,24 @@ const isGameActive = (message) => {
 const calculateExp = (message) => {
   // 기본 1점
   let exp = 1;
-  
+
   // 글자 수에 따른 추가 경험치
   if (message.length >= 100) {
     exp = 3;
   } else if (message.length >= 50) {
     exp = 2;
   }
-  
+
   // 이모지 추가 경험치 (이모지 하나당 0.2점)
   const emojiCount = countEmojis(message);
   const emojiExp = emojiCount * 0.2;
   exp += emojiExp;
-  
+
   // 게임 중이면 5점 추가
   if (isGameActive(message)) {
     exp += 5;
   }
-  
+
   return Math.round(exp * 10) / 10; // 소수점 첫째자리까지 반올림
 };
 
@@ -110,7 +111,7 @@ const isOneOnOneChat = async (roomId) => {
 
 /**
  * 1대1 채팅 전용 SSE 스트리밍 응답 생성
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -155,7 +156,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 1. 사용자가 참여한 채팅방인지 확인
     const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-      where: { 
+      where: {
         chatroomId: parseInt(roomId, 10),
         clerkId: userId,
       },
@@ -212,7 +213,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     const userMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'user').length;
     const aiMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'ai').length;
     const isFirstMessage = userMessageCount <= 1 && aiMessageCount === 0;
-
+    let savedChatLogId = null;
     // 1. 먼저 사용자 메시지를 즉시 DB에 저장
     try {
       await prismaConfig.prisma.chatLog.create({
@@ -240,7 +241,6 @@ const streamChatByRoom2 = async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
-
     // 3. AI 응답 스트리밍 생성 및 전송
     let fullResponseText = "";
     try {
@@ -267,7 +267,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 4. 스트림 완료 후, AI 응답 전체를 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
+      const chatRog = await prismaConfig.prisma.chatLog.create({
         data: {
           chatroomId: parseInt(roomId, 10),
           text: fullResponseText,
@@ -277,11 +277,15 @@ const streamChatByRoom2 = async (req, res, next) => {
           time: new Date()
         }
       });
-
-      // 사용자 메시지 길이에 따른 친밀도 증가
+      savedChatLogId = chatRog.id;
+      // AI 메시지 전송 시 친밀도 증가
       const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
-
+      res.write(`data: ${JSON.stringify({
+        type: 'message_saved',
+        chatLogId: savedChatLogId,
+      })}\n\n`);
+      console.log(savedChatLogId, "qqqqqqqqqqqqqqqqqqqqqqqqqqqqQQQQQQQQQQQQQQQ");
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
       const io = req.app.getIo ? req.app.getIo() : null;
       if (io && friendshipResult) {
@@ -331,7 +335,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -382,19 +386,21 @@ const createMultiChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * 채팅방 생성 (그룹 채팅 지원)
  * @route POST /chat/rooms
  * @body { participantIds: number[] } (personaId 배열) 또는 { personaId: number } (1대1 채팅)
+ * @body { isPublic: boolean } (공개 여부, 기본값: true)
  */
 const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { participantIds, personaId } = req.body;
+  const { participantIds, personaId, isPublic = true } = req.body;
   const { userId } = req.auth;
 
   console.log('createChatRoom - participantIds:', participantIds);
   console.log('createChatRoom - personaId:', personaId);
+  console.log('createChatRoom - isPublic:', isPublic);
   console.log('createChatRoom - userId:', userId);
 
   // 1대1 채팅인 경우 (personaId가 있는 경우)
   if (personaId) {
     console.log('createChatRoom - 1대1 채팅 생성');
-    const result = await chatService.createOneOnOneChatRoom(userId, personaId);
+    const result = await chatService.createOneOnOneChatRoom(userId, personaId, isPublic);
     console.log('createChatRoom - 1대1 채팅 결과:', result);
     return responseHandler.sendSuccess(res, 201, '1대1 채팅방이 생성되었습니다.', result);
   }
@@ -410,7 +416,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
   console.log('createChatRoom - allParticipantIds:', allParticipantIds);
 
   // 이미 동일한 참가자 조합의 방이 있으면 반환, 없으면 새로 생성
-  const result = await chatService.createMultiChatRoom(allParticipantIds);
+  const result = await chatService.createMultiChatRoom(allParticipantIds, isPublic);
   console.log('createChatRoom - result:', result);
 
   // 새로 생성된 채팅방인 경우 프론트엔드에서 자동 인사 처리
@@ -424,7 +430,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 채팅방 삭제
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -448,7 +454,7 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { roomId } = req.query;
   const { userId } = req.auth;
-  
+
   if (!roomId) {
     return responseHandler.sendBadRequest(res, 'roomId 쿼리 파라미터가 필요합니다.');
   }
@@ -456,7 +462,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   if (isNaN(parsedRoomId)) {
       return responseHandler.sendBadRequest(res, 'roomId는 숫자여야 합니다.');
   }
-  
+
   // 내가 참여한 방인지 확인
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: { chatroomId: parsedRoomId, clerkId: userId },
@@ -704,7 +710,7 @@ const streamChatByRoom = async (req, res, next) => {
       // 단체 채팅에서는 모든 AI에게 각각 친밀도 증가
       const expIncrease = calculateExp(message);
       console.log(`🔍 단체 채팅 경험치 계산: 메시지 "${message}" -> +${expIncrease}점`);
-      
+
       for (const response of aiResponses) {
         console.log(`🔍 단체 채팅 ${response.personaName} 친밀도 증가 시도: 경험치 +${expIncrease}`);
         await chatService.increaseFriendship(userId, response.personaId, expIncrease);
@@ -1102,11 +1108,30 @@ const getTts = async (req, res, next) => {
         return res.status(400).json({ error: 'TTS 변환할 텍스트가 비어있거나 유효하지 않습니다.' });
     }
 
+    const manVoice = 'zQzvQBubVkDWYuqJYMFn'; // Eleven Labs에서 제공하는 남성 음성 ID
+    const womanVoice = '8jHHF8rMqMlg8if2mOUe'; // Eleven Labs에서 제공하는 여성 음성 ID
+
+    const persona = await prismaConfig.prisma.persona.findFirst({
+      where: {
+        id: parseInt(chatLog.senderId, 10),
+        isDeleted: false
+      },
+      select: {
+        name: true,
+        prompt: true,
+      }
+    });
+
+    console.log('DEBUG: persona:', persona?.prompt.tag);
+    let voiceId = womanVoice; // 기본적으로 여성 음성 사용
+    if (persona.prompt.tag.includes('남성')) {
+      voiceId = manVoice; // 남성 태그가 포함된 경우 남성 음성 사용
+    }
     // 6. Eleven Labs API 호출하여 TTS 스트림 받기 (웹 표준 ReadableStream)
-    const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert("JBFqnCBsd6RMkjVDRZzb", {
+    const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert(voiceId, {
       outputFormat: "mp3_44100_128", // MP3 형식임을 명시
       text: textToConvert,
-      modelId: "eleven_multilingual_v2"
+      modelId: "eleven_flash_v2_5"
     });
 
     // **핵심 변경 부분:**
@@ -1654,6 +1679,90 @@ const handleGroupChatFlow = async (req, res, next) => {
   }
 };
 
+/**
+ * 채팅방 공개 설정 변경
+ * @route PUT /chat/rooms/:roomId/public
+ */
+const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
+  const { roomId } = req.params;
+  const { isPublic } = req.body;
+  const { userId } = req.auth;
+
+  if (typeof isPublic !== 'boolean') {
+    return responseHandler.sendBadRequest(res, 'isPublic은 boolean 값이어야 합니다.');
+  }
+
+  // 내가 참여한 방인지 확인
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    where: { chatroomId: parseInt(roomId), clerkId: userId },
+  });
+  
+  if (!participant) {
+    return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
+  }
+
+  // 채팅방 공개 설정 업데이트
+  const updatedRoom = await prismaConfig.prisma.chatRoom.update({
+    where: { id: parseInt(roomId) },
+    data: { isPublic: isPublic }
+  });
+
+  return responseHandler.sendSuccess(res, 200, '채팅방 공개 설정이 성공적으로 변경되었습니다.', {
+    roomId: updatedRoom.id,
+    isPublic: updatedRoom.isPublic
+  });
+});
+
+/**
+ * 공개 채팅방 목록 조회
+ * @route GET /chat/public-rooms
+ */
+const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  
+  try {
+    // 공개된 채팅방만 조회
+    const publicRooms = await prismaConfig.prisma.chatRoom.findMany({
+      where: {
+        isPublic: true,
+        isDeleted: false,
+      },
+      include: {
+        participants: {
+          include: {
+            persona: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 50 // 최대 50개까지만 조회
+    });
+
+    // 응답 데이터 가공
+    const formattedRooms = publicRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      isPublic: room.isPublic,
+      createdAt: room.createdAt,
+      participants: room.participants.map(p => ({
+        personaId: p.personaId,
+        persona: p.persona ? {
+          id: p.persona.id,
+          name: p.persona.name,
+          imageUrl: p.persona.imageUrl
+        } : null
+      }))
+    }));
+
+    return responseHandler.sendSuccess(res, 200, '공개 채팅방 목록을 성공적으로 조회했습니다.', formattedRooms);
+  } catch (error) {
+    console.error('공개 채팅방 조회 실패:', error);
+    return responseHandler.sendInternalServerError(res, '공개 채팅방 조회에 실패했습니다.');
+  }
+});
+
 export default {
   streamChatByRoom,
   streamChatByRoom2,
@@ -1663,9 +1772,11 @@ export default {
   deleteChatRoom,
   getRoomInfo,
   updateChatRoomName,
+  updateChatRoomPublic,
   getCharacterFriendship,
   getAllFriendships,
   getTts,
   streamGroupChatByRoom,
-  sendChatMessage
+  sendChatMessage,
+  getPublicChatRooms
 };
