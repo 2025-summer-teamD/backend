@@ -188,6 +188,17 @@ router.post(  // AI를 사용하여 나의 페르소나 생성 (POST /api/my/cha
 );
 
 /**
+ * Perplexity API 키 테스트 API
+ */
+router.post(
+  '/test-perplexity',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  ensureUserInDB,
+  personaController.testPerplexityAPI
+);
+
+/**
  * AI로 캐릭터 정보를 생성만 하고 DB에 저장하지 않는 preview API
  */
 router.post(
@@ -357,6 +368,100 @@ router.get(
   authMiddleware.requireAuth,
   ensureUserInDB,
   personaController.getMyPersonaDetails
+);
+
+/**
+ * @swagger
+ * /characters/{characterId}:
+ *   put:
+ *     summary: 페르소나 수정
+ *     description: 특정 페르소나의 정보를 수정합니다.
+ *     tags:
+ *       - update character
+ *     parameters:
+ *       - in: path
+ *         name: characterId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 페르소나 ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: 캐릭터 이름
+ *               introduction:
+ *                 type: string
+ *                 example: 캐릭터 설명
+ *               personality:
+ *                 type: string
+ *                 example: 성격
+ *               tone:
+ *                 type: string
+ *                 example: 말투
+ *               tag:
+ *                 type: string
+ *                 example: 태그
+ *               isPublic:
+ *                 type: boolean
+ *                 example: true
+ *     responses:
+ *       200:
+ *         description: 수정 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 페르소나가 수정되었습니다.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     name:
+ *                       type: string
+ *                       example: 캐릭터 이름
+ *                     image_url:
+ *                       type: string
+ *                       example: https://example.com/image.png
+ *                     is_public:
+ *                       type: boolean
+ *                       example: true
+ *                     prompt:
+ *                       type: object
+ *                       properties:
+ *                         tone:
+ *                           type: string
+ *                           example: 말투입니다
+ *                         personality:
+ *                           type: string
+ *                           example: 성격입니다
+ *                         tag:
+ *                           type: string
+ *                           example: "#태그"
+ *                     description:
+ *                       type: string
+ *                       example: 추가설명입니다
+ *       404:
+ *         description: 페르소나를 찾을 수 없음
+ *       403:
+ *         description: 권한 없음
+ */
+router.put(
+  '/:characterId',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  ensureUserInDB,
+  personaController.updatePersona
 );
 
 

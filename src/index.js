@@ -76,14 +76,14 @@ io.on('connection', (socket) => {
     if (!senderType || senderType === 'user') {
       console.log('🤖 AI 응답 생성 시작 (그룹 채팅)');
       
-      // 채팅방의 모든 AI(페르소나) 참여자 조회
+      // 채팅방의 AI(페르소나) 참여자 조회
       const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
         where: { id: parseInt(roomId, 10) },
-        include: { participants: { include: { persona: true } } },
+        include: { persona: true },
       });
-      const aiParticipants = chatRoom.participants.filter(p => p.personaId && p.persona);
+      const aiParticipants = chatRoom.persona ? [chatRoom.persona] : [];
       
-      console.log(`👥 AI 참여자 수: ${aiParticipants.length}`, aiParticipants.map(p => ({ id: p.persona.id, name: p.persona.name })));
+      console.log(`👥 AI 참여자 수: ${aiParticipants.length}`, aiParticipants.map(p => ({ id: p.id, name: p.name })));
       
       // 1대1 채팅인지 확인
       const isOneOnOne = aiParticipants.length === 1;
@@ -108,8 +108,8 @@ io.on('connection', (socket) => {
               return `${userName || '사용자'}: ${log.text}`;
             } else {
               // AI 메시지인 경우 해당 AI의 이름 찾기
-              const aiParticipant = aiParticipants.find(p => p.persona.id === parseInt(log.senderId));
-              const aiName = aiParticipant ? aiParticipant.persona.name : `AI(${log.senderId})`;
+              const aiParticipant = aiParticipants.find(p => p.id === parseInt(log.senderId));
+              const aiName = aiParticipant ? aiParticipant.name : `AI(${log.senderId})`;
               return `${aiName}: ${log.text}`;
             }
           })
@@ -129,7 +129,7 @@ io.on('connection', (socket) => {
         
         // 단체 채팅: 다중 AI 응답
         // 모든 AI 정보 수집
-        const allPersonas = aiParticipants.map(p => p.persona);
+        const allPersonas = aiParticipants;
         
         // 병렬로 모든 AI 응답 생성
         console.log('📝 AI에 전달할 대화 기록:', chatHistory);

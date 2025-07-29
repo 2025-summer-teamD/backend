@@ -92,19 +92,19 @@ const getLevel = (exp) => {
  * @returns {Promise<boolean>} 1대1 채팅방 여부
  */
 const isOneOnOneChat = async (roomId) => {
-  // ChatRoomParticipant를 통해 1대1 채팅인지 확인
-  const participants = await prismaConfig.prisma.chatRoomParticipant.findMany({
+  // ChatRoom을 통해 1대1 채팅인지 확인
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
-      chatroomId: parseInt(roomId, 10),
-      personaId: { not: null } // AI 참가자가 있는 경우만
+      id: parseInt(roomId, 10),
+      isDeleted: false
     },
     include: {
       persona: true
     }
   });
 
-  // 1대1 채팅: AI 참가자가 1명이고, personaId가 있는 경우
-  return participants.length === 1 && participants[0].personaId !== null;
+  // 1대1 채팅: personaId가 있는 경우
+  return chatRoom && chatRoom.personaId !== null;
 };
 
 /**
@@ -149,47 +149,38 @@ const streamChatByRoom2 = async (req, res, next) => {
     // 실제 채팅방 정보를 데이터베이스에서 조회
 
     // 1. 사용자가 참여한 채팅방인지 확인
-    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: {
-        chatroomId: parseInt(roomId, 10),
+        id: parseInt(roomId, 10),
         clerkId: userId,
+        isDeleted: false
       },
       include: {
-        chatRoom: {
-          include: {
-            participants: {
-              include: {
-                persona: true
-          }
-        },
+        persona: true,
         ChatLogs: {
           where: { isDeleted: false },
           orderBy: { time: 'desc' },
-              take: 10,
-              select: { text: true, senderType: true, senderId: true, time: true }
-            }
-          }
+          take: 10,
+          select: { text: true, senderType: true, senderId: true, time: true }
         }
       }
     });
 
-    if (!participant || !participant.chatRoom) {
+    if (!chatRoom) {
       return responseHandler.sendNotFound(res, `채팅방 ID ${roomId}를 찾을 수 없습니다.`);
     }
 
-    // AI 참여자 찾기
-    const aiParticipant = participant.chatRoom.participants.find(p => p.personaId && p.persona);
-    if (!aiParticipant || !aiParticipant.persona) {
+    // AI 참여자 확인
+    if (!chatRoom.persona) {
       return responseHandler.sendNotFound(res, '1대1 채팅방에서 AI를 찾을 수 없습니다.');
     }
 
-    const chatRoom = participant.chatRoom;
     personaInfo = {
-      id: aiParticipant.persona.id,
-      name: aiParticipant.persona.name,
-      personality: aiParticipant.persona.introduction || '친근하고 도움이 되는 성격',
-      tone: '친근하고 자연스러운 말투',
-      prompt: aiParticipant.persona.prompt
+      id: chatRoom.persona.id,
+      name: chatRoom.persona.name,
+              personality: chatRoom.persona.introduction || '친근하고 도움이 되는 성격',
+        tone: '친근하고 자연스러운 말투',
+              prompt: chatRoom.persona.prompt
     };
 
     // 실제 대화 기록을 문자열로 변환
@@ -383,7 +374,7 @@ const createMultiChatRoom = errorHandler.asyncHandler(async (req, res) => {
  * @body { isPublic: boolean } (공개 여부, 기본값: true)
  */
 const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
-  const { participantIds, personaId, isPublic = true } = req.body;
+  const { participantIds, personaId, isPublic = true, description } = req.body;
   const { userId } = req.auth;
 
   console.log('createChatRoom - participantIds:', participantIds);
@@ -394,7 +385,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
   // 1대1 채팅인 경우 (personaId가 있는 경우)
   if (personaId) {
     console.log('createChatRoom - 1대1 채팅 생성');
-    const result = await chatService.createOneOnOneChatRoom(userId, personaId, isPublic);
+    const result = await chatService.createOneOnOneChatRoom(userId, personaId, isPublic, description);
     console.log('createChatRoom - 1대1 채팅 결과:', result);
     return responseHandler.sendSuccess(res, 201, '1대1 채팅방이 생성되었습니다.', result);
   }
@@ -458,60 +449,34 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   }
 
   // 내가 참여한 방인지 확인
-  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-    where: { chatroomId: parsedRoomId, clerkId: userId },
-  });
-  if (!participant) {
-    return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
-  }
-
-  // 채팅방 정보 및 대표 persona 정보
-  const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
-    where: { id: parsedRoomId },
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: { 
+      id: parsedRoomId, 
+      clerkId: userId,
+      isDeleted: false
+    },
     include: {
-      participants: { include: { persona: true } },
+      persona: true,
     },
   });
   if (!chatRoom) {
-    return responseHandler.sendNotFound(res, '채팅방을 찾을 수 없습니다.');
+    return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
   }
-  const personaParticipant = chatRoom.participants.find(p => p.personaId);
-  const persona = personaParticipant?.persona;
-  // 멀티방 구조: 모든 AI(페르소나)별 exp(친밀도) 반환
-  const aiParticipants = chatRoom.participants.filter(p => p.personaId && p.persona);
+
+  const persona = chatRoom.persona;
+  
   // 참여자 정보 가공 (새로운 친밀도 시스템 사용)
-  const participants = await Promise.all(chatRoom.participants.map(async (p) => {
-    // Persona에서 직접 exp와 friendship 조회
-    const persona = await prismaConfig.prisma.persona.findFirst({
-      where: {
-        id: p.personaId,
-        clerkId: userId,
-        isDeleted: false
-      },
-      select: {
-        exp: true,
-        friendship: true,
-        name: true,
-        imageUrl: true,
-        introduction: true
-      }
-    });
-
-    const exp = persona ? persona.exp : 0;
-    const friendshipLevel = persona ? persona.friendship : 1;
-
-    return {
-      personaId: p.persona.id,
-      clerkId: userId,
-      name: p.persona.name,
-      imageUrl: p.persona.imageUrl,
-      exp,
-      friendship: friendshipLevel,
-      personality: p.persona.personality,
-      tone: p.persona.tone,
-      introduction: p.persona.introduction
-    };
-  }));
+  const participants = [{
+    personaId: persona.id,
+    clerkId: userId,
+    name: persona.name,
+    imageUrl: persona.imageUrl,
+    exp: persona.exp || 0,
+    friendship: persona.friendship || 1,
+    personality: persona.introduction || '친근하고 도움이 되는 성격',
+    tone: '친근하고 자연스러운 말투',
+    introduction: persona.introduction
+  }];
 
   // 채팅 기록 조회
   const chatHistory = await prismaConfig.prisma.chatLog.findMany({
@@ -537,7 +502,9 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
 
   return responseHandler.sendSuccess(res, 200, '채팅방 정보를 조회했습니다.', {
     roomId: chatRoom.id,
-    character: persona ? {
+    name: chatRoom.name,
+    description: chatRoom.description,
+    persona: persona ? {
       id: persona.id,
       name: persona.name,
       introduction: persona.introduction,
@@ -564,14 +531,15 @@ const updateChatRoomName = errorHandler.asyncHandler(async (req, res) => {
 
   try {
     // 채팅방에 참여하고 있는지 확인
-    const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: {
-        chatroomId: parseInt(roomId, 10),
-        clerkId: userId
+        id: parseInt(roomId, 10),
+        clerkId: userId,
+        isDeleted: false
       }
     });
 
-    if (!participant) {
+    if (!chatRoom) {
       return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
     }
 
@@ -580,6 +548,15 @@ const updateChatRoomName = errorHandler.asyncHandler(async (req, res) => {
       where: { id: parseInt(roomId, 10) },
       data: { name: name.trim() }
     });
+
+    // WebSocket을 통해 채팅방 이름 변경 이벤트 브로드캐스트
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`room_${roomId}`).emit('roomNameUpdated', {
+        roomId: parseInt(roomId, 10),
+        name: name.trim()
+      });
+    }
 
     return responseHandler.sendSuccess(res, 200, '채팅방 이름이 성공적으로 수정되었습니다.', { name: name.trim() });
 
@@ -608,34 +585,28 @@ const streamChatByRoom = async (req, res, next) => {
         return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
       }
       // 내가 참여한 방인지 확인
-      const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-        where: { chatroomId: parseInt(roomId, 10), clerkId: userId },
-      });
-      if (!participant) {
-        return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
-      }
-      // 채팅방 정보 및 모든 참여자(AI 포함) 조회
-      const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
-        where: { id: parseInt(roomId, 10) },
+      const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+        where: { 
+          id: parseInt(roomId, 10), 
+          clerkId: userId,
+          isDeleted: false
+        },
         include: {
-          participants: {
-            include: { persona: true } // persona 정보도 함께 가져오기
-          }
+          persona: true
         },
       });
+      if (!chatRoom) {
+        return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
+      }
 
-      // 모든 AI(페르소나) 참여자 목록 - personaId가 있는 참여자들만 필터링하고 중복 제거
-      const aiParticipants = chatRoom.participants
-        .filter(p => p.personaId && p.persona)
-        .filter((p, idx, arr) =>
-          arr.findIndex(x => x.personaId === p.personaId) === idx
-        );
+      // AI 참여자 목록
+      const aiParticipants = chatRoom.persona ? [chatRoom.persona] : [];
 
       console.log(`📋 채팅방 ${roomId}의 AI 참여자들:`, aiParticipants.map(p => ({
-        id: p.persona.id,
-        name: p.persona.name,
-        personality: p.persona.personality,
-        tone: p.persona.tone
+        id: p.id,
+        name: p.name,
+        personality: p.introduction || '친근하고 도움이 되는 성격',
+        tone: '친근하고 자연스러운 말투'
       })));
 
       // 최근 10개 메시지 조회
@@ -673,7 +644,7 @@ const streamChatByRoom = async (req, res, next) => {
       console.log('💬 단체 채팅 AI 응답 생성 시작');
 
       // 모든 AI 정보 수집
-      const allPersonas = aiParticipants.map(p => p.persona);
+      const allPersonas = aiParticipants;
 
       // 새로운 최적화된 단체 채팅 함수 사용
       const aiResponses = await chatService.generateAiChatResponseGroup(
@@ -926,11 +897,15 @@ const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
   }
 
   // 내가 참여한 방인지 확인
-  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-    where: { chatroomId: parseInt(roomId), clerkId: userId },
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+    where: { 
+      id: parseInt(roomId), 
+      clerkId: userId,
+      isDeleted: false
+    },
   });
   
-  if (!participant) {
+  if (!chatRoom) {
     return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
   }
 
@@ -961,11 +936,7 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
         isDeleted: false,
       },
       include: {
-        participants: {
-          include: {
-            persona: true
-          }
-        }
+        persona: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -977,16 +948,17 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
     const formattedRooms = publicRooms.map(room => ({
       id: room.id,
       name: room.name,
+      description: room.description,
       isPublic: room.isPublic,
       createdAt: room.createdAt,
-      participants: room.participants.map(p => ({
-        personaId: p.personaId,
-        persona: p.persona ? {
-          id: p.persona.id,
-          name: p.persona.name,
-          imageUrl: p.persona.imageUrl
+      participants: [{
+        personaId: room.personaId,
+        persona: room.persona ? {
+          id: room.persona.id,
+          name: room.persona.name,
+          imageUrl: room.persona.imageUrl
         } : null
-      }))
+      }]
     }));
 
     return responseHandler.sendSuccess(res, 200, '공개 채팅방 목록을 성공적으로 조회했습니다.', formattedRooms);
