@@ -20,6 +20,15 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import redisClient from '../config/redisClient.js'; // BullMQ 및 Redis Pub/Sub을 위한 클라이언트
 import { addAiChatJob } from '../services/queueService.js';
 import { warnOnce } from '@prisma/client/runtime/library';
+import {
+  setupSSEHeaders,
+  saveChatMessage,
+  sendSSEError,
+  sendSSEUserMessage,
+  sendSSEComplete,
+  sendSSEExpUpdate,
+  createClientCloseHandler
+} from '../utils/chatHelpers.js';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -216,15 +225,11 @@ const streamChatByRoom2 = async (req, res, next) => {
     let savedChatLogId = null;
     // 1. 먼저 사용자 메시지를 즉시 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: userMessage,
-          type: 'text',
-          senderType: 'user',
-          senderId: String(userId),
-          time: new Date()
-        }
+      await saveChatMessage({
+        roomId,
+        text: userMessage,
+        senderType: 'user',
+        senderId: userId
       });
       logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
         roomId: roomId,
@@ -237,10 +242,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     }
 
     // 2. SSE 헤더 설정
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    setupSSEHeaders(res);
     // 3. AI 응답 스트리밍 생성 및 전송
     let fullResponseText = "";
     try {
@@ -267,15 +269,11 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 4. 스트림 완료 후, AI 응답 전체를 DB에 저장
     try {
-      const chatRog = await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: fullResponseText,
-          type: 'text',
-          senderType: 'ai',
-          senderId: String(personaInfo.id),
-          time: new Date()
-        }
+      const chatRog = await saveChatMessage({
+        roomId,
+        text: fullResponseText,
+        senderType: 'ai',
+        senderId: personaInfo.id
       });
       savedChatLogId = chatRog.id;
       // AI 메시지 전송 시 친밀도 증가
@@ -663,15 +661,12 @@ const streamChatByRoom = async (req, res, next) => {
       const isFirstMessage = userMessageCount <= 1;
 
       // 1. 사용자 메시지 저장
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: message,
-          type: 'text',
-          senderType: 'user',
-          senderId: userId,
-          time: new Date(timestamp)
-        }
+      await saveChatMessage({
+        roomId,
+        text: message,
+        senderType: 'user',
+        senderId: userId,
+        time: new Date(timestamp)
       });
 
       // 2. 모든 AI(페르소나)마다 한 번씩 응답 생성/저장
@@ -694,16 +689,11 @@ const streamChatByRoom = async (req, res, next) => {
       // 각 AI 응답을 DB에 저장
       for (const response of aiResponses) {
         // AI 응답을 DB에 저장
-        await prismaConfig.prisma.chatLog.create({
-          data: {
-            chatroomId: parseInt(roomId, 10),
-            text: response.content,
-            type: 'text',
-            senderType: 'ai',
-            senderId: response.personaId,
-            time: new Date(),
-            isDeleted: false,
-          }
+        await saveChatMessage({
+          roomId,
+          text: response.content,
+          senderType: 'ai',
+          senderId: response.personaId
         });
       }
 
@@ -865,15 +855,11 @@ const streamGroupChatByRoom = async (req, res, next) => {
 
     // 4. 사용자 메시지를 즉시 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: message,
-          type: 'text',
-          senderType: 'user',
-          senderId: String(userId),
-          time: new Date()
-        }
+      await saveChatMessage({
+        roomId,
+        text: message,
+        senderType: 'user',
+        senderId: userId
       });
       console.log('✅ 사용자 메시지 DB 저장 완료');
       
@@ -889,12 +875,7 @@ const streamGroupChatByRoom = async (req, res, next) => {
     }
 
     // 5. SSE 헤더 설정
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*'); // CORS 허용
-    res.flushHeaders();
-
+    setupSSEHeaders(res);
     console.log('✅ SSE 헤더 설정 완료');
 
     // 6. 즉시 사용자 메시지 전송
@@ -1223,12 +1204,7 @@ const sendChatMessage = async (req, res, next) => {
     console.log(`✅ 채팅방 타입 확인 완료: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
     
     // 3. 공통 SSE 헤더 설정
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.flushHeaders();
-    
+    setupSSEHeaders(res);
     console.log('✅ SSE 헤더 설정 완료');
     
     // 4. 타입에 따른 내부 처리 분기
@@ -1326,39 +1302,21 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
     
     // 3. 사용자 메시지를 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: userMessage,
-          type: 'text',
-          senderType: 'user',
-          senderId: String(userId),
-          time: new Date()
-        }
+      await saveChatMessage({
+        roomId,
+        text: userMessage,
+        senderType: 'user',
+        senderId: userId
       });
       console.log('✅ 사용자 메시지 DB 저장 완료');
-      logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
-        roomId: roomId,
-        personaName: personaInfo.name,
-        messageLength: userMessage.length
-      });
     } catch (dbError) {
       console.error('❌ 사용자 메시지 저장 실패:', dbError);
-      logger.logError('사용자 메시지 저장 실패', dbError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: '메시지 저장에 실패했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
     
     // 4. 사용자 메시지 즉시 전송
-    res.write(`data: ${JSON.stringify({
-      type: 'user_message',
-      content: userMessage,
-      sender: userName,
-      senderId: userId,
-      timestamp: new Date().toISOString()
-    })}\n\n`);
+    sendSSEUserMessage(res, { message: userMessage, userName, userId });
     console.log('✅ 사용자 메시지 SSE 전송 완료');
     
     // 5. AI 응답 생성 및 전송
@@ -1380,23 +1338,17 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
     } catch (aiError) {
       console.error('❌ AI 응답 생성 실패:', aiError);
       logger.logError('AI 응답 생성 중 오류 발생', aiError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 생성 중 오류가 발생했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      sendSSEError(res, 'AI 응답 생성 중 오류가 발생했습니다.');
       return;
     }
     
     // 6. AI 응답을 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: fullResponseText,
-          type: 'text',
-          senderType: 'ai',
-          senderId: String(personaInfo.id),
-          time: new Date()
-        }
+      await saveChatMessage({
+        roomId,
+        text: fullResponseText,
+        senderType: 'ai',
+        senderId: personaInfo.id
       });
       console.log('✅ AI 응답 DB 저장 완료');
       
@@ -1406,34 +1358,26 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       
       // 친밀도 업데이트를 SSE로 전송
       if (friendshipResult) {
-        res.write(`data: ${JSON.stringify({
-          type: 'exp_updated',
+        sendSSEExpUpdate(res, {
           personaId: personaInfo.id,
           personaName: personaInfo.name,
           newExp: friendshipResult.exp,
           newLevel: friendshipResult.friendship,
           expIncrease,
           userId
-        })}\n\n`);
+        });
         console.log('✅ 친밀도 업데이트 SSE 전송 완료');
       }
-      
-      logger.logUserActivity('AI_CHAT_MESSAGE_SAVED', 'AI', {
-        roomId: roomId,
-        personaName: personaInfo.name,
-        messageLength: fullResponseText.length
-      });
       
     } catch (dbError) {
       console.error('❌ AI 메시지 저장 실패:', dbError);
       logger.logError('AI 메시지 저장 실패', dbError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 저장에 실패했습니다.' })}\n\n`);
+      sendSSEError(res, 'AI 응답 저장에 실패했습니다.');
+      return;
     }
     
     // 8. 완료 신호 전송
-    res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
+    sendSSEComplete(res);
     console.log('✅ 1대1 채팅 플로우 완료');
     
   } catch (error) {
@@ -1511,15 +1455,11 @@ const handleGroupChatFlow = async (req, res, next) => {
     
     // 2. 사용자 메시지를 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
-        data: {
-          chatroomId: parseInt(roomId, 10),
-          text: message,
-          type: 'text',
-          senderType: 'user',
-          senderId: String(userId),
-          time: new Date()
-        }
+      await saveChatMessage({
+        roomId,
+        text: message,
+        senderType: 'user',
+        senderId: userId
       });
       console.log('✅ 사용자 메시지 DB 저장 완료');
       
@@ -1531,20 +1471,12 @@ const handleGroupChatFlow = async (req, res, next) => {
     } catch (dbError) {
       console.error('❌ 사용자 메시지 저장 실패:', dbError);
       logger.logError('그룹 채팅 사용자 메시지 저장 실패', dbError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: '메시지 저장에 실패했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
     
     // 3. 사용자 메시지 즉시 전송
-    res.write(`data: ${JSON.stringify({
-      type: 'user_message',
-      content: message,
-      sender: userName,
-      senderId: userId,
-      timestamp: new Date().toISOString()
-    })}\n\n`);
+    sendSSEUserMessage(res, { message, userName, userId });
     console.log('✅ 사용자 메시지 SSE 전송 완료');
     
     // 4. BullMQ에 AI 처리 작업 추가

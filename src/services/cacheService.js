@@ -14,10 +14,11 @@ import crypto from 'crypto';
 
 /**
  * 메시지 해시 생성 (AI 응답 캐시 키용)
+ * SHA-256 사용으로 보안성 향상 (캐시 키 생성용이므로 암호학적 보안은 불필요하지만 정적 분석 도구 경고 해결)
  */
 const generateMessageHash = (message, context = '') => {
   const content = `${message}:${context}`;
-  return crypto.createHash('md5').update(content).digest('hex').substring(0, 16);
+  return crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
 };
 
 /**
