@@ -11,3 +11,4 @@ export * from './createUploadDir.js';
 export * from './createDefaultImage.js';
 export * from './token.js';
 export * from './chatHelpers.js';
+export * from './expCalculator.js';
