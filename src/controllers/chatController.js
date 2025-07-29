@@ -1,9 +1,9 @@
 /**
  * 채팅 컨트롤러
- * 
+ *
  * 사용 위치:
  * - chatRoutes.js에서 라우터 연결
- * 
+ *
  * 기능:
  * - 채팅방 관리
  * - AI 채팅 응답 생성
@@ -44,7 +44,7 @@ const isGameActive = (message) => {
   const gameKeywords = [
     '[GAME:끝말잇기]', '[GAME:스무고개]', '[GAME:밸런스게임]'
   ];
-  
+
   return gameKeywords.some(keyword => message.includes(keyword));
 };
 
@@ -55,24 +55,24 @@ const isGameActive = (message) => {
 const calculateExp = (message) => {
   // 기본 1점
   let exp = 1;
-  
+
   // 글자 수에 따른 추가 경험치
   if (message.length >= 100) {
     exp = 3;
   } else if (message.length >= 50) {
     exp = 2;
   }
-  
+
   // 이모지 추가 경험치 (이모지 하나당 0.2점)
   const emojiCount = countEmojis(message);
   const emojiExp = emojiCount * 0.2;
   exp += emojiExp;
-  
+
   // 게임 중이면 5점 추가
   if (isGameActive(message)) {
     exp += 5;
   }
-  
+
   return Math.round(exp * 10) / 10; // 소수점 첫째자리까지 반올림
 };
 
@@ -108,7 +108,7 @@ const isOneOnOneChat = async (roomId) => {
 
 /**
  * 1대1 채팅 전용 SSE 스트리밍 응답 생성
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -149,7 +149,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 1. 사용자가 참여한 채팅방인지 확인
     const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
-      where: { 
+      where: {
         chatroomId: parseInt(roomId, 10),
         clerkId: userId,
       },
@@ -206,7 +206,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     const userMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'user').length;
     const aiMessageCount = chatRoom.ChatLogs.filter(log => log.senderType === 'ai').length;
     const isFirstMessage = userMessageCount <= 1 && aiMessageCount === 0;
-
+    let savedChatLogId = null;
     // 1. 먼저 사용자 메시지를 즉시 DB에 저장
     try {
       await prismaConfig.prisma.chatLog.create({
@@ -234,7 +234,6 @@ const streamChatByRoom2 = async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
-
     // 3. AI 응답 스트리밍 생성 및 전송
     let fullResponseText = "";
     try {
@@ -261,7 +260,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 4. 스트림 완료 후, AI 응답 전체를 DB에 저장
     try {
-      await prismaConfig.prisma.chatLog.create({
+      const chatRog = await prismaConfig.prisma.chatLog.create({
         data: {
           chatroomId: parseInt(roomId, 10),
           text: fullResponseText,
@@ -271,11 +270,15 @@ const streamChatByRoom2 = async (req, res, next) => {
           time: new Date()
         }
       });
-
-      // 사용자 메시지 길이에 따른 친밀도 증가
+      savedChatLogId = chatRog.id;
+      // AI 메시지 전송 시 친밀도 증가
       const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
-
+      res.write(`data: ${JSON.stringify({
+        type: 'message_saved',
+        chatLogId: savedChatLogId,
+      })}\n\n`);
+      console.log(savedChatLogId, "qqqqqqqqqqqqqqqqqqqqqqqqqqqqQQQQQQQQQQQQQQQ");
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
       const io = req.app.getIo ? req.app.getIo() : null;
       if (io && friendshipResult) {
@@ -325,7 +328,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
 /**
  * 내가 참여한 채팅방 목록을 조회합니다.
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -418,7 +421,7 @@ const createChatRoom = errorHandler.asyncHandler(async (req, res) => {
 
 /**
  * 채팅방 삭제
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -442,7 +445,7 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
 const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { roomId } = req.query;
   const { userId } = req.auth;
-  
+
   if (!roomId) {
     return responseHandler.sendBadRequest(res, 'roomId 쿼리 파라미터가 필요합니다.');
   }
@@ -450,7 +453,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   if (isNaN(parsedRoomId)) {
       return responseHandler.sendBadRequest(res, 'roomId는 숫자여야 합니다.');
   }
-  
+
   // 내가 참여한 방인지 확인
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: { chatroomId: parsedRoomId, clerkId: userId },
@@ -698,7 +701,7 @@ const streamChatByRoom = async (req, res, next) => {
       // 단체 채팅에서는 모든 AI에게 각각 친밀도 증가
       const expIncrease = calculateExp(message);
       console.log(`🔍 단체 채팅 경험치 계산: 메시지 "${message}" -> +${expIncrease}점`);
-      
+
       for (const response of aiResponses) {
         console.log(`🔍 단체 채팅 ${response.personaName} 친밀도 증가 시도: 경험치 +${expIncrease}`);
         await chatService.increaseFriendship(userId, response.personaId, expIncrease);
