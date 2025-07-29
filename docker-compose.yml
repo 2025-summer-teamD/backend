@@ -12,6 +12,8 @@ services:
     environment:
       NODE_ENV: development
       GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
 
     depends_on:
       db:

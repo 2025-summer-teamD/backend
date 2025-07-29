@@ -181,3 +181,5 @@ userId:"user_12345" AND traceId:*
 
 트레이싱 및 모니터링 관련 문의사항이 있으시면 개발팀에 문의해주세요.
 
+##BullMQ install
+npm install bullmq ioredis

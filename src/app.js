@@ -51,6 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cors({
   origin: [
     'http://localhost:5173',
+    'http://localhost:5174', // 🔧 추가: Vite 개발 서버 5174 포트
     'http://localhost:3000',
     'https://api.${DOMAIN}',
     'https://${DOMAIN}'
@@ -146,9 +147,5 @@ app.use(errorHandler.notFoundHandler);
 
 // 전역 에러 핸들러 (마지막에 배치)
 app.use(errorHandler.errorHandler);
-
-// mainRouter는 '/api' 접두사로 마운트됩니다.
-// 따라서 uploadRouter의 '/uploads/:filename' 경로는 최종적으로 '/api/uploads/:filename'이 됩니다.
-app.use('/api', mainRouter);
 
 export default app;
