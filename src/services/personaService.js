@@ -360,6 +360,13 @@ const getMyPersonas = async (userId, type = 'created') => {
  * @returns {Promise<object>} 수정된 페르소나 객체
  */
 const updatePersona = async (personaId, userId, updateData) => {
+  console.log('🔍 personaService.updatePersona - Input:', {
+    personaId,
+    userId,
+    updateData,
+    isPublic: updateData.isPublic
+  });
+
   // 1. 본인 소유 페르소나인지 확인
   const persona = await prismaConfig.prisma.persona.findUnique({
     where: { id: personaId },
@@ -375,6 +382,10 @@ const updatePersona = async (personaId, userId, updateData) => {
   if (updateData.introduction !== undefined) {
     updateFields.introduction = updateData.introduction;
   }
+  if (updateData.isPublic !== undefined) {
+    updateFields.isPublic = updateData.isPublic;
+    console.log('✅ personaService - isPublic will be updated to:', updateData.isPublic);
+  }
   if (
     updateData.personality !== undefined ||
     updateData.tone !== undefined ||
@@ -389,6 +400,9 @@ const updatePersona = async (personaId, userId, updateData) => {
       ...(updateData.tag !== undefined ? { tag: updateData.tag } : {}),
     };
   }
+  
+  console.log('🔍 personaService - updateFields:', updateFields);
+  
   // 3. DB 업데이트
   const updated = await prismaConfig.prisma.persona.update({
     where: { id: personaId },
@@ -396,6 +410,12 @@ const updatePersona = async (personaId, userId, updateData) => {
     include: {
       user: true,
     },
+  });
+  
+  console.log('✅ personaService - Updated persona:', {
+    id: updated.id,
+    name: updated.name,
+    isPublic: updated.isPublic
   });
   // 4. getPersonaDetails와 동일한 구조로 반환
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
