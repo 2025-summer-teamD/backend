@@ -30,53 +30,48 @@ model User {
   updatedAt DateTime? @map("updated_at")
   isDeleted Boolean   @default(false) @map("is_deleted")
   personas  Persona[]
+  chatRooms ChatRoom[] // 유저가 참여한 채팅방들
 
   @@map("users")
 }
 
 model Persona {
-  id                   Int                   @id @default(autoincrement())
-  clerkId              String                @map("clerk_id")
-  user                 User                  @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
-  creatorName          String?               @map("creator_name") @db.VarChar(100)
-  name                 String                @db.VarChar(100)
-  imageUrl             String                @map("image_url") @db.VarChar(1024)
-  isPublic             Boolean               @default(true) @map("is_public")
+  id                   Int       @id @default(autoincrement())
+  clerkId              String    @map("clerk_id")
+  user                 User      @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+  creatorName          String?   @map("creator_name") @db.VarChar(100)
+  name                 String    @db.VarChar(100)
+  imageUrl             String    @map("image_url") @db.VarChar(1024)
+  isPublic             Boolean   @default(true) @map("is_public")
   introduction         String?
   prompt               Json
-  usesCount            Int                   @default(0) @map("uses_count")
-  likesCount           Int                   @default(0) @map("likes_count")
-  exp                  Int                   @default(0) // 사용자별 경험치 (총합)
-  friendship           Int                   @default(1) // 사용자별 친밀도 레벨
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime?             @map("updated_at")
-  isDeleted            Boolean               @default(false) @map("is_deleted")
-  chatRoomParticipants ChatRoomParticipant[] @relation("PersonaToParticipant")
+  usesCount            Int       @default(0) @map("uses_count")
+  likesCount           Int       @default(0) @map("likes_count")
+  exp                  Int       @default(0) // 사용자별 경험치 (총합)
+  friendship           Int       @default(1) // 사용자별 친밀도 레벨
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime? @map("updated_at")
+  isDeleted            Boolean   @default(false) @map("is_deleted")
+  chatRooms            ChatRoom[] // AI가 참여한 채팅방들
 
   @@index([clerkId])
 }
 
 model ChatRoom {
-  id           Int                   @id @unique @default(autoincrement())
-  name         String?               @db.VarChar(255) // 채팅방 이름
-  isPublic     Boolean               @default(true) @map("is_public") // 공개 여부
-  likes        Boolean               @default(false)
-  createdAt    DateTime              @default(now()) @map("created_at")
-  updatedAt    DateTime?             @map("updated_at")
-  isDeleted    Boolean               @default(false) @map("is_deleted")
-  participants ChatRoomParticipant[]
+  id           Int       @id @unique @default(autoincrement())
+  name         String?   @db.VarChar(255) // 채팅방 이름
+  description  String?   @db.VarChar(500) // 채팅방 설명
+  clerkId      String    @map("clerk_id") // 유저 참여자
+  personaId    Int       @map("persona_id") // AI 참여자
+  user         User      @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+  persona      Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  isPublic     Boolean   @default(true) @map("is_public") // 공개 여부
+  likes        Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+  isDeleted    Boolean   @default(false) @map("is_deleted")
   ChatLogs     ChatLog[]
-}
 
-model ChatRoomParticipant {
-  id         Int      @id @default(autoincrement())
-  chatroomId Int
-  chatRoom   ChatRoom @relation(fields: [chatroomId], references: [id], onDelete: Cascade)
-  clerkId    String? // 유저 참여자 (User.clerkId)
-  personaId  Int? // AI 참여자 (Persona.id)
-  persona    Persona? @relation("PersonaToParticipant", fields: [personaId], references: [id])
-  joinedAt   DateTime @default(now())
-  @@index([chatroomId])
   @@index([clerkId])
   @@index([personaId])
 }

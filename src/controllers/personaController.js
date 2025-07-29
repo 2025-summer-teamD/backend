@@ -67,6 +67,29 @@ const createCustomPersona = async (req, res, next) => {
 };
 
 /**
+ * Perplexity API 키 테스트 컨트롤러
+ *
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const testPerplexityAPI = errorHandler.asyncHandler(async (req, res) => {
+  try {
+    const gemini25 = await import('../vertexai/gemini25.js');
+    const result = await gemini25.default.testPerplexityAPI();
+    
+    if (result) {
+      return responseHandler.sendSuccess(res, 200, 'Perplexity API 키가 유효합니다.', { valid: true });
+    } else {
+      return responseHandler.sendError(res, 400, 'Perplexity API 키가 유효하지 않습니다.', { valid: false });
+    }
+  } catch (error) {
+    console.error('Perplexity API 테스트 오류:', error);
+    return responseHandler.sendError(res, 500, 'Perplexity API 테스트 중 오류가 발생했습니다.', { error: error.message });
+  }
+});
+
+/**
  * AI를 사용하여 페르소나를 생성하는 컨트롤러
  *
  * @param {object} req - Express request 객체
@@ -163,12 +186,20 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
     console.log('AI가 생성한 캐릭터 정보:', aiGeneratedDetails);
 
   } catch (error) {
+    console.error('AI 생성 실패:', error.message);
     aiGeneratedDetails = {
-      description: error.message + ' (AI가 캐릭터 정보를 생성하는 데 실패했습니다.)',
+      description: `${name}에 대한 상세한 소개입니다. (AI 생성 실패: ${error.message})`,
+      prompt: {
+        tone: "친근하고 자연스러운 말투",
+        personality: "친절함, 호기심, 적극성",
+        tag: "친근함,호기심,적극성",
+        imageUrl: []
+      }
     };
     // 2. AI가 생성한 정보만 반환 (DB 저장 X)
-    return responseHandler.sendSuccess(res, 500, 'AI로 생성된 캐릭터 정보 미리보기', {
-      aiGeneratedDetails
+    return responseHandler.sendSuccess(res, 200, 'AI로 생성된 캐릭터 정보 미리보기', {
+      name,
+      ...aiGeneratedDetails
     });
   }
   // 2. AI가 생성한 정보만 반환 (DB 저장 X)
@@ -421,6 +452,7 @@ export default {
   createCustomPersona,
   createAiPersona,
   previewAiPersona,
+  testPerplexityAPI,
   getPersonaList,
   getCommunityPersonaDetails,
   getMyPersonaList,
