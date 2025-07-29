@@ -36,9 +36,35 @@ import {
   parseAndValidateRoomId,
   validateAndProcessParticipants,
   sendFriendshipUpdateEvent,
-  validateChatRoomParticipant
+  validateChatRoomParticipant,
+  sendSSETimeout,
+  sendSSEMessageSaved,
+  sendSSETextChunk,
+  sendSSECompleteSignal,
+  sendSSEErrorAndClose
 } from '../utils/chatHelpers.js';
 import { calculateExp, getLevel } from '../utils/expCalculator.js';
+import {
+  logSuccess,
+  logError,
+  logInfo,
+  logProgress,
+  logComplete,
+  logUserActivity,
+  logErrorWithContext
+} from '../utils/loggingHelpers.js';
+import {
+  setupRedisSubscription,
+  cleanupRedisSubscription,
+  parseRedisMessage,
+  setupRedisTimeout
+} from '../utils/redisHelpers.js';
+import {
+  handleCompleteFriendshipUpdate,
+  handleGroupChatFriendshipUpdates,
+  generateAndSaveAiResponse,
+  generateAndSaveGroupAiResponses
+} from '../utils/businessLogicHelpers.js';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -83,7 +109,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
   // 클라이언트 연결 종료 이벤트 처리 함수
   const handleClientClose = () => {
-    logger.logUserActivity('CHAT_DISCONNECT', req.auth?.userId, { roomId: roomId });
+    logUserActivity.chatDisconnect(req.auth?.userId, { roomId: roomId });
     if (!res.writableEnded) {
       res.end();
     }
@@ -105,7 +131,7 @@ const streamChatByRoom2 = async (req, res, next) => {
 
     // 🎯 채팅방 타입 자동 감지 (1대1 + 그룹 모두 지원)
     const isOneOnOne = await isOneOnOneChat(roomId);
-    console.log(`🔍 채팅방 타입: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
+    logInfo(`채팅방 타입: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
     
     // 🔄 그룹 채팅인 경우 기존 그룹 채팅 로직으로 위임
     if (!isOneOnOne) {
@@ -156,7 +182,7 @@ const streamChatByRoom2 = async (req, res, next) => {
         senderType: 'user',
         senderId: userId
       });
-      logger.logUserActivity('CHAT_MESSAGE_SAVED', sender, {
+      logUserActivity.chatMessageSaved(sender, {
         roomId: roomId,
         personaName: personaInfo.name,
         messageLength: userMessage.length
@@ -182,13 +208,11 @@ const streamChatByRoom2 = async (req, res, next) => {
 
       // 응답을 한 번에 전송 (스트리밍 대신)
       fullResponseText = aiResponseText;
-      res.write(`data: ${JSON.stringify({ type: 'text_chunk', content: aiResponseText })}\n\n`);
+      sendSSETextChunk(res, aiResponseText);
 
     } catch (aiError) {
       logger.logError('AI 응답 생성 중 오류 발생', aiError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 생성 중 오류가 발생했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      sendSSEErrorAndClose(res, 'AI 응답 생성 중 오류가 발생했습니다.');
       return;
     }
 
@@ -204,10 +228,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       // AI 메시지 전송 시 친밀도 증가
       const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
-      res.write(`data: ${JSON.stringify({
-        type: 'message_saved',
-        chatLogId: savedChatLogId,
-      })}\n\n`);
+      sendSSEMessageSaved(res, savedChatLogId);
       console.log(savedChatLogId, "qqqqqqqqqqqqqqqqqqqqqqqqqqqqQQQQQQQQQQQQQQQ");
       // WebSocket을 통해 친밀도 업데이트 이벤트 전송
       if (friendshipResult) {
@@ -222,7 +243,7 @@ const streamChatByRoom2 = async (req, res, next) => {
         });
       }
 
-      logger.logUserActivity('AI_CHAT_MESSAGE_SAVED', 'AI', {
+      logUserActivity.aiChatMessageSaved({
         roomId: roomId,
         personaName: personaInfo.name,
         messageLength: fullResponseText.length
@@ -354,7 +375,7 @@ const deleteChatRoom = errorHandler.asyncHandler(async (req, res) => {
 
   await chatService.deleteChatRoom(roomId, userId);
 
-  logger.logUserActivity('DELETE_CHAT_ROOM', userId, {
+  logUserActivity.deleteChatRoom(userId, {
     roomId: roomId
   });
 
@@ -644,7 +665,7 @@ const streamChatByRoom = async (req, res, next) => {
     }
   }
   req.on('close', () => {
-    logger.logUserActivity('CHAT_DISCONNECT', req.auth?.userId, { roomId: req.params.roomId });
+    logUserActivity.chatDisconnect(req.auth?.userId, { roomId: req.params.roomId });
     res.end();
   });
 };
@@ -664,7 +685,7 @@ const streamGroupChatByRoom = async (req, res, next) => {
 
   // 클라이언트 연결 종료 이벤트 처리 함수
   const handleClientClose = () => {
-    logger.logUserActivity('GROUP_CHAT_DISCONNECT', userId, { roomId: roomId });
+    logUserActivity.groupChatDisconnect(userId, { roomId: roomId });
     if (pubSubClient) {
       pubSubClient.disconnect();
     }
@@ -682,7 +703,7 @@ const streamGroupChatByRoom = async (req, res, next) => {
     userId = req.auth.userId;
     userMessage = message;
 
-    console.log('🔄 그룹 채팅 SSE 요청 수신:', { roomId, userId, messageLength: message?.length });
+    logProgress('그룹 채팅 SSE 요청 수신', { roomId, userId, messageLength: message?.length });
 
     // 입력 검증
     const inputValidation = validateChatInput({ message, sender, userName });
@@ -729,9 +750,9 @@ const streamGroupChatByRoom = async (req, res, next) => {
         senderType: 'user',
         senderId: userId
       });
-      console.log('✅ 사용자 메시지 DB 저장 완료');
+      logSuccess('사용자 메시지 DB 저장 완료');
       
-      logger.logUserActivity('GROUP_CHAT_MESSAGE_SAVED', sender, {
+      logUserActivity.groupChatMessageSaved(sender, {
         roomId: roomId,
         messageLength: message.length,
         aiParticipantsCount: aiParticipants.length
@@ -773,9 +794,9 @@ const streamGroupChatByRoom = async (req, res, next) => {
     try {
       const job = await addAiChatJob(jobData);
       
-      console.log('✅ BullMQ 작업 추가 완료:', { jobId: job.id });
+      logSuccess('BullMQ 작업 추가 완료', { jobId: job.id });
       
-      logger.logUserActivity('GROUP_CHAT_JOB_QUEUED', userId, {
+      logUserActivity.groupChatJobQueued(userId, {
         roomId: roomId,
         jobId: job.id,
         responseChannel: responseChannel
@@ -786,7 +807,7 @@ const streamGroupChatByRoom = async (req, res, next) => {
         pubSubClient = redisClient.duplicate();
         await pubSubClient.connect();
         
-        console.log('✅ Redis Pub/Sub 클라이언트 연결 완료');
+        logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
 
         // 구독 설정
         await pubSubClient.subscribe(responseChannel, (message) => {
@@ -861,26 +882,22 @@ const streamGroupChatByRoom = async (req, res, next) => {
         }, 30000);
 
       } catch (redisError) {
-        console.error('❌ Redis Pub/Sub 설정 실패:', redisError);
-        logger.logError('Redis Pub/Sub 설정 실패', redisError, { roomId: roomId });
-        res.write(`data: ${JSON.stringify({ type: 'error', message: 'Redis 연결에 실패했습니다.' })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
+        logError('Redis Pub/Sub 설정 실패', redisError);
+        logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
+        sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
         return;
       }
 
     } catch (queueError) {
-      console.error('❌ BullMQ 작업 추가 실패:', queueError);
-      logger.logError('그룹 채팅 큐 작업 추가 실패', queueError, { roomId: roomId });
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'AI 응답 처리 중 오류가 발생했습니다.' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      logError('BullMQ 작업 추가 실패', queueError);
+      logErrorWithContext.groupChatQueueFailed(queueError, { roomId: roomId });
+      sendSSEErrorAndClose(res, 'AI 응답 처리 중 오류가 발생했습니다.');
       return;
     }
 
   } catch (error) {
-    console.error('❌ 그룹 채팅 SSE 전체 에러:', error);
-    logger.logError('그룹 채팅 SSE 스트리밍 에러', error, { roomId: req.params.roomId });
+    logError('그룹 채팅 SSE 전체 에러', error);
+    logErrorWithContext.chatFlowError(error, { roomId: req.params.roomId }, '그룹 채팅 SSE 스트리밍');
     if (!res.headersSent) {
       next(error);
     } else {
@@ -1176,8 +1193,8 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       );
       
       fullResponseText = aiResponseText;
-      res.write(`data: ${JSON.stringify({ type: 'text_chunk', content: aiResponseText })}\n\n`);
-      console.log('✅ AI 응답 SSE 전송 완료');
+      sendSSETextChunk(res, aiResponseText);
+      logSuccess('AI 응답 SSE 전송 완료');
       
     } catch (aiError) {
       console.error('❌ AI 응답 생성 실패:', aiError);
@@ -1292,16 +1309,16 @@ const handleGroupChatFlow = async (req, res, next) => {
         senderType: 'user',
         senderId: userId
       });
-      console.log('✅ 사용자 메시지 DB 저장 완료');
+      logSuccess('사용자 메시지 DB 저장 완료');
       
-      logger.logUserActivity('GROUP_CHAT_MESSAGE_SAVED', sender, {
+      logUserActivity.groupChatMessageSaved(sender, {
         roomId: roomId,
         messageLength: message.length,
         aiParticipantsCount: aiParticipants.length
       });
     } catch (dbError) {
-      console.error('❌ 사용자 메시지 저장 실패:', dbError);
-      logger.logError('그룹 채팅 사용자 메시지 저장 실패', dbError, { roomId: roomId });
+      logError('사용자 메시지 저장 실패', dbError);
+      logErrorWithContext.groupChatUserMessageSaveFailed(dbError, { roomId: roomId });
       sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
@@ -1321,13 +1338,13 @@ const handleGroupChatFlow = async (req, res, next) => {
       responseChannel
     };
     
-    console.log('🔄 BullMQ 작업 추가 준비:', { responseChannel });
+    logProgress('BullMQ 작업 추가 준비', { responseChannel });
     
     try {
       const job = await addAiChatJob(jobData);
-      console.log('✅ BullMQ 작업 추가 완료:', { jobId: job.id });
+      logSuccess('BullMQ 작업 추가 완료', { jobId: job.id });
       
-      logger.logUserActivity('GROUP_CHAT_JOB_QUEUED', userId, {
+      logUserActivity.groupChatJobQueued(userId, {
         roomId: roomId,
         jobId: job.id,
         responseChannel: responseChannel
@@ -1337,7 +1354,7 @@ const handleGroupChatFlow = async (req, res, next) => {
       try {
         pubSubClient = redisClient.duplicate();
         await pubSubClient.connect();
-        console.log('✅ Redis Pub/Sub 클라이언트 연결 완료');
+        logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
         
         // 구독 설정
         await pubSubClient.subscribe(responseChannel, (message) => {

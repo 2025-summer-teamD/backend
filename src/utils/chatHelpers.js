@@ -100,6 +100,49 @@ export const sendSSEComplete = (res) => {
 };
 
 /**
+ * SSE 타임아웃 응답 공통 함수
+ */
+export const sendSSETimeout = (res, message = 'AI 응답 대기 시간이 초과되었습니다.') => {
+  res.write(`data: ${JSON.stringify({ type: 'timeout', message })}\n\n`);
+  res.write('data: [DONE]\n\n');
+  res.end();
+};
+
+/**
+ * SSE 메시지 저장 확인 전송 공통 함수
+ */
+export const sendSSEMessageSaved = (res, chatLogId) => {
+  res.write(`data: ${JSON.stringify({
+    type: 'message_saved',
+    chatLogId
+  })}\n\n`);
+};
+
+/**
+ * SSE 텍스트 청크 전송 공통 함수
+ */
+export const sendSSETextChunk = (res, content) => {
+  res.write(`data: ${JSON.stringify({ type: 'text_chunk', content })}\n\n`);
+};
+
+/**
+ * SSE 완료 신호만 전송 (연결 종료 안함)
+ */
+export const sendSSECompleteSignal = (res) => {
+  res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+  res.write('data: [DONE]\n\n');
+};
+
+/**
+ * SSE 에러 전송 후 연결 종료 공통 함수
+ */
+export const sendSSEErrorAndClose = (res, message) => {
+  res.write(`data: ${JSON.stringify({ type: 'error', message })}\n\n`);
+  res.write('data: [DONE]\n\n');
+  res.end();
+};
+
+/**
  * 채팅방 참여자 검증 공통 함수
  */
 export const validateChatRoomParticipant = async (roomId, userId) => {
