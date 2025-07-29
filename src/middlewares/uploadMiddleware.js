@@ -3,8 +3,14 @@ import multer from 'multer';
 import path from 'path';
 import { Storage } from '@google-cloud/storage';
 
-// ✅ 환경 변수 유효성 검사 추가
-const requiredEnvVars = ['GOOGLE_CLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS', 'GCS_BUCKET_NAME'];
+// 환경에 따른 설정 분리
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const requiredEnvVars = ['GOOGLE_CLOUD_PROJECT', 'GCS_BUCKET_NAME'];
+if (isDevelopment) {
+  requiredEnvVars.push('GOOGLE_APPLICATION_CREDENTIALS');
+}
+
 requiredEnvVars.forEach(varName => {
   if (!process.env[varName]) {
     throw new Error(`Missing required environment variable: ${varName}`);
@@ -12,10 +18,14 @@ requiredEnvVars.forEach(varName => {
 });
 
 // ✅ GCS 클라이언트 초기화
-const storage = new Storage({
+const storageConfig = {
   projectId: process.env.GOOGLE_CLOUD_PROJECT,
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+};
+if (isDevelopment) {
+  storageConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+}
+
+const storage = new Storage(storageConfig);
 
 const bucket = storage.bucket(process.env.GCS_BUCKET_NAME);
 
