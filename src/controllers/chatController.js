@@ -913,6 +913,40 @@ const getTts = async (req, res, next) => {
 };
 
 /**
+ * 채팅방 공개 설정 변경
+ * @route PUT /chat/rooms/:roomId/public
+ */
+const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
+  const { roomId } = req.params;
+  const { isPublic } = req.body;
+  const { userId } = req.auth;
+
+  if (typeof isPublic !== 'boolean') {
+    return responseHandler.sendBadRequest(res, 'isPublic은 boolean 값이어야 합니다.');
+  }
+
+  // 내가 참여한 방인지 확인
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+    where: { chatroomId: parseInt(roomId), clerkId: userId },
+  });
+  
+  if (!participant) {
+    return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
+  }
+
+  // 채팅방 공개 설정 업데이트
+  const updatedRoom = await prismaConfig.prisma.chatRoom.update({
+    where: { id: parseInt(roomId) },
+    data: { isPublic: isPublic }
+  });
+
+  return responseHandler.sendSuccess(res, 200, '채팅방 공개 설정이 성공적으로 변경되었습니다.', {
+    roomId: updatedRoom.id,
+    isPublic: updatedRoom.isPublic
+  });
+});
+
+/**
  * 공개 채팅방 목록 조회
  * @route GET /chat/public-rooms
  */
@@ -971,6 +1005,7 @@ export default {
   deleteChatRoom,
   getRoomInfo,
   updateChatRoomName,
+  updateChatRoomPublic,
   getCharacterFriendship,
   getAllFriendships,
   getTts,
