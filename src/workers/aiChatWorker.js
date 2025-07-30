@@ -121,7 +121,7 @@ const processAiChatJob = async (job) => {
   
   const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
     where: { id: parseInt(roomId, 10) },
-    include: { participants: { include: { persona: true } } },
+    include: { persona: true },
   });
 
   if (!chatRoom) {
@@ -129,7 +129,11 @@ const processAiChatJob = async (job) => {
     throw new Error(`채팅방 ${roomId}를 찾을 수 없습니다.`);
   }
 
-  const aiParticipants = chatRoom.participants.filter(p => p.personaId && p.persona);
+  // 새로운 스키마: ChatRoom이 직접 persona를 가짐
+  const aiParticipants = chatRoom.persona ? [{
+    personaId: chatRoom.personaId,
+    persona: chatRoom.persona
+  }] : [];
   const isOneOnOne = aiParticipants.length === 1;
 
   console.log('✅ [WORKER] AI 참여자 조회 완료:', {

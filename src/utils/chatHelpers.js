@@ -144,6 +144,7 @@ export const sendSSEErrorAndClose = (res, message) => {
 
 /**
  * 채팅방에 해당 유저/AI가 참가자인지 확인
+
  */
 export const validateChatRoomParticipant = async (roomId, userIdOrPersonaId) => {
   const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
@@ -185,7 +186,7 @@ export const validateChatInput = ({ message, sender, userName }) => {
 };
 
 /**
- * 채팅방 정보 조회 공통 함수
+ * 채팅방 정보 조회 공통 함수 (새로운 스키마 적용)
  */
 export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
@@ -273,6 +274,7 @@ export const findAiParticipants = (chatRoom, excludeUserId = null) => {
     prompt: p.persona.prompt || '자연스러운 대화',
     imageUrl: p.persona.imageUrl || null
   }));
+
 };
 
 /**

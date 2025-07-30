@@ -19,7 +19,6 @@ import errorHandler from '../middlewares/errorHandler.js';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import redisClient from '../config/redisClient.js'; // BullMQ 및 Redis Pub/Sub을 위한 클라이언트
 import { addAiChatJob } from '../services/queueService.js';
-
 import {
   setupSSEHeaders,
   saveChatMessage,
@@ -40,7 +39,6 @@ import {
   sendSSECompleteSignal,
   sendSSEErrorAndClose
 } from '../utils/chatHelpers.js';
-import { calculateExp, getLevel } from '../utils/expCalculator.js';
 import {
   logSuccess,
   logError,
@@ -68,18 +66,8 @@ const elevenlabs = new ElevenLabsClient({
 });
 
 
-/**
- * 게임 상태 확인 함수
- * @param {string} message - 사용자 메시지
- * @returns {boolean} 게임 중 여부
- */
-const isGameActive = (message) => {
-  const gameKeywords = [
-    '[GAME:끝말잇기]', '[GAME:스무고개]', '[GAME:밸런스게임]'
-  ];
 
-  return gameKeywords.some(keyword => message.includes(keyword));
-};
+
 
 /**
  * 이모지 개수 계산 함수
@@ -95,6 +83,7 @@ const countEmojis = (text) => {
   const matches = text.match(emojiRegex);
   return matches ? matches.length : 0;
 };
+
 
 
 
@@ -179,7 +168,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     if (!aiParticipant) {
       return responseHandler.sendNotFound(res, '1대1 채팅방에서 AI를 찾을 수 없습니다.');
     }
-    
+
     personaInfo = {
       id: aiParticipant.persona.id,
       name: aiParticipant.persona.name,
@@ -409,12 +398,11 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
   const { roomId } = req.query;
   const { userId } = req.auth;
 
-  // roomId 검증
-  const validation = parseAndValidateRoomId(roomId);
-  if (!validation.isValid) {
-    return responseHandler.sendBadRequest(res, validation.error);
+  // userId 검증 추가
+  if (!userId) {
+    console.error('🚫 getRoomInfo - userId is null or undefined:', { userId, auth: req.auth });
+    return responseHandler.sendUnauthorized(res, '사용자 인증이 필요합니다.');
   }
-  const parsedRoomId = validation.roomId;
 
   // 내가 참여한 방인지 확인 (ChatRoomParticipant 기반)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
@@ -464,6 +452,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     totalParticipants: chatRoom.participants?.length || 0,
     aiParticipantsCount: aiParticipants.length
   });
+
   
   // 대표 AI (첫 번째 AI)
   const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
@@ -523,6 +512,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     chatHistory,
     isOneOnOne // 1대1 채팅 여부 추가
   });
+
 });
 
 /**
@@ -633,6 +623,7 @@ const streamChatByRoom = async (req, res, next) => {
           imageUrl: p.persona.imageUrl || null
         }));
 
+
       console.log(`📋 채팅방 ${roomId}의 AI 참여자들:`, aiParticipants.map(p => ({
         id: p.id,
         name: p.name,
@@ -646,7 +637,7 @@ const streamChatByRoom = async (req, res, next) => {
 
       // 최근 10개 메시지 조회
       const recentLogs = await prismaConfig.prisma.chatLog.findMany({
-        where: { chatroomId: chatRoom.id, isDeleted: false },
+        where: { chatroomId: detailedChatRoom.id, isDeleted: false },
         orderBy: { time: 'desc' },
         take: 10,
         select: { text: true, senderType: true, senderId: true, time: true }
@@ -672,7 +663,7 @@ const streamChatByRoom = async (req, res, next) => {
       console.log('💬 단체 채팅 AI 응답 생성 시작');
 
       // 모든 AI 정보 수집
-      const allPersonas = aiParticipants;
+      const allPersonas = aiParticipants.map(p => p.persona);
 
       // 새로운 최적화된 단체 채팅 함수 사용
       console.log('🔍 서비스 호출 전 데이터 확인:', {
