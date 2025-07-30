@@ -194,8 +194,9 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
   
   const includeConfig = {
-    persona: true,  // 직접 persona 관계 사용
-    user: true      // user 정보도 포함
+    persona: true,
+    user: true
+
   };
 
   if (includeChatLogs) {
@@ -218,16 +219,16 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
  * 새로운 스키마에서는 ChatRoom이 직접 persona를 가지므로 단순화됨
  */
 export const findAiParticipants = (chatRoom, excludeUserId = null) => {
+  // chatRoom now has direct persona and user fields
+
   if (!chatRoom || !chatRoom.persona) {
     return [];
   }
+  // Check if the persona should be excluded (if excludeUserId matches the persona's owner)
+  const isNotUser = excludeUserId ? chatRoom.persona.clerkId !== excludeUserId : true;
   
-  // 새로운 스키마에서는 각 채팅방이 하나의 AI만 가짐
-  return [{
-    personaId: chatRoom.personaId,
-    persona: chatRoom.persona,
-    clerkId: chatRoom.clerkId
-  }];
+  return isNotUser ? [chatRoom.persona] : [];
+
 };
 
 /**
@@ -318,14 +319,15 @@ export const parseAndValidateRoomId = (roomId) => {
 };
 
 /**
- * 참가자 배열 검증 및 처리 공통 함수
+ * 참가자 배열 검증 및 처리 공통 함수 (새로운 스키마에 맞게 수정)
  */
 export const validateAndProcessParticipants = (participantIds, userId) => {
   if (!Array.isArray(participantIds) || participantIds.length < 1) {
     return { isValid: false, error: '참가자 배열이 1명 이상 필요합니다.' };
   }
   
-  const allParticipantIds = [userId, ...participantIds];
+  // participantIds는 personaId 배열이므로 userId는 포함하지 않음
+  const allParticipantIds = participantIds;
   return { isValid: true, allParticipantIds };
 };
 

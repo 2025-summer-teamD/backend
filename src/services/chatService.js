@@ -122,10 +122,14 @@ const getMyChatList = async (userId, pagination) => {
         name: persona.name,
         imageUrl: persona.imageUrl
       } : null,
-      aiParticipants: persona ? [{
+      participants: persona ? [{
+        id: persona.id,
         personaId: persona.id,
         name: persona.name,
-        imageUrl: persona.imageUrl
+        imageUrl: persona.imageUrl,
+        exp: persona.exp || 0,
+        friendship: persona.friendship || 1,
+        introduction: persona.introduction
       }] : []
     };
   });
@@ -601,13 +605,14 @@ const createMultiChatRoom = async (participantIds, isPublic = true) => {
     isNewRoom: true, // 항상 새 방
     isPublic: foundRoom.isPublic,
     participants: [{
+      id: foundRoomWithParticipants.persona?.id,
       clerkId: foundRoomWithParticipants.clerkId,
       personaId: foundRoomWithParticipants.personaId,
-      persona: foundRoomWithParticipants.persona ? { 
-        id: foundRoomWithParticipants.persona.id, 
-        name: foundRoomWithParticipants.persona.name, 
-        imageUrl: foundRoomWithParticipants.persona.imageUrl 
-      } : undefined
+      name: foundRoomWithParticipants.persona?.name,
+      imageUrl: foundRoomWithParticipants.persona?.imageUrl,
+      exp: foundRoomWithParticipants.persona?.exp || 0,
+      friendship: foundRoomWithParticipants.persona?.friendship || 1,
+      introduction: foundRoomWithParticipants.persona?.introduction
     }],
     chatHistory
   };
@@ -659,6 +664,16 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
       return {
         roomId: existingChatRoom.id,
         persona: existingChatRoom.persona,
+        participants: [{
+          id: existingChatRoom.persona.id,
+          clerkId: userId,
+          personaId: existingChatRoom.persona.id,
+          name: existingChatRoom.persona.name,
+          imageUrl: existingChatRoom.persona.imageUrl,
+          exp: existingChatRoom.persona.exp || 0,
+          friendship: existingChatRoom.persona.friendship || 1,
+          introduction: existingChatRoom.persona.introduction
+        }],
         chatHistory: chatHistory,
         isNewRoom: false,
         isPublic: existingChatRoom.isPublic,
@@ -707,6 +722,16 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
     return {
       roomId: newRoom.id,
       persona: persona,
+      participants: [{
+        id: persona.id,
+        clerkId: userId,
+        personaId: persona.id,
+        name: persona.name,
+        imageUrl: persona.imageUrl,
+        exp: persona.exp || 0,
+        friendship: persona.friendship || 1,
+        introduction: persona.introduction
+      }],
       chatHistory: [],
       isNewRoom: true,
       isPublic: newRoom.isPublic,
