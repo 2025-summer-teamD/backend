@@ -143,7 +143,7 @@ export const sendSSEErrorAndClose = (res, message) => {
 };
 
 /**
- * 채팅방 참여자 검증 공통 함수
+ * 채팅방 참여자 검증 공통 함수 (새로운 스키마 적용)
  */
 export const validateChatRoomParticipant = async (roomId, userId) => {
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
@@ -188,7 +188,7 @@ export const validateChatInput = ({ message, sender, userName }) => {
 };
 
 /**
- * 채팅방 정보 조회 공통 함수
+ * 채팅방 정보 조회 공통 함수 (새로운 스키마 적용)
  */
 export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
@@ -196,6 +196,7 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const includeConfig = {
     persona: true,
     user: true
+
   };
 
   if (includeChatLogs) {
@@ -214,18 +215,20 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
 };
 
 /**
- * AI 참여자 찾기 공통 함수
+ * AI 참여자 찾기 공통 함수 (새로운 스키마 적용)
+ * 새로운 스키마에서는 ChatRoom이 직접 persona를 가지므로 단순화됨
  */
 export const findAiParticipants = (chatRoom, excludeUserId = null) => {
   // chatRoom now has direct persona and user fields
+
   if (!chatRoom || !chatRoom.persona) {
     return [];
   }
-  
   // Check if the persona should be excluded (if excludeUserId matches the persona's owner)
   const isNotUser = excludeUserId ? chatRoom.persona.clerkId !== excludeUserId : true;
   
   return isNotUser ? [chatRoom.persona] : [];
+
 };
 
 /**

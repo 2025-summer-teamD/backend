@@ -52,6 +52,29 @@ services:
     networks:
       - app-network
 
+  # BullMQ 워커 (AI 채팅 처리)
+  worker:
+    build: .
+    container_name: bullmq_worker
+    volumes:
+      - ./google-credentials:/app/google-credentials:ro
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+    command: npm run worker
+
   migrate:
     build: .
     env_file:
