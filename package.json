@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "worker": "node src/workers/aiChatWorker.js",
+    "worker:dev": "nodemon src/workers/aiChatWorker.js",
     "test": "jest",
     "monitoring": "docker-compose -f docker-compose.monitoring.yml up -d",
     "monitoring:stop": "docker-compose -f docker-compose.monitoring.yml down",
@@ -21,6 +23,7 @@
     "@prisma/client": "^6.11.1",
     "axios": "^1.10.0",
     "bottleneck": "^2.19.5",
+    "bullmq": "^5.56.8",
     "connect-redis": "^9.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
