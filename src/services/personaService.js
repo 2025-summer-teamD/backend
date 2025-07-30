@@ -284,34 +284,47 @@ const getMyPersonas = async (userId, type = 'created') => {
         clerkId: userId,
         likes: true, // 좋아요 한 것만 필터링
         isDeleted: false,
-        persona: {
-          isDeleted: false,
-          clerkId: {
-            not: userId // 내가 만든 캐릭터는 제외 (다른 사람이 만든 것만)
+        participants: {
+          some: {
+            persona: {
+              isDeleted: false,
+              clerkId: {
+                not: userId // 내가 만든 캐릭터는 제외 (다른 사람이 만든 것만)
+              }
+            }
           }
         }
       },
       include: {
-        persona: true,
+        participants: {
+          include: {
+            persona: true,
+          }
+        },
       },
     });
 
     // 2. 결과를 최종 응답 형태로 가공한다.
-    return likedChatRooms.map(chatRoom => ({
-      id: chatRoom.persona.id,
-      clerkId: chatRoom.persona.clerkId, // clerkId 필드 추가
-      name: chatRoom.persona.name,
-      imageUrl: chatRoom.persona.imageUrl,
-      introduction: chatRoom.persona.introduction,
-      prompt: chatRoom.persona.prompt,
-      creatorName: chatRoom.persona.creatorName || '알 수 없음',
-      usesCount: chatRoom.persona.usesCount,
-      likesCount: chatRoom.persona.likesCount,
-      liked: true, // 이 목록은 항상 true
-      friendship: chatRoom.persona.friendship || 1, // friendship 필드 사용
-      exp: chatRoom.persona.exp || 0, // exp 필드 사용
-      isDeleted: chatRoom.persona.isDeleted,
-    }));
+    // participants에서 persona가 있는 첫 번째 참가자를 찾아서 persona 정보를 사용
+    return likedChatRooms.map(chatRoom => {
+      const aiParticipant = chatRoom.participants.find(p => p.persona);
+      const persona = aiParticipant ? aiParticipant.persona : null;
+      return persona ? {
+        id: persona.id,
+        clerkId: persona.clerkId, // clerkId 필드 추가
+        name: persona.name,
+        imageUrl: persona.imageUrl,
+        introduction: persona.introduction,
+        prompt: persona.prompt,
+        creatorName: persona.creatorName || '알 수 없음',
+        usesCount: persona.usesCount,
+        likesCount: persona.likesCount,
+        liked: true, // 이 목록은 항상 true
+        friendship: persona.friendship || 1, // friendship 필드 사용
+        exp: persona.exp || 0, // exp 필드 사용
+        isDeleted: persona.isDeleted,
+      } : null;
+    }).filter(Boolean);
   } else {
     // --- 내가 만든 페르소나 조회 로직 ('created') ---
 

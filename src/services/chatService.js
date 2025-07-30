@@ -703,66 +703,78 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
   try {
     console.log(`🔍 친밀도 증가 시도: 사용자 ${userId}, 캐릭터 ${personaId}, 획득 경험치 ${expGain}`);
 
-    // 해당 사용자가 소유한 Persona인지 확인
+    // 해당 캐릭터가 존재하는지 확인 (내가 만든 캐릭터든 다른 사용자가 만든 캐릭터든)
     const persona = await prismaConfig.prisma.persona.findFirst({
       where: {
         id: personaId,
-        clerkId: userId,
         isDeleted: false
       }
     });
 
     if (!persona) {
-      console.log(`❌ 사용자 ${userId}가 소유하지 않은 캐릭터 ${personaId}`);
+      console.log(`❌ 캐릭터 ${personaId}가 존재하지 않습니다`);
       return null;
     }
 
+    // 내가 만든 캐릭터인지 확인
+    const isMyCharacter = persona.clerkId === userId;
+    console.log(`📝 캐릭터 소유자: ${persona.clerkId}, 현재 사용자: ${userId}, 내 캐릭터: ${isMyCharacter}`);
+
     console.log(`📊 기존 친밀도 정보: exp=${persona.exp}, friendship=${persona.friendship}`);
 
-    // 새로운 경험치와 친밀도 계산
-    const newExp = persona.exp + expGain;
-    
-    // 30레벨 시스템: 공식으로 계산
-    let newFriendshipLevel = 1;
-    if (newExp >= 10) {
-      newFriendshipLevel = Math.floor((-1 + Math.sqrt(1 + 8 * newExp / 10)) / 2) + 1;
-      newFriendshipLevel = Math.min(newFriendshipLevel, 30); // 최대 30레벨
-    }
-
-    console.log(`📈 친밀도 업데이트: ${persona.exp} → ${newExp}, 레벨: ${persona.friendship} → ${newFriendshipLevel}`);
-
-    // Persona 업데이트
-    const updatedPersona = await prismaConfig.prisma.persona.update({
-      where: {
-        id: personaId
-      },
-      data: {
-        exp: newExp,
-        friendship: newFriendshipLevel
+    // 내가 만든 캐릭터인 경우에만 친밀도 증가
+    if (isMyCharacter) {
+      // 새로운 경험치와 친밀도 계산
+      const newExp = persona.exp + expGain;
+      
+      // 30레벨 시스템: 공식으로 계산
+      let newFriendshipLevel = 1;
+      if (newExp >= 10) {
+        newFriendshipLevel = Math.floor((-1 + Math.sqrt(1 + 8 * newExp / 10)) / 2) + 1;
+        newFriendshipLevel = Math.min(newFriendshipLevel, 30); // 최대 30레벨
       }
-    });
 
-    // 캐시 무효화 - 사용자의 캐릭터 목록 캐시 삭제
-    try {
-      const createdCacheKey = `user:${userId}:characters:created`;
-      const likedCacheKey = `user:${userId}:characters:liked`;
+      console.log(`📈 친밀도 업데이트: ${persona.exp} → ${newExp}, 레벨: ${persona.friendship} → ${newFriendshipLevel}`);
 
-      await redisClient.del(createdCacheKey);
-      await redisClient.del(likedCacheKey);
+      // Persona 업데이트
+      const updatedPersona = await prismaConfig.prisma.persona.update({
+        where: {
+          id: personaId
+        },
+        data: {
+          exp: newExp,
+          friendship: newFriendshipLevel
+        }
+      });
 
-      console.log(`🗑️ 캐시 무효화 완료: ${createdCacheKey}, ${likedCacheKey}`);
-    } catch (cacheError) {
-      console.error('❌ 캐시 무효화 실패:', cacheError);
-      // 캐시 무효화 실패는 치명적이지 않으므로 계속 진행
+      console.log(`✅ 친밀도 업데이트 완료:`, updatedPersona);
+      console.log(`🎉 친밀도 증가 완료: 사용자 ${userId}, 캐릭터 ${personaId}, 경험치 +${expGain}, 총 경험치: ${updatedPersona.exp}, 친밀도: ${updatedPersona.friendship}`);
+
+      return {
+        exp: updatedPersona.exp,
+        friendship: updatedPersona.friendship
+      };
+    } else {
+      // 다른 사용자의 캐릭터인 경우 친밀도 증가하지 않음
+      console.log(`ℹ️ 다른 사용자의 캐릭터 ${personaId}와의 채팅 - 친밀도 증가하지 않음`);
+      return null;
     }
 
-    console.log(`✅ 친밀도 업데이트 완료:`, updatedPersona);
-    console.log(`🎉 친밀도 증가 완료: 사용자 ${userId}, 캐릭터 ${personaId}, 경험치 +${expGain}, 총 경험치: ${updatedPersona.exp}, 친밀도: ${updatedPersona.friendship}`);
+    // 캐시 무효화 - 사용자의 캐릭터 목록 캐시 삭제 (내 캐릭터인 경우에만)
+    if (isMyCharacter) {
+      try {
+        const createdCacheKey = `user:${userId}:characters:created`;
+        const likedCacheKey = `user:${userId}:characters:liked`;
 
-    return {
-      exp: updatedPersona.exp,
-      friendship: updatedPersona.friendship
-    };
+        await redisClient.del(createdCacheKey);
+        await redisClient.del(likedCacheKey);
+
+        console.log(`🗑️ 캐시 무효화 완료: ${createdCacheKey}, ${likedCacheKey}`);
+      } catch (cacheError) {
+        console.error('❌ 캐시 무효화 실패:', cacheError);
+        // 캐시 무효화 실패는 치명적이지 않으므로 계속 진행
+      }
+    }
   } catch (error) {
     console.error('❌ 친밀도 증가 실패:', error);
     throw error;
