@@ -24,6 +24,7 @@ import {
   saveChatMessage,
   sendSSEError,
   sendSSEUserMessage,
+  sendSSEAIResponse,
   sendSSEComplete,
   sendSSEExpUpdate,
   createClientCloseHandler,
@@ -58,6 +59,7 @@ import {
   createAndProcessGroupChatJob
 } from '../utils/queueHelpers.js';
 import { isOneOnOneChat } from '../utils/chatTypeUtils.js';
+import { calculateExp } from '../utils/expCalculator.js';
 
 const elevenlabs = new ElevenLabsClient({
 
@@ -217,7 +219,12 @@ const streamChatByRoom2 = async (req, res, next) => {
 
       // 응답을 한 번에 전송 (스트리밍 대신)
       fullResponseText = aiResponseText;
-      sendSSETextChunk(res, aiResponseText);
+      sendSSEAIResponse(res, {
+        content: aiResponseText,
+        aiName: personaInfo.name,
+        aiId: personaInfo.id,
+        personaId: personaInfo.id
+      });
 
     } catch (aiError) {
       logError('AI 응답 생성 실패', aiError);
@@ -264,8 +271,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       // 저장 실패해도 클라이언트에는 이미 응답을 보냈으므로 에러 로그만 남김
     }
 
-    res.write('data: [DONE]\n\n');
-    res.end();
+    sendSSEComplete(res);
 
   } catch (error) {
     logger.logError('스트리밍 채팅 에러', error, { roomId: req.params.roomId });
@@ -1248,7 +1254,12 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       );
       
       fullResponseText = aiResponseText;
-      sendSSETextChunk(res, aiResponseText);
+      sendSSEAIResponse(res, {
+        content: aiResponseText,
+        aiName: personaInfo.name,
+        aiId: personaInfo.id,
+        personaId: personaInfo.id
+      });
       logSuccess('AI 응답 SSE 전송 완료');
       
     } catch (aiError) {
@@ -1300,8 +1311,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
     logError('1대1 채팅 플로우 에러', error);
     logger.logError('1대1 채팅 플로우 에러', error, { roomId, userId });
     res.write(`data: ${JSON.stringify({ type: 'error', message: '1대1 채팅 처리 중 오류가 발생했습니다.' })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
+    sendSSEComplete(res);
   }
 };
 

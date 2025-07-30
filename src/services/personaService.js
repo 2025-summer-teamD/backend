@@ -279,39 +279,49 @@ const getMyPersonas = async (userId, type = 'created') => {
     // --- 내가 좋아요 한 페르소나 조회 로직 ---
 
     // 1. 내가 좋아요 한 페르소나를 ChatRoom을 통해 찾는다 (likes = true인 것만)
+    // 먼저 좋아요한 채팅방들을 찾고, 그 다음에 참여자 정보를 가져온다
     const likedChatRooms = await prismaConfig.prisma.chatRoom.findMany({
       where: {
         clerkId: userId,
         likes: true, // 좋아요 한 것만 필터링
         isDeleted: false,
-        persona: {
-          isDeleted: false,
-          clerkId: {
-            not: userId // 내가 만든 캐릭터는 제외 (다른 사람이 만든 것만)
-          }
-        }
       },
       include: {
-        persona: true,
+        participants: {
+          include: {
+            persona: true,
+          }
+        },
       },
     });
 
+    // 클라이언트 사이드에서 필터링: 내가 만든 캐릭터는 제외
+    const filteredChatRooms = likedChatRooms.filter(chatRoom => {
+      const aiParticipant = chatRoom.participants.find(p => p.persona);
+      return aiParticipant && aiParticipant.persona && aiParticipant.persona.clerkId !== userId;
+    });
+
     // 2. 결과를 최종 응답 형태로 가공한다.
-    return likedChatRooms.map(chatRoom => ({
-      id: chatRoom.persona.id,
-      clerkId: chatRoom.persona.clerkId, // clerkId 필드 추가
-      name: chatRoom.persona.name,
-      imageUrl: chatRoom.persona.imageUrl,
-      introduction: chatRoom.persona.introduction,
-      prompt: chatRoom.persona.prompt,
-      creatorName: chatRoom.persona.creatorName || '알 수 없음',
-      usesCount: chatRoom.persona.usesCount,
-      likesCount: chatRoom.persona.likesCount,
-      liked: true, // 이 목록은 항상 true
-      friendship: chatRoom.persona.friendship || 1, // friendship 필드 사용
-      exp: chatRoom.persona.exp || 0, // exp 필드 사용
-      isDeleted: chatRoom.persona.isDeleted,
-    }));
+    // participants에서 persona가 있는 첫 번째 참가자를 찾아서 persona 정보를 사용
+    return filteredChatRooms.map(chatRoom => {
+      const aiParticipant = chatRoom.participants.find(p => p.persona);
+      const persona = aiParticipant ? aiParticipant.persona : null;
+      return persona ? {
+        id: persona.id,
+        clerkId: persona.clerkId, // clerkId 필드 추가
+        name: persona.name,
+        imageUrl: persona.imageUrl,
+        introduction: persona.introduction,
+        prompt: persona.prompt,
+        creatorName: persona.creatorName || '알 수 없음',
+        usesCount: persona.usesCount,
+        likesCount: persona.likesCount,
+        liked: true, // 이 목록은 항상 true
+        friendship: persona.friendship || 1, // friendship 필드 사용
+        exp: persona.exp || 0, // exp 필드 사용
+        isDeleted: persona.isDeleted,
+      } : null;
+    }).filter(Boolean);
   } else {
     // --- 내가 만든 페르소나 조회 로직 ('created') ---
 
@@ -477,6 +487,8 @@ const deletePersona = async (personaId, userId) => {
  * @returns {Promise<object>} { isLiked, likesCount }
  */
 const toggleLike = async (personaId, userId) => {
+  console.log('🔍 toggleLike service - 시작:', { personaId, userId });
+  
   // 1. 페르소나 존재 확인
   const persona = await prismaConfig.prisma.persona.findUnique({
     where: { id: personaId, isDeleted: false },
@@ -484,6 +496,8 @@ const toggleLike = async (personaId, userId) => {
   if (!persona) {
     throw new Error('존재하지 않는 페르소나입니다.');
   }
+  
+  console.log('🔍 toggleLike service - 페르소나 확인:', { personaId: persona.id, personaClerkId: persona.clerkId, userId });
   
   // 2. 본인 페르소나 좋아요 방지
   if (persona.clerkId === userId) {
@@ -499,18 +513,29 @@ const toggleLike = async (personaId, userId) => {
     }
   });
   
+  console.log('🔍 toggleLike service - 기존 채팅방 확인:', { existingChatRoom: existingChatRoom ? { id: existingChatRoom.id, likes: existingChatRoom.likes } : null });
+  
   let isLiked = false;
   
   if (!existingChatRoom) {
     // 새로운 채팅방 생성 (likes: true로 설정)
-    await prismaConfig.prisma.chatRoom.create({
+    const newChatRoom = await prismaConfig.prisma.chatRoom.create({
       data: {
         clerkId: userId,
         personaId: personaId,
-        likes: true
+        likes: true,
+        participants: {
+          create: [
+            {
+              userId: userId,
+              personaId: personaId
+            }
+          ]
+        }
       }
     });
     isLiked = true;
+    console.log('🔍 toggleLike service - 새 채팅방 생성:', { chatRoomId: newChatRoom.id, likes: newChatRoom.likes });
   } else {
     // 기존 채팅방의 likes 상태 토글
     const newLikesState = !existingChatRoom.likes;
@@ -519,6 +544,7 @@ const toggleLike = async (personaId, userId) => {
       data: { likes: newLikesState }
     });
     isLiked = newLikesState;
+    console.log('🔍 toggleLike service - 기존 채팅방 업데이트:', { chatRoomId: existingChatRoom.id, oldLikes: existingChatRoom.likes, newLikes: newLikesState });
   }
   
   // 4. 페르소나의 총 좋아요 수 업데이트 (likes: true인 ChatRoom 개수)
@@ -530,15 +556,21 @@ const toggleLike = async (personaId, userId) => {
     }
   });
   
+  console.log('🔍 toggleLike service - 총 좋아요 수 계산:', { totalLikes });
+  
   await prismaConfig.prisma.persona.update({
     where: { id: personaId },
     data: { likesCount: totalLikes },
   });
   
-  return {
+  const result = {
     isLiked: isLiked,
     likesCount: totalLikes,
   };
+  
+  console.log('🔍 toggleLike service - 최종 결과:', result);
+  
+  return result;
 };
 
 /**
