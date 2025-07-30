@@ -154,7 +154,8 @@ export const generateAndSaveGroupAiResponses = async ({
   allPersonas,
   chatHistory,
   isFirstMessage,
-  roomId
+  roomId,
+  userName = '사용자'
 }) => {
   try {
     const { default: chatService } = await import('../services/chatService.js');
@@ -167,7 +168,8 @@ export const generateAndSaveGroupAiResponses = async ({
       message,
       allPersonas,
       chatHistory,
-      isFirstMessage
+      isFirstMessage,
+      userName
     );
 
     console.log('✅ 단체 채팅 AI 응답 생성 완료:', aiResponses.length, '개의 응답');

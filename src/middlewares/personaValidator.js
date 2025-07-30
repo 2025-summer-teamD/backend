@@ -95,13 +95,25 @@ const validateAiCreatePersona = (req, res, next) => {
 };
 
 const validateTTSParam = (req, res, next) => {
-    // GET 요청이므로 req.query에서 파라미터를 가져옵니다.
+    // GET 요청이므로 req.params에서 파라미터를 가져옵니다.
     const { roomId, chatLogId } = req.params;
 
     // 필수 파라미터들이 존재하는지 확인합니다.
     if (!roomId || !chatLogId) {
         // 하나라도 누락되었다면 에러 응답
-        return res.status(400).json({ error: 'roomId, userId, chatLogId는 필수 파라미터입니다.' });
+        return res.status(400).json({ error: 'roomId와 chatLogId는 필수 파라미터입니다.' });
+    }
+
+    // roomId와 chatLogId가 유효한 숫자인지 확인합니다.
+    const roomIdNum = parseInt(roomId, 10);
+    const chatLogIdNum = parseInt(chatLogId, 10);
+
+    if (isNaN(roomIdNum) || roomIdNum <= 0) {
+        return res.status(400).json({ error: '유효하지 않은 roomId입니다. ID는 양의 정수여야 합니다.' });
+    }
+
+    if (isNaN(chatLogIdNum) || chatLogIdNum <= 0) {
+        return res.status(400).json({ error: '유효하지 않은 chatLogId입니다. ID는 양의 정수여야 합니다.' });
     }
 
     // 모든 필수 파라미터가 존재하면 다음 미들웨어로 넘어갑니다.

@@ -56,7 +56,7 @@ const extractPersonaDetails = async (personaInfo) => {
 };
 
 /**
- * 특정 사용자의 채팅 목록을 페이지네이션하여 조회합니다.
+ * 내 채팅방 목록 조회 (ChatRoomParticipant 기반)
  * @param {string} userId - 현재 로그인한 사용자의 Clerk ID
  * @param {object} pagination - 페이지네이션 옵션 { skip, take, page, size }
  * @returns {Promise<object>} { chatList, totalElements, totalPages }
@@ -65,17 +65,17 @@ const getMyChatList = async (userId, pagination) => {
   const { skip, take, size } = pagination;
 
   // 내가 참여중인 채팅방 id 목록
-  const myRooms = await prismaConfig.prisma.chatRoom.findMany({
-    where: { clerkId: userId, isDeleted: false },
-    select: { id: true }
+  const myRooms = await prismaConfig.prisma.chatRoomParticipant.findMany({
+    where: { user: { clerkId: userId } },
+    select: { chatRoom: { select: { id: true } } }
   });
-  const roomIds = myRooms.map(r => r.id);
+  const roomIds = myRooms.map(r => r.chatRoom.id);
 
   if (roomIds.length === 0) {
     return { chatList: [], totalElements: 0, totalPages: 0 };
   }
 
-  // 채팅방 정보 조회
+  // 채팅방 정보 조회 (참가자 포함)
   const totalElements = await prismaConfig.prisma.chatRoom.count({
     where: {
       id: { in: roomIds },
@@ -94,7 +94,12 @@ const getMyChatList = async (userId, pagination) => {
     skip,
     take,
     include: {
-      persona: true,
+      participants: {
+        include: {
+          persona: true,
+          user: true
+        }
+      },
       ChatLogs: {
         orderBy: { time: 'desc' },
         take: 1, 
@@ -105,118 +110,41 @@ const getMyChatList = async (userId, pagination) => {
 
   // 응답 데이터 가공
   const chatList = chatRooms.map(room => {
-    const persona = room.persona;
+    // AI 참가자들만 찾기 (사용자 제거)
+    const aiParticipants = room.participants.filter(p => p.persona);
+    
+    // 대표 AI (첫 번째 AI 또는 null)
+    const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
 
     return {
       roomId: room.id,
-      characterId: persona?.id || null,
-      name: room.name || (persona?.name ? `${persona.name}와의 채팅방` : '채팅방'),
+      characterId: mainPersona?.id || null,
+      name: room.name || (mainPersona?.name ? `${mainPersona.name}와의 채팅방` : '채팅방'),
       description: room.description || null,
-      imageUrl: persona?.imageUrl || null,
+      imageUrl: mainPersona?.imageUrl || null,
       lastChat: lastChat ? lastChat.text : null,
       time: lastChat ? lastChat.time.toISOString() : null,
       isPublic: room.isPublic,
-      persona: persona ? {
-        id: persona.id,
-        name: persona.name,
-        imageUrl: persona.imageUrl
+      persona: mainPersona ? {
+        id: mainPersona.id,
+        name: mainPersona.name,
+        imageUrl: mainPersona.imageUrl
       } : null,
-      participants: persona ? [{
-        id: persona.id,
-        personaId: persona.id,
-        name: persona.name,
-        imageUrl: persona.imageUrl,
-        exp: persona.exp || 0,
-        friendship: persona.friendship || 1,
-        introduction: persona.introduction
-      }] : []
+      participants: aiParticipants.map(p => ({
+        id: p.persona.id,
+        personaId: p.persona.id,
+        name: p.persona.name,
+        imageUrl: p.persona.imageUrl,
+        exp: p.persona.exp || 0,
+        friendship: p.persona.friendship || 1,
+        introduction: p.persona.introduction
+      }))
     };
   });
 
   const totalPages = Math.ceil(totalElements / size);
   return { chatList, totalElements, totalPages };
-};
-
-/**
- * AI 캐릭터의 응답을 생성합니다. (DB 연동 없음)
- * 이 함수는 페르소나 정보와 대화 기록을 직접 받아 순수하게 AI 응답만 생성합니다.
- * @param {string} userMessage - 사용자가 보낸 메시지
- * @param {object} personaInfo - 페르소나 정보 { name, personality, tone }
- * @param {string} chatHistory - 이전 대화 기록 (문자열)
- * @returns {Promise<string>} AI가 생성한 응답 메시지
- */
-const generateAiChatResponse = async (
-  userMessage,
-  personaInfo,
-  chatHistory,
-  otherParticipants = [],
-  userName = '사용자'
-) => {
-  // 1. 내 정보 - AI로 성격, 말투, 특징 추출
-  const myDetails = await extractPersonaDetails(personaInfo);
-
-  const myInfo = `
-[당신의 정보]
-이름: ${personaInfo.name}
-성격: ${myDetails.personality}
-말투: ${myDetails.tone}
-특징: ${myDetails.characteristics}
-소개: ${personaInfo.introduction || ''}
-`;
-
-  // 2. 상대 AI 정보 (표 형태)
-  const othersInfo = await Promise.all(
-    otherParticipants
-      .filter(p => p.persona && p.persona.id !== personaInfo.id)
-      .map(async p => {
-        const otherDetails = await extractPersonaDetails(p.persona);
-        return `이름: ${p.persona.name} | 성격: ${otherDetails.personality} | 말투: ${otherDetails.tone} | 특징: ${otherDetails.characteristics} | 소개: ${p.persona.introduction || ''}`;
-      })
-  );
-
-  const othersInfoText = othersInfo.join('\n');
-
-  // 3. 프롬프트
-  const prompt = `
-${myInfo}
-[채팅방에 함께 있는 다른 AI 정보]
-${othersInfoText}
-
-너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
-
-중요 규칙:
-- 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
-- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 인사를 창의적으로 할 것
-- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
-- 각 AI의 이름을 정확히 사용해서 대화할 것
-- 지금 채팅방에 처음 입장했다면, 각 상대 AI에게 한 명씩 인사할 것
-- 다른 AI들이 대화할 때도 그들의 이름과 특성을 인지하고 반응할 것
-- 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
-- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
-- 사용자의 이름(${userName})을 기억하고 언급할 것
-
-[최근 대화 기록]
-${chatHistory}
----
-${userName}: ${userMessage}
-${personaInfo.name}:`;
-
-  // 4. Google AI 호출
-  let aiResponseText;
-  try {
-    console.log('🤖 Google AI 호출 시도...');
-    console.log('📝 프롬프트:', prompt.trim());
-    aiResponseText = await gemini25.generateText(prompt.trim());
-    console.log('✅ Google AI 응답 성공:', aiResponseText);
-  } catch (error) {
-    console.error('❌ Google AI 호출 실패:', error.message);
-    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
-  }
-  if (!aiResponseText || aiResponseText.trim() === '') {
-    aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
-  }
-  return aiResponseText;
 };
 
 /**
@@ -242,15 +170,60 @@ const generateAiChatResponseOneOnOne = async (
   if (imageMatch) {
     const imageUrl = imageMatch[1].trim();
     try {
-      console.log('🖼️ Gemini 멀티모달 호출 (image + text)...', imageUrl);
+      console.log('🖼️ [CHAT SERVICE] 이미지 메시지 감지:', { 
+        originalMessage: userMessage,
+        extractedImageUrl: imageUrl,
+        personaName: personaInfo.name 
+      });
 
       // 캐릭터 설정을 포함한 프롬프트
-      const promptText = `당신은 "${personaInfo.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.\n- 성격: ${personaInfo.personality}\n- 말투: ${personaInfo.tone}`;
+      const promptText = `당신은 "${personaInfo.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.
+
+중요 규칙:
+- 성격: ${personaInfo.personality}
+- 말투: ${personaInfo.tone}
+- 절대 이미지 URL이나 링크를 포함하지 말 것
+- 텍스트로만 응답할 것
+- 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
+- 응답 끝에 자신의 이름을 붙이지 말 것
+
+${personaInfo.name}:`;
+      
+      console.log('📝 [CHAT SERVICE] 이미지 프롬프트:', promptText);
 
       const aiResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
-      return aiResponse;
+      
+      console.log('✅ [CHAT SERVICE] 이미지 응답 생성 완료:', { 
+        responseLength: aiResponse.length,
+        responsePreview: aiResponse.substring(0, 100) + '...',
+        personaName: personaInfo.name
+      });
+      
+      // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
+      let cleanedResponse = aiResponse;
+      
+      // 응답 끝에 AI 이름이 붙어있는지 확인
+      const namePatterns = [
+        new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[\\n\\r]*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
+      ];
+      
+      for (const pattern of namePatterns) {
+        if (pattern.test(cleanedResponse)) {
+          console.log(`🧹 ${personaInfo.name} 이미지 응답에서 자기 이름 제거:`, {
+            originalResponse: aiResponse.substring(0, 200) + '...',
+            cleanedResponse: cleanedResponse.substring(0, 200) + '...'
+          });
+          cleanedResponse = cleanedResponse.replace(pattern, '').trim();
+        }
+      }
+      
+      return cleanedResponse;
     } catch (error) {
-      console.error('❌ Gemini 이미지 응답 실패:', error.message);
+      console.error('❌ [CHAT SERVICE] Gemini 이미지 응답 실패:', error.message);
+      console.error('❌ [CHAT SERVICE] 오류 상세:', error);
       return `죄송해요, 이미지를 읽는 데 문제가 발생했습니다. 다른 이미지를 보내주시겠어요?`;
     }
   }
@@ -299,6 +272,9 @@ ${myInfo}
 - 사용자(${userName})와 1대1 대화이므로 자연스럽고 친근하게 대화할 것
 - 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
+- 절대 이미지 URL이나 링크를 포함하지 말 것
+- 텍스트로만 응답할 것
+- 응답 끝에 자신의 이름을 붙이지 말 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -313,6 +289,9 @@ ${personaInfo.name}:`;
 중요 규칙:
 - 사용자의 이름(${userName})을 기억하고 언급할 것
 - 자신의 개성을 유지하면서 자연스럽게 대화할 것
+- 절대 이미지 URL이나 링크를 포함하지 말 것
+- 텍스트로만 응답할 것
+- 응답 끝에 자신의 이름을 붙이지 말 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -328,6 +307,29 @@ ${personaInfo.name}:`;
     console.log('📝 프롬프트:', prompt.trim());
     aiResponseText = await gemini25.generateText(prompt.trim());
     console.log('✅ Google AI 응답 성공 (1대1):', aiResponseText);
+    
+    // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
+    let cleanedResponse = aiResponseText;
+    
+    // 응답 끝에 AI 이름이 붙어있는지 확인
+    const namePatterns = [
+      new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*$`, 'i'),
+      new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[\\n\\r]*$`, 'i'),
+      new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*$`, 'i'),
+      new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
+    ];
+    
+    for (const pattern of namePatterns) {
+      if (pattern.test(cleanedResponse)) {
+        console.log(`🧹 ${personaInfo.name} 응답에서 자기 이름 제거:`, {
+          originalResponse: aiResponseText.substring(0, 200) + '...',
+          cleanedResponse: cleanedResponse.substring(0, 200) + '...'
+        });
+        cleanedResponse = cleanedResponse.replace(pattern, '').trim();
+      }
+    }
+    
+    aiResponseText = cleanedResponse;
   } catch (error) {
     console.error('❌ Google AI 호출 실패 (1대1):', error.message);
     aiResponseText = `안녕하세요! 저는 ${personaInfo.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`;
@@ -339,33 +341,41 @@ ${personaInfo.name}:`;
 };
 
 /**
- * 채팅방 삭제 (소프트 삭제)
+ * 채팅방 삭제 (소프트 삭제) - ChatRoomParticipant 기반
  * @param {number} roomId - 삭제할 채팅방 ID
  * @param {string} userId - 요청자 Clerk ID (권한 확인용)
  * @returns {Promise<object>} 삭제된 채팅방 객체
  */
 const deleteChatRoom = async (roomId, userId) => {
-  // 1. 본인 참여 채팅방인지 확인
+  // 1. 본인 참여 채팅방인지 확인 (ChatRoomParticipant 기반)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: { 
       id: parseInt(roomId, 10),
-      clerkId: userId,
-      isDeleted: false
-    },
+      isDeleted: false,
+      participants: {
+        some: {
+          user: { clerkId: userId }
+        }
+      }
+    }
   });
+  
   if (!chatRoom) {
     throw new Error('삭제 권한이 없거나 존재하지 않는 채팅방입니다.');
   }
+  
   // 2. 채팅방을 소프트 삭제
   const deleted = await prismaConfig.prisma.chatRoom.update({
     where: { id: parseInt(roomId, 10) },
     data: { isDeleted: true },
   });
+  
   // 3. 관련 채팅 로그도 소프트 삭제
   await prismaConfig.prisma.chatLog.updateMany({
     where: { chatroomId: deleted.id },
     data: { isDeleted: true },
   });
+  
   return deleted;
 };
 /**
@@ -558,71 +568,52 @@ async function checkAndGenerateVideoReward(roomId, options) {
 }
 
 /**
- * 여러 캐릭터/유저로 단체 채팅방 생성 (동일 참가자 조합이 있으면 반환, 없으면 새로 생성)
- * @param {string[]} participantIds - 유저/AI의 clerkId 또는 personaId 배열
- * @returns {Promise<object>} 생성/조회된 채팅방 정보
+ * 단체 채팅방 생성 (N:N 구조)
+ * @param {string[]} userIds - 유저 clerkId 배열 (최소 1명)
+ * @param {number[]} personaIds - AI personaId 배열 (최소 1명)
+ * @param {boolean} isPublic
+ * @returns {Promise<object>} 생성된 채팅방 정보
  */
-const createMultiChatRoom = async (participantIds, isPublic = true) => {
-  console.log('createMultiChatRoom service - participantIds:', participantIds);
-  console.log('createMultiChatRoom service - isPublic:', isPublic);
-
-  // 1. 참가자 배열을 clerkId/personaId로 분리
-  // participantIds는 [userId, personaId1, personaId2, ...] 형태
-  const userIds = participantIds.filter(id => typeof id === 'string' && id.startsWith('user_'));
-  const personaIds = participantIds.filter(id => typeof id === 'number').map(id => parseInt(id, 10));
-
-  console.log('createMultiChatRoom service - userIds:', userIds);
-  console.log('createMultiChatRoom service - personaIds:', personaIds);
-
-  // 항상 새 채팅방 생성 (기존 채팅방 재사용 제거)
-  console.log('createMultiChatRoom service - creating new room');
-  
-  // 첫 번째 유저와 첫 번째 AI로 채팅방 생성
-  const foundRoom = await prismaConfig.prisma.chatRoom.create({
+const createMultiChatRoom = async (userIds, personaIds, isPublic = true, description = null) => {
+  const chatRoom = await prismaConfig.prisma.chatRoom.create({
     data: {
-      clerkId: userIds[0],
-      personaId: personaIds[0],
-      isPublic: isPublic
+      isPublic,
+      description,
+      participants: {
+        create: [
+          ...userIds.map(userId => ({ user: { connect: { clerkId: userId } } })),
+          ...personaIds.map(personaId => ({ persona: { connect: { id: personaId } } }))
+        ]
+      }
     },
-    include: { persona: true }
+    include: {
+      participants: {
+        include: { user: true, persona: true }
+      }
+    }
   });
-  console.log('createMultiChatRoom service - created room id:', foundRoom.id);
-
-  // 참가자 정보 포함해서 다시 조회
-  const foundRoomWithParticipants = await prismaConfig.prisma.chatRoom.findUnique({
-    where: { id: foundRoom.id },
-    include: { persona: true }
-  });
-
-  // 채팅 로그
-  const chatHistory = await prismaConfig.prisma.chatLog.findMany({
-    where: { chatroomId: foundRoom.id, isDeleted: false },
-    orderBy: { time: 'asc' }
-  });
-
-  const result = {
-    roomId: foundRoom.id,
-    isNewRoom: true, // 항상 새 방
-    isPublic: foundRoom.isPublic,
-    participants: [{
-      id: foundRoomWithParticipants.persona?.id,
-      clerkId: foundRoomWithParticipants.clerkId,
-      personaId: foundRoomWithParticipants.personaId,
-      name: foundRoomWithParticipants.persona?.name,
-      imageUrl: foundRoomWithParticipants.persona?.imageUrl,
-      exp: foundRoomWithParticipants.persona?.exp || 0,
-      friendship: foundRoomWithParticipants.persona?.friendship || 1,
-      introduction: foundRoomWithParticipants.persona?.introduction
-    }],
-    chatHistory
+  // AI 참가자만 필터링 (사용자 제거)
+  const aiParticipants = chatRoom.participants.filter(p => p.persona);
+  
+  return {
+    roomId: chatRoom.id,
+    isNewRoom: true,
+    isPublic: chatRoom.isPublic,
+    participants: aiParticipants.map(p => ({
+      id: p.persona.id,
+      personaId: p.persona.id,
+      name: p.persona.name,
+      imageUrl: p.persona.imageUrl,
+      exp: p.persona.exp || 0,
+      friendship: p.persona.friendship || 1,
+      introduction: p.persona.introduction
+    })),
+    chatHistory: []
   };
-
-  console.log('createMultiChatRoom service - final result:', result);
-  return result;
 };
 
 /**
- * 1대1 채팅방 생성
+ * 1대1 채팅방 생성 (ChatRoomParticipant 기반)
  * @param {string} userId - 사용자 ID
  * @param {number} personaId - 캐릭터 ID
  * @param {boolean} isPublic - 공개 여부
@@ -633,20 +624,35 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
   try {
     console.log('createOneOnOneChatRoom - userId:', userId, 'personaId:', personaId, 'isPublic:', isPublic);
 
-    // 1. 먼저 기존 채팅방이 있는지 확인
+    // 1. 먼저 기존 채팅방이 있는지 확인 (ChatRoomParticipant 기반)
     const existingChatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: {
-        clerkId: userId,
-        personaId: personaId,
-        isDeleted: false
+        isDeleted: false,
+        participants: {
+          every: {
+            OR: [
+              { user: { clerkId: userId } },
+              { persona: { id: personaId } }
+            ]
+          }
+        }
       },
       include: {
-        persona: true
+        participants: {
+          include: {
+            persona: true,
+            user: true
+          }
+        }
       }
     });
 
     if (existingChatRoom) {
       console.log('createOneOnOneChatRoom - 기존 채팅방 발견:', existingChatRoom.id);
+
+      // AI 참가자 찾기
+      const aiParticipant = existingChatRoom.participants.find(p => p.persona);
+      const userParticipant = existingChatRoom.participants.find(p => p.user);
 
       // 기존 채팅방의 메시지 히스토리 가져오기
       const chatHistory = await prismaConfig.prisma.chatLog.findMany({
@@ -663,17 +669,18 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
 
       return {
         roomId: existingChatRoom.id,
-        persona: existingChatRoom.persona,
-        participants: [{
-          id: existingChatRoom.persona.id,
-          clerkId: userId,
-          personaId: existingChatRoom.persona.id,
-          name: existingChatRoom.persona.name,
-          imageUrl: existingChatRoom.persona.imageUrl,
-          exp: existingChatRoom.persona.exp || 0,
-          friendship: existingChatRoom.persona.friendship || 1,
-          introduction: existingChatRoom.persona.introduction
-        }],
+        persona: aiParticipant?.persona || null,
+        participants: [
+          {
+            id: aiParticipant?.persona.id || null,
+            personaId: aiParticipant?.persona.id || null,
+            name: aiParticipant?.persona.name || '알 수 없음',
+            imageUrl: aiParticipant?.persona.imageUrl || null,
+            exp: aiParticipant?.persona.exp || 0,
+            friendship: aiParticipant?.persona.friendship || 1,
+            introduction: aiParticipant?.persona.introduction || null
+          }
+        ],
         chatHistory: chatHistory,
         isNewRoom: false,
         isPublic: existingChatRoom.isPublic,
@@ -704,27 +711,31 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
       data: {
         name: defaultRoomName,
         description: description,
-        clerkId: userId,
-        personaId: personaId,
         isPublic: isPublic,
-        isDeleted: false,
+        participants: {
+          create: [
+            { user: { connect: { clerkId: userId } } },
+            { persona: { connect: { id: personaId } } }
+          ]
+        }
       },
+      include: {
+        participants: {
+          include: {
+            persona: true,
+            user: true
+          }
+        }
+      }
     });
 
     console.log('createOneOnOneChatRoom - 새 채팅방 생성:', newRoom.id);
-
-    // 3. 사용자와 캐릭터 정보는 이미 채팅방 생성 시 포함됨
-
-    // 4. 캐릭터 정보는 이미 위에서 조회했으므로 재사용
-
-    console.log('createOneOnOneChatRoom - 새 1대1 채팅방 생성 완료:', newRoom.id);
 
     return {
       roomId: newRoom.id,
       persona: persona,
       participants: [{
         id: persona.id,
-        clerkId: userId,
         personaId: persona.id,
         name: persona.name,
         imageUrl: persona.imageUrl,
@@ -737,8 +748,8 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
       isPublic: newRoom.isPublic,
     };
   } catch (error) {
-    console.error('createOneOnOneChatRoom - 에러:', error);
-    throw new Error('1대1 채팅방 생성에 실패했습니다.');
+    console.error('createOneOnOneChatRoom - 오류:', error);
+    throw error;
   }
 };
 
@@ -929,9 +940,30 @@ const getUserFriendships = async (userId) => {
  * @returns {Promise<array>} 각 AI의 응답 배열
  */
 const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자', roomId = null) => {
-  console.log('🤖 단체 채팅 AI 응답 생성 시작:', allPersonas.length, '명의 AI');
-  console.log('📝 첫 번째 메시지 여부:', isFirstMessage);
-  console.log('👤 사용자 이름:', userName);
+  console.log('🎯 단체 채팅 AI 응답 생성 시작:', {
+    messageLength: userMessage.length,
+    personasCount: allPersonas.length,
+    isFirstMessage,
+    userName
+  });
+
+  // 입력 데이터 상세 로깅
+  console.log('🔍 입력 데이터 상세:', {
+    userMessage: userMessage.substring(0, 100) + '...',
+    allPersonas: allPersonas.map(p => ({
+      id: p.id,
+      name: p.name,
+      personality: p.personality,
+      tone: p.tone,
+      characteristics: p.characteristics,
+      introduction: p.introduction,
+      prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
+      imageUrl: p.imageUrl
+    })),
+    chatHistory: chatHistory.substring(0, 200) + '...',
+    isFirstMessage,
+    userName
+  });
 
   // 1. 이미지 메시지 여부 확인 ([이미지] {url}) 패턴)
   const imageRegex = /^\[이미지\]\s+(.+)/;
@@ -940,27 +972,82 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
   // 이미지 메시지인 경우 → 멀티모달 호출
   if (imageMatch) {
     const imageUrl = imageMatch[1].trim();
-    console.log(`🖼️ 단체 채팅 이미지 감지: ${imageUrl}`);
+    console.log(`🖼️ [GROUP CHAT] 단체 채팅 이미지 감지:`, { 
+      originalMessage: userMessage,
+      extractedImageUrl: imageUrl,
+      aiCount: allPersonas.length 
+    });
     
     // 각 AI가 이미지에 대해 개별적으로 반응
     const imageResponses = await Promise.all(
       allPersonas.map(async (persona) => {
         try {
-          console.log(`🖼️ ${persona.name} 이미지 처리 시작`);
+          console.log(`🖼️ [GROUP CHAT] ${persona.name} 이미지 처리 시작`);
           
-          // 캐릭터 설정을 포함한 프롬프트
-          const promptText = `당신은 "${persona.name}"이라는 AI 캐릭터입니다. 아래 성격과 말투를 반영하여, 사용자가 보낸 이미지를 보고 대답해주세요.\n- 성격: ${persona.personality || '친근하고 활발한'}\n- 말투: ${persona.tone || '친근하고 자연스러운'}`;
+          // 다른 AI들의 정보를 포함한 이미지 프롬프트
+          const otherPersonas = allPersonas.filter(p => p.id !== persona.id);
+          const otherPersonasInfo = otherPersonas.map(p => `${p.name}(${p.personality || '친근한'}, ${p.tone || '자연스러운'})`).join(', ');
+          
+          const promptText = `당신은 "${persona.name}"이라는 AI 캐릭터입니다. 사용자(${userName})와 다른 AI들(${otherPersonasInfo})과 함께 이미지를 보고 대화하고 있습니다.
+
+다른 AI들의 정보:
+${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, ${p.tone || '자연스러운'} 말투, ${p.characteristics || '활발한'} 특징
+  소개: ${p.introduction || '친근한 AI'}
+  프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
+  이미지: ${p.imageUrl || '기본 이미지'}`).join('\n')}
+
+중요 규칙:
+- 성격: ${persona.personality || '친근하고 활발한'}
+- 말투: ${persona.tone || '친근하고 자연스러운'}
+- 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
+- 다른 AI들과 함께 이미지를 분석하고 의견을 나눌 것
+- 자신의 개성을 유지하면서도 다른 AI들과 협력적인 분위기를 만들어갈 것
+- 다른 AI들의 프롬프트 정보를 참고하여 그들과의 대화를 자연스럽게 이끌 것
+- 다른 AI들의 이미지나 외모에 대한 언급도 자연스럽게 포함할 것
+- 절대 이미지 URL이나 링크를 포함하지 말 것
+- 텍스트로만 응답할 것
+- 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
+- 응답 끝에 자신의 이름을 붙이지 말 것
+
+${persona.name}:`;
+
+          console.log(`📝 [GROUP CHAT] ${persona.name} 이미지 프롬프트:`, promptText);
 
           const imageResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
-          console.log(`✅ ${persona.name} 이미지 응답:`, imageResponse);
+          console.log(`✅ [GROUP CHAT] ${persona.name} 이미지 응답 완료:`, { 
+            responseLength: imageResponse.length,
+            responsePreview: imageResponse.substring(0, 100) + '...'
+          });
+          
+          // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
+          let cleanedResponse = imageResponse;
+          
+          // 응답 끝에 AI 이름이 붙어있는지 확인
+          const namePatterns = [
+            new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
+            new RegExp(`\\s*[-\\s]*${persona.name}\\s*[\\n\\r]*$`, 'i'),
+            new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
+            new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
+          ];
+          
+          for (const pattern of namePatterns) {
+            if (pattern.test(cleanedResponse)) {
+              console.log(`🧹 ${persona.name} 그룹 채팅 이미지 응답에서 자기 이름 제거:`, {
+                originalResponse: imageResponse.substring(0, 200) + '...',
+                cleanedResponse: cleanedResponse.substring(0, 200) + '...'
+              });
+              cleanedResponse = cleanedResponse.replace(pattern, '').trim();
+            }
+          }
           
           return {
             personaId: persona.id,
             personaName: persona.name,
-            content: imageResponse
+            content: cleanedResponse
           };
         } catch (error) {
-          console.error(`❌ ${persona.name} 이미지 처리 실패:`, error.message);
+          console.error(`❌ [GROUP CHAT] ${persona.name} 이미지 처리 실패:`, error.message);
+          console.error(`❌ [GROUP CHAT] ${persona.name} 오류 상세:`, error);
           return {
             personaId: persona.id,
             personaName: persona.name,
@@ -970,31 +1057,44 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
       })
     );
     
+    console.log(`🎉 [GROUP CHAT] 모든 AI 이미지 응답 완료:`, { 
+      responseCount: imageResponses.length,
+      responses: imageResponses.map(r => ({ name: r.personaName, length: r.content.length }))
+    });
+    
     return imageResponses;
   }
 
-  // 일반 대화 모드
-  const personasInfo = await Promise.all(
-    allPersonas.map(async (persona, index) => {
-      const details = await extractPersonaDetails(persona);
-      return {
-        id: persona.id,
-        name: persona.name,
-        personality: details.personality,
-        tone: details.tone,
-        characteristics: details.characteristics,
-        introduction: persona.introduction || '',
-        prompt: persona.prompt || '',
-        index
-      };
-    })
-  );
+  // 일반 대화 모드 - 각 페르소나에 인덱스 추가
+  const personasInfo = allPersonas.map((persona, index) => ({
+    ...persona,
+    index
+  }));
 
-  console.log('👥 참여 AI 목록:', personasInfo.map(p => p.name));
+  console.log('📋 처리할 AI 참여자들:', personasInfo.map(p => ({
+    id: p.id,
+    name: p.name,
+    index: p.index,
+    personality: p.personality,
+    tone: p.tone
+  })));
 
-  // 각 AI별로 개별 응답 생성
-  const responses = await Promise.all(
-    personasInfo.map(async (persona) => {
+  // AI들이 순차적으로 응답 생성 (실제 채팅처럼)
+  const responses = [];
+  const aiResponses = []; // 다른 AI들의 응답을 저장할 배열
+  
+  for (let i = 0; i < personasInfo.length; i++) {
+    const persona = personasInfo[i];
+    console.log(`🤖 ${persona.name} AI 응답 생성 중... (${i + 1}/${personasInfo.length})`);
+    
+    // 이전 AI들의 응답을 포함한 채팅 히스토리 업데이트
+    let updatedChatHistory = chatHistory;
+    if (aiResponses.length > 0) {
+      const recentAiMessages = aiResponses.map(response => 
+        `${response.personaName}: ${response.content}`
+      ).join('\n');
+      updatedChatHistory = `${chatHistory}\n${recentAiMessages}`;
+    }
       let individualPrompt;
 
       if (isFirstMessage) {
@@ -1007,23 +1107,57 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
 특징: ${p.characteristics}
 소개: ${p.introduction}
 프롬프트: ${p.prompt}
+이미지: ${p.imageUrl || '기본 이미지'}
 `).join('\n');
 
-        individualPrompt = `
-${allPersonasInfo}
+        const otherPersonasInfo = personasInfo.filter(p => p.id !== persona.id).map(p => p.name).join(', ');
 
-위의 정보 중에서 [AI ${persona.index + 1} 정보]에 해당하는 AI입니다.
+        console.log(`🔍 ${persona.name} - 첫 번째 메시지 프롬프트 구성:`, {
+          personaName: persona.name,
+          totalPersonas: personasInfo.length,
+          otherPersonasInfo,
+          allPersonasInfo: personasInfo.map(p => ({
+            id: p.id,
+            name: p.name,
+            personality: p.personality,
+            tone: p.tone,
+            characteristics: p.characteristics,
+            introduction: p.introduction,
+            prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
+            imageUrl: p.imageUrl
+          }))
+        });
+
+        individualPrompt = `
+[당신의 정보]
+이름: ${persona.name}
+성격: ${persona.personality || '친근하고 활발한'}
+말투: ${persona.tone || '친근하고 자연스러운'}
+특징: ${persona.characteristics || '활발하고 긍정적인'}
+소개: ${persona.introduction || '친근한 AI 캐릭터'}
+
+[채팅방에 함께 있는 다른 AI 정보]
+${otherPersonas.map(p => `
+이름: ${p.name}
+성격: ${p.personality || '친근하고 활발한'}
+말투: ${p.tone || '친근하고 자연스러운'}
+특징: ${p.characteristics || '활발하고 긍정적인'}
+소개: ${p.introduction || '친근한 AI 캐릭터'}
+프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
+이미지: ${p.imageUrl || '기본 이미지'}
+`).join('\n')}
+
+너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
 
 중요 규칙:
 - 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
-- 다른 AI들의 정보를 참고하되, 자신의 개성을 유지할 것
-- 사용자(${userName})와 다른 AI들과 함께하는 단체 대화이므로 자연스럽게 대화할 것
-- 자신의 프롬프트와 특성을 100% 반영해서 응답할 것
-- 다른 AI들과 상호작용하면서도 자신의 개성을 유지할 것
-- 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
-- 첫 번째 메시지이므로 다른 AI들과 인사를 나누거나 서로를 소개하는 방식으로 시작할 것
-- 자신의 특성을 보여주면서도 다른 AI들과의 협력적인 분위기를 만들어갈 것
-- 다른 AI들의 이름을 정확히 기억하고 언급할 것 (${personasInfo.map(p => p.name).join(', ')})
+- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 인사를 창의적으로 할 것
+- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
+- 각 AI의 이름을 정확히 사용해서 대화할 것
+- 지금 채팅방에 처음 입장했다면, 각 상대 AI에게 한 명씩 인사할 것
+- 다른 AI들이 대화할 때도 그들의 이름과 특성을 인지하고 반응할 것
+- 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
+- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
 
 [최근 대화 기록]
@@ -1036,17 +1170,53 @@ ${persona.name}:`;
         const otherPersonas = personasInfo.filter(p => p.id !== persona.id);
         const otherPersonasInfo = otherPersonas.map(p => `${p.name}`).join(', ');
 
+        console.log(`🔍 ${persona.name} - 이후 메시지 프롬프트 구성:`, {
+          personaName: persona.name,
+          totalPersonas: personasInfo.length,
+          otherPersonasCount: otherPersonas.length,
+          otherPersonas: otherPersonas.map(p => ({
+            id: p.id,
+            name: p.name,
+            personality: p.personality,
+            tone: p.tone,
+            characteristics: p.characteristics,
+            introduction: p.introduction,
+            prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
+            imageUrl: p.imageUrl
+          }))
+        });
+
         individualPrompt = `
-당신은 ${persona.name}입니다. 사용자(${userName})와 다른 AI들(${otherPersonasInfo})과 함께 단체 대화를 나누고 있습니다.
+[당신의 정보]
+이름: ${persona.name}
+성격: ${persona.personality || '친근하고 활발한'}
+말투: ${persona.tone || '친근하고 자연스러운'}
+특징: ${persona.characteristics || '활발하고 긍정적인'}
+소개: ${persona.introduction || '친근한 AI 캐릭터'}
+
+[채팅방에 함께 있는 다른 AI 정보]
+${otherPersonas.map(p => `
+이름: ${p.name}
+성격: ${p.personality || '친근하고 활발한'}
+말투: ${p.tone || '친근하고 자연스러운'}
+특징: ${p.characteristics || '활발하고 긍정적인'}
+소개: ${p.introduction || '친근한 AI 캐릭터'}
+프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
+이미지: ${p.imageUrl || '기본 이미지'}
+`).join('\n')}
+
+너는 위의 [당신의 정보]를 100% 반영해서, 아래 [채팅방에 함께 있는 다른 AI 정보]를 모두 인지하고 있다.
 
 중요 규칙:
-- 다른 AI들의 이름을 정확히 기억하고 언급할 것 (${personasInfo.map(p => p.name).join(', ')})
+- 반드시 자신의 성격, 말투, 소개만 사용해서 대화할 것
+- 상대방의 성격, 말투, 소개를 참고해서, 그에 어울리는 인사를 창의적으로 할 것
+- 절대 상대방의 말투/성격을 따라하지 말고, 자신의 개성을 유지할 것
+- 각 AI의 이름을 정확히 사용해서 대화할 것
+- 지금 채팅방에 처음 입장했다면, 각 상대 AI에게 한 명씩 인사할 것
+- 다른 AI들이 대화할 때도 그들의 이름과 특성을 인지하고 반응할 것
+- 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
+- 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
-- 자신의 개성을 유지하면서도 다른 AI들과 자연스럽게 대화할 것
-- 다른 AI들의 말에 반응하고 상호작용할 것
-- 대화 기록에서 다른 AI들의 이름을 확인하고 그들의 말에 직접적으로 반응할 것
-- 다른 AI들이 언급한 내용에 대해 의견을 제시하거나 질문할 것
-- 단체 대화의 맥락을 유지하면서 자신의 개성을 드러낼 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -1058,23 +1228,70 @@ ${persona.name}:`;
       try {
         console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
         console.log(`📝 ${persona.name} 프롬프트 (첫 200자):`, individualPrompt.trim().substring(0, 200) + '...');
+        
+        // 다른 AI 정보가 실제로 포함되어 있는지 확인
+        const otherPersonasSection = individualPrompt.includes('다른 AI들의 상세 정보:');
+        const otherPersonasContent = individualPrompt.match(/다른 AI들의 상세 정보:\s*([\s\S]*?)(?=중요 규칙:|$)/);
+        
+        console.log(`🔍 ${persona.name} - 다른 AI 정보 포함 여부:`, {
+          hasOtherPersonasSection: otherPersonasSection,
+          otherPersonasContent: otherPersonasContent ? otherPersonasContent[1].trim().substring(0, 300) + '...' : '없음'
+        });
+        
+        // 전체 프롬프트 로깅 (디버깅용)
+        console.log(`📝 ${persona.name} - 전체 프롬프트:`, individualPrompt);
+        
         const response = await gemini25.generateText(individualPrompt.trim());
         console.log(`✅ ${persona.name} AI 응답 완료:`, response.substring(0, 100) + '...');
-        return {
+        
+        // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
+        let cleanedResponse = response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
+        
+        // 응답 끝에 AI 이름이 붙어있는지 확인
+        const namePatterns = [
+          new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
+          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[\\n\\r]*$`, 'i'),
+          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
+          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
+        ];
+        
+        for (const pattern of namePatterns) {
+          if (pattern.test(cleanedResponse)) {
+            console.log(`🧹 ${persona.name} 응답에서 자기 이름 제거:`, {
+              originalResponse: response.substring(0, 200) + '...',
+              cleanedResponse: cleanedResponse.substring(0, 200) + '...'
+            });
+            cleanedResponse = cleanedResponse.replace(pattern, '').trim();
+          }
+        }
+        
+        const aiResponse = {
           personaId: persona.id,
           personaName: persona.name,
-          content: response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`
+          content: cleanedResponse
         };
+        
+        responses.push(aiResponse);
+        aiResponses.push(aiResponse);
+        
+        // 다음 AI 응답 전에 잠시 대기 (실제 채팅처럼)
+        if (i < personasInfo.length - 1) {
+          const delay = 1000 + Math.random() * 2000; // 1-3초 랜덤 대기
+          console.log(`⏳ ${persona.name} 응답 완료. ${delay}ms 후 다음 AI 응답 시작...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
       } catch (error) {
         console.error(`❌ ${persona.name} AI 응답 생성 실패:`, error.message);
-        return {
+        const errorResponse = {
           personaId: persona.id,
           personaName: persona.name,
           content: `안녕하세요! 저는 ${persona.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`
         };
+        responses.push(errorResponse);
+        aiResponses.push(errorResponse);
       }
-    })
-  );
+    }
 
   console.log('🎉 단체 채팅 AI 응답 생성 완료:', responses.length, '개의 응답');
   return responses;
@@ -1083,7 +1300,7 @@ ${persona.name}:`;
 
 const chatService = {
   getMyChatList,
-  generateAiChatResponse,
+  generateAiChatResponseOneOnOne,
   deleteChatRoom, 
   makeVeo3Prompt,
   generateVideoWithVeo3,
@@ -1091,7 +1308,6 @@ const chatService = {
   checkAndGenerateVideoReward,
   createMultiChatRoom,
   createOneOnOneChatRoom,
-  generateAiChatResponseOneOnOne,
   increaseFriendship,
   getFriendship,
   getUserFriendships,

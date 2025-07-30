@@ -74,7 +74,8 @@ export const processGroupAiResponses = async ({
   allPersonas,
   chatHistory,
   isFirstMessage,
-  roomId
+  roomId,
+  userName = '사용자'
 }) => {
   try {
     const { default: chatService } = await import('../services/chatService.js');
@@ -86,7 +87,8 @@ export const processGroupAiResponses = async ({
       message,
       allPersonas,
       chatHistory,
-      isFirstMessage
+      isFirstMessage,
+      userName
     );
 
     logSuccess('단체 채팅 AI 응답 생성 완료', { responseCount: aiResponses.length });

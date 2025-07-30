@@ -267,9 +267,16 @@ async function generateCharacterWithPerplexity(characterName) {
  */
 const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 보고 자세히 설명해줘') => {
   try {
+    console.log('🖼️ [GEMINI] 이미지 처리 시작:', { imageUrl, textPrompt });
+    
     // 이미지 파일을 다운로드해 base64로 인코딩 (inlineData 사용)
+    console.log('📥 [GEMINI] 이미지 다운로드 시작...');
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
+    console.log('✅ [GEMINI] 이미지 다운로드 완료:', { 
+      size: buffer.length, 
+      imageUrl 
+    });
 
     // 간단한 MIME 타입 추정
     let mimeType = 'image/jpeg';
@@ -277,6 +284,10 @@ const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 �
     else if (imageUrl.endsWith('.webp')) mimeType = 'image/webp';
 
     const base64Data = buffer.toString('base64');
+    console.log('🔄 [GEMINI] Base64 인코딩 완료:', { 
+      mimeType, 
+      base64Length: base64Data.length 
+    });
 
     const request = {
       contents: [
@@ -295,11 +306,20 @@ const generateTextWithImage = async (imageUrl, textPrompt = '이 이미지를 �
       ],
     };
 
+    console.log('🤖 [GEMINI] Gemini API 호출 시작...');
     const result = await generativeModel.generateContent(request);
     const res = result.response;
-    return res.candidates[0].content.parts[0].text;
+    const generatedText = res.candidates[0].content.parts[0].text;
+    
+    console.log('✅ [GEMINI] 이미지+텍스트 생성 완료:', { 
+      responseLength: generatedText.length,
+      responsePreview: generatedText.substring(0, 100) + '...'
+    });
+    
+    return generatedText;
   } catch (error) {
-    console.error('Gemini 이미지+텍스트 생성 오류:', error.message);
+    console.error('❌ [GEMINI] 이미지+텍스트 생성 오류:', error.message);
+    console.error('❌ [GEMINI] 오류 상세:', error);
     throw new Error('Gemini가 이미지를 처리하는데 실패했습니다.');
   }
 };

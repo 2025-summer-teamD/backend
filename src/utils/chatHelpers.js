@@ -143,25 +143,23 @@ export const sendSSEErrorAndClose = (res, message) => {
 };
 
 /**
- * 채팅방 참여자 검증 공통 함수 (새로운 스키마 적용)
+ * 채팅방에 해당 유저/AI가 참가자인지 확인
+
  */
-export const validateChatRoomParticipant = async (roomId, userId) => {
-  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
+export const validateChatRoomParticipant = async (roomId, userIdOrPersonaId) => {
+  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
     where: {
-      id: parseInt(roomId, 10),
-      clerkId: userId,
-      isDeleted: false
-    },
-    include: {
-      persona: true
+      chatRoomId: parseInt(roomId, 10),
+      OR: [
+        { userId: userIdOrPersonaId },
+        { personaId: typeof userIdOrPersonaId === 'number' ? userIdOrPersonaId : undefined }
+      ]
     }
   });
-
-  if (!chatRoom) {
-    throw new Error(`채팅방 ID ${roomId}를 찾을 수 없습니다.`);
+  if (!participant) {
+    throw new Error(`채팅방 ID ${roomId}에 참가자가 아닙니다.`);
   }
-
-  return chatRoom;
+  return participant;
 };
 
 /**
@@ -194,9 +192,12 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
   
   const includeConfig = {
-    persona: true,
-    user: true
-
+    participants: {
+      include: {
+        persona: true,
+        user: true
+      }
+    }
   };
 
   if (includeChatLogs) {
@@ -215,19 +216,64 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
 };
 
 /**
- * AI 참여자 찾기 공통 함수 (새로운 스키마 적용)
- * 새로운 스키마에서는 ChatRoom이 직접 persona를 가지므로 단순화됨
+ * AI 참여자 찾기 공통 함수 (ChatRoomParticipant 기반)
  */
 export const findAiParticipants = (chatRoom, excludeUserId = null) => {
-  // chatRoom now has direct persona and user fields
+  console.log('🔍 findAiParticipants 호출:', {
+    hasChatRoom: !!chatRoom,
+    hasParticipants: !!chatRoom?.participants,
+    participantsCount: chatRoom?.participants?.length || 0,
+    excludeUserId
+  });
 
-  if (!chatRoom || !chatRoom.persona) {
+  if (!chatRoom || !chatRoom.participants) {
+    console.log('❌ 채팅방 또는 참여자 정보 없음');
     return [];
   }
-  // Check if the persona should be excluded (if excludeUserId matches the persona's owner)
-  const isNotUser = excludeUserId ? chatRoom.persona.clerkId !== excludeUserId : true;
   
-  return isNotUser ? [chatRoom.persona] : [];
+  // AI 참가자들 찾기
+  const aiParticipants = chatRoom.participants.filter(p => p.persona);
+  console.log('🔍 AI 참여자 필터링 결과:', {
+    totalParticipants: chatRoom.participants.length,
+    aiParticipantsCount: aiParticipants.length,
+    aiParticipants: aiParticipants.map(p => ({
+      participantId: p.id,
+      personaId: p.personaId,
+      personaName: p.persona?.name,
+      personaClerkId: p.persona?.clerkId
+    }))
+  });
+  
+  // excludeUserId가 있는 경우 해당 유저가 소유한 AI는 제외
+  if (excludeUserId) {
+    const filteredParticipants = aiParticipants.filter(p => p.persona.clerkId !== excludeUserId);
+    console.log('🔍 excludeUserId 필터링 결과:', {
+      excludeUserId,
+      beforeFilterCount: aiParticipants.length,
+      afterFilterCount: filteredParticipants.length
+    });
+    // 모든 필드를 포함한 AI 참여자 정보 반환
+    return filteredParticipants.map(p => ({
+      ...p.persona,
+      personality: p.persona.personality || p.persona.introduction || '친근하고 도움이 되는 성격',
+      tone: p.persona.tone || '친근하고 자연스러운 말투',
+      characteristics: p.persona.characteristics || '활발하고 친근한',
+      introduction: p.persona.introduction || '친근한 AI',
+      prompt: p.persona.prompt || '자연스러운 대화',
+      imageUrl: p.persona.imageUrl || null
+    }));
+  }
+  
+  // 모든 필드를 포함한 AI 참여자 정보 반환
+  return aiParticipants.map(p => ({
+    ...p.persona,
+    personality: p.persona.personality || p.persona.introduction || '친근하고 도움이 되는 성격',
+    tone: p.persona.tone || '친근하고 자연스러운 말투',
+    characteristics: p.persona.characteristics || '활발하고 친근한',
+    introduction: p.persona.introduction || '친근한 AI',
+    prompt: p.persona.prompt || '자연스러운 대화',
+    imageUrl: p.persona.imageUrl || null
+  }));
 
 };
 
