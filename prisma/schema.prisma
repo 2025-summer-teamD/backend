@@ -21,13 +21,16 @@ enum ChatLogSpeaker {
 }
 
 model ChatRoom {
-  id           Int                  @id @default(autoincrement())
+  id           Int                   @id @default(autoincrement())
   name         String?
   description  String?
-  isPublic     Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime?
-  isDeleted    Boolean              @default(false)
+  clerkId      String?              @map("clerk_id")
+  personaId    Int?                 @map("persona_id")
+  likes        Boolean?              @default(false)
+  isPublic     Boolean               @default(true) @map("is_public")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime?             @map("updated_at")
+  isDeleted    Boolean               @default(false) @map("is_deleted")
   participants ChatRoomParticipant[]
   ChatLogs     ChatLog[]
 }
@@ -35,12 +38,12 @@ model ChatRoom {
 model ChatRoomParticipant {
   id         Int      @id @default(autoincrement())
   chatRoom   ChatRoom @relation(fields: [chatRoomId], references: [id])
-  chatRoomId Int
+  chatRoomId Int      @map("chatroom_id")
   user       User?    @relation(fields: [userId], references: [clerkId])
-  userId     String?
+  userId     String?  @map("user_id")
   persona    Persona? @relation(fields: [personaId], references: [id])
-  personaId  Int?
-  joinedAt   DateTime @default(now())
+  personaId  Int?     @map("persona_id")
+  joinedAt   DateTime @default(now()) @map("joined_at")
 }
 
 model User {
@@ -82,8 +85,8 @@ model ChatLog {
   id         Int         @id @default(autoincrement())
   chatroomId Int         @map("chatroom_id")
   chatRoom   ChatRoom    @relation(fields: [chatroomId], references: [id], onDelete: Cascade)
-  senderType String // 'user' | 'ai'
-  senderId   String // clerkId(유저) or personaId(문자열 변환)
+  senderType String      @map("sender_type") // 'user' | 'ai'
+  senderId   String      @map("sender_id") // clerkId(유저) or personaId(문자열 변환)
   text       String
   type       ChatLogType
   time       DateTime    @default(now())
