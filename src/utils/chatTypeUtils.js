@@ -10,17 +10,15 @@ import prismaConfig from '../config/prisma.js';
  * @returns {Promise<boolean>} 1대1 채팅방 여부
  */
 export const isOneOnOneChat = async (roomId) => {
-  // ChatRoomParticipant를 통해 1대1 채팅인지 확인
-  const participants = await prismaConfig.prisma.chatRoomParticipant.findMany({
+  // 현재 스키마에서는 ChatRoom이 직접 personaId를 가지므로 항상 1대1 채팅
+  // ChatRoom 테이블에서 해당 roomId가 존재하는지만 확인
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
-      chatroomId: parseInt(roomId, 10),
-      personaId: { not: null } // AI 참가자가 있는 경우만
-    },
-    include: {
-      persona: true
+      id: parseInt(roomId, 10),
+      isDeleted: false
     }
   });
 
-  // 1대1 채팅: AI 참가자가 1명이고, personaId가 있는 경우
-  return participants.length === 1 && participants[0].personaId !== null;
+  // 현재 스키마는 모든 채팅방이 1대1 채팅 (ChatRoom이 직접 personaId를 가짐)
+  return !!chatRoom;
 }; 

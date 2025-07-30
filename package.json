@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "worker": "node src/workers/aiChatWorker.js",
+    "worker:dev": "nodemon src/workers/aiChatWorker.js",
     "test": "jest",
     "monitoring": "docker-compose -f docker-compose.monitoring.yml up -d",
     "monitoring:stop": "docker-compose -f docker-compose.monitoring.yml down",
