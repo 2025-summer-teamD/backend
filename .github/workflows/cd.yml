@@ -42,6 +42,7 @@ jobs:
             docker-compose.prod.yml \
             docker-compose.monitoring.yml \
             docker.sh \
+            prisma/ \
             deploy.sh \
             prometheus/ \
             grafana/ \
