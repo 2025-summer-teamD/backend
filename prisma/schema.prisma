@@ -25,6 +25,9 @@ model ChatRoom {
   name         String?
   description  String?
   isPublic     Boolean              @default(true)
+  clerkId      String?              @map("clerk_id")
+  personaId    Int?                 @map("persona_id")
+  likes        Boolean?              @default(false)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime?
   isDeleted    Boolean              @default(false)
