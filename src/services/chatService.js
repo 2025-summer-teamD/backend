@@ -66,7 +66,7 @@ const getMyChatList = async (userId, pagination) => {
 
   // 내가 참여중인 채팅방 id 목록
   const myRooms = await prismaConfig.prisma.chatRoomParticipant.findMany({
-    where: { user: { clerkId: userId } },
+    where: { userId: userId },
     select: { chatRoom: { select: { id: true } } }
   });
   const roomIds = myRooms.map(r => r.chatRoom.id);
@@ -354,7 +354,7 @@ const deleteChatRoom = async (roomId, userId) => {
       isDeleted: false,
       participants: {
         some: {
-          user: { clerkId: userId }
+          userId: userId
         }
       }
     }

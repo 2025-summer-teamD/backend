@@ -417,7 +417,13 @@ const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.characterId, 10);
 
+  console.log('🔍 toggleLike controller - 시작:', { userId, personaId });
+  console.log('🔍 toggleLike controller - 요청 파라미터:', req.params);
+  console.log('🔍 toggleLike controller - 인증 정보:', req.auth);
+
   const result = await PersonaService.toggleLike(personaId, userId);
+
+  console.log('🔍 toggleLike controller - 서비스 결과:', result);
 
   // 2. ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
   const cacheKeyToDelete = `user:${userId}:characters:liked`;
@@ -427,10 +433,16 @@ const toggleLike = errorHandler.asyncHandler(async (req, res) => {
   // 사용자 활동 로깅
   logger.logUserActivity('TOGGLE_LIKE', userId, {
     personaId,
-    action: result.liked ? 'LIKE' : 'UNLIKE'
+    action: result.isLiked ? 'LIKE' : 'UNLIKE'
   });
 
-  return responseHandler.sendSuccess(res, 200, result.liked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.', result);
+  console.log('🔍 toggleLike controller - 응답 전송:', {
+    isLiked: result.isLiked,
+    likesCount: result.likesCount,
+    message: result.isLiked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.'
+  });
+
+  return responseHandler.sendSuccess(res, 200, result.isLiked ? '페르소나를 좋아요했습니다.' : '페르소나 좋아요를 취소했습니다.', result);
 });
 
 /**
