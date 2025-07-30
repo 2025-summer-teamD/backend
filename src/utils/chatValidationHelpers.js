@@ -61,8 +61,38 @@ export const validateChatRoomAndAI = async ({ roomId, userId, isGroupChat = fals
     return { isValid: false, error: '채팅방을 찾을 수 없습니다.' };
   }
 
+  // 디버깅: 채팅방 정보 출력
+  console.log('🔍 채팅방 정보:', {
+    roomId: chatRoom.id,
+    name: chatRoom.name,
+    participantsCount: chatRoom.participants?.length || 0,
+    participants: chatRoom.participants?.map(p => ({
+      id: p.id,
+      userId: p.userId,
+      personaId: p.personaId,
+      hasPersona: !!p.persona,
+      hasUser: !!p.user,
+      personaName: p.persona?.name,
+      userName: p.user?.name
+    }))
+  });
+
   // 2. AI 참여자 확인
-  const aiParticipants = findAiParticipants(chatRoom, userId);
+  // 그룹 채팅에서는 모든 AI 참여자가 응답해야 하므로 excludeUserId를 사용하지 않음
+  const excludeUserId = isGroupChat ? null : userId;
+  const aiParticipants = findAiParticipants(chatRoom, excludeUserId);
+  console.log('🔍 AI 참여자 검색 결과:', {
+    totalParticipants: chatRoom.participants?.length || 0,
+    aiParticipantsCount: aiParticipants.length,
+    isGroupChat,
+    excludeUserId,
+    aiParticipants: aiParticipants.map(p => ({
+      id: p.id,
+      name: p.name,
+      clerkId: p.clerkId
+    }))
+  });
+
   if (aiParticipants.length === 0) {
     const errorMsg = isGroupChat 
       ? '이 채팅방에는 AI 참여자가 없습니다.' 

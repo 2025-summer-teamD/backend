@@ -51,6 +51,7 @@ const handleAiResponseMessage = (res, responseData) => {
     aiName: responseData.aiName,
     aiId: responseData.aiId,
     personaId: responseData.personaId,
+    aiProfileImageUrl: responseData.aiProfileImageUrl || null, // AI 프로필 이미지 URL을 명확히 구분
     timestamp: responseData.timestamp
   })}\n\n`);
 };

@@ -233,11 +233,11 @@ const processAiChatJob = async (job) => {
         // 캐시 미스 - AI API 호출
         console.log('🔗 [WORKER] 캐시 미스 - AI API 호출 중...', { personaId: persona.id });
         
-        response = await chatService.generateAiChatResponse(
+        response = await chatService.generateAiChatResponseOneOnOne(
           message,
           persona,
           chatHistory,
-          [], // otherParticipants: 1대1 채팅에서는 빈 배열
+          false, // isFirstMessage
           userName
         );
         
@@ -255,95 +255,137 @@ const processAiChatJob = async (job) => {
         console.log('💾 [WORKER] AI 응답 캐시 저장 완료:', { personaId: persona.id });
       }
       
+      // AI 응답에서 이미지 URL이 포함되어 있는지 확인하고 제거
+      let cleanedResponse = response;
+      if (response && typeof response === 'string') {
+        const imageUrlPattern = /https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i;
+        const imageMatches = response.match(imageUrlPattern);
+        
+        if (imageMatches) {
+          console.warn(`⚠️ [WORKER] AI 응답에 이미지 URL이 포함됨 (1대1) - 제거 중:`, {
+            personaId: persona.id,
+            personaName: persona.name,
+            imageUrls: imageMatches,
+            responsePreview: response.substring(0, 200) + '...'
+          });
+          
+          // 이미지 URL 제거
+          cleanedResponse = response.replace(imageUrlPattern, '').trim();
+          
+          // 연속된 공백 정리
+          cleanedResponse = cleanedResponse.replace(/\s+/g, ' ');
+          
+          console.log(`✅ [WORKER] 이미지 URL 제거 완료 (1대1):`, {
+            personaId: persona.id,
+            personaName: persona.name,
+            cleanedResponsePreview: cleanedResponse.substring(0, 200) + '...'
+          });
+        }
+      }
+      
       aiResponses = [{
-        content: response,
+        content: cleanedResponse,
         personaId: persona.id,
         personaName: persona.name,
       }];
     } else {
-      // 그룹 채팅: 다중 AI 응답 (각각 캐시 확인)
+      // 그룹 채팅: 다중 AI 응답 (한 번에 모든 AI 응답 생성)
       console.log('👥 [WORKER] 그룹 채팅 - 다중 AI 응답 생성 중...', { participantCount: aiParticipants.length });
       
-      const responsePromises = aiParticipants.map(async (participant) => {
-        const persona = participant.persona; // 실제 persona 객체
-        console.log(`🔍 [WORKER] 그룹 - AI ${persona.id} 캐시 확인 중...`);
-        
-        // 각 캐릭터별로 캐시 확인
-        const cachedResponse = await AiResponseCache.get(
-          persona.id,
+      // 모든 AI의 persona 정보 수집
+      const allPersonas = aiParticipants.map(p => p.persona);
+      
+      // 한 번에 모든 AI 응답 생성
+      const groupResponses = await chatService.generateAiChatResponseGroup(
+        message,
+        allPersonas,
+        chatHistory,
+        false, // isFirstMessage
+        userName
+      );
+      
+      console.log('✅ [WORKER] 그룹 채팅 - 모든 AI 응답 생성 완료:', { 
+        responseCount: groupResponses.length,
+        responses: groupResponses.map(r => ({ personaId: r.personaId, personaName: r.personaName, length: r.content.length }))
+      });
+      
+      // 각 AI 응답을 캐시에 저장
+      for (const response of groupResponses) {
+        await AiResponseCache.set(
+          response.personaId,
           message,
-          chatHistory.substring(0, 200)
+          response.content,
+          chatHistory.substring(0, 200),
+          3600
         );
-        
-        let response;
-        if (cachedResponse) {
-          response = cachedResponse.response;
-          console.log(`💾 [WORKER] 그룹 - AI ${persona.id} 캐시 히트`);
-          logger.logInfo('AI 응답 캐시 사용됨 (그룹)', {
-            personaId: persona.id,
-            cached: true
-          });
-        } else {
-          // 개별 AI 응답 생성
-          console.log(`🔗 [WORKER] 그룹 - AI ${persona.id} API 호출 중...`);
+        console.log(`💾 [WORKER] 그룹 - AI ${response.personaId} 캐시 저장 완료`);
+      }
+      
+      // AI 응답에서 이미지 URL이 포함되어 있는지 확인하고 제거
+      aiResponses = groupResponses.map(response => {
+        let cleanedResponse = response.content;
+        if (response.content && typeof response.content === 'string') {
+          const imageUrlPattern = /https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i;
+          const imageMatches = response.content.match(imageUrlPattern);
           
-          // 현재 AI를 제외한 다른 참여자들의 persona 정보
-          const otherParticipants = aiParticipants
-            .filter(p => p.persona.id !== persona.id)
-            .map(p => p.persona);
-          
-          response = await chatService.generateAiChatResponse(
-            message,
-            persona,
-            chatHistory,
-            otherParticipants, // 다른 AI 참여자들의 persona
-            userName
-          );
-          
-          console.log(`✅ [WORKER] 그룹 - AI ${persona.id} API 호출 완료:`, { responseLength: response.length });
-          
-          // 캐시에 저장
-          await AiResponseCache.set(
-            persona.id,
-            message,
-            response,
-            chatHistory.substring(0, 200),
-            3600
-          );
-          
-          console.log(`💾 [WORKER] 그룹 - AI ${persona.id} 캐시 저장 완료`);
+          if (imageMatches) {
+            console.warn(`⚠️ [WORKER] AI 응답에 이미지 URL이 포함됨 - 제거 중:`, {
+              personaId: response.personaId,
+              personaName: response.personaName,
+              imageUrls: imageMatches,
+              responsePreview: response.content.substring(0, 200) + '...'
+            });
+            
+            // 이미지 URL 제거
+            cleanedResponse = response.content.replace(imageUrlPattern, '').trim();
+            
+            // 연속된 공백 정리
+            cleanedResponse = cleanedResponse.replace(/\s+/g, ' ');
+            
+            console.log(`✅ [WORKER] 이미지 URL 제거 완료:`, {
+              personaId: response.personaId,
+              personaName: response.personaName,
+              cleanedResponsePreview: cleanedResponse.substring(0, 200) + '...'
+            });
+          }
         }
         
         return {
-          content: response,
-          personaId: persona.id,
-          personaName: persona.name,
+          content: cleanedResponse,
+          personaId: response.personaId,
+          personaName: response.personaName,
         };
       });
-      
-      aiResponses = await Promise.all(responsePromises);
     }
 
+    const totalProcessingTime = Date.now() - job.timestamp;
     console.log('🎉 [WORKER] AI 응답 생성 완료:', {
       jobId: job.id,
       roomId,
       responseCount: aiResponses.length,
-      responseLengths: aiResponses.map(r => r.content.length)
+      responseLengths: aiResponses.map(r => r.content.length),
+      totalProcessingTime: `${totalProcessingTime}ms`
     });
 
     logger.logInfo('AI 응답 생성 완료', {
       jobId: job.id,
       roomId,
       responseCount: aiResponses.length,
+      totalProcessingTime: `${totalProcessingTime}ms`
     });
 
     // 3. 응답을 DB에 저장하고 실시간 전송
-    console.log('💾 [WORKER] DB 저장 및 실시간 전송 시작...', { responseCount: aiResponses.length });
+    console.log('💾 [WORKER] DB 저장 및 실시간 전송 시작...', { 
+      responseCount: aiResponses.length,
+      startTime: Date.now()
+    });
     const saveAndSendPromises = aiResponses.map(async (response, index) => {
+      const startTime = Date.now();
       console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} DB 저장 시작:`, { 
         personaId: response.personaId,
         personaName: response.personaName,
-        responseLength: response.content.length
+        responseLength: response.content.length,
+        startTime
       });
       
       // 3-1. DB 저장
@@ -358,9 +400,11 @@ const processAiChatJob = async (job) => {
         },
       });
 
+      const dbSaveTime = Date.now() - startTime;
       console.log(`✅ [WORKER] AI 응답 ${index + 1} DB 저장 완료:`, { 
         chatLogId: savedMessage.id,
-        personaId: response.personaId
+        personaId: response.personaId,
+        dbSaveTime: `${dbSaveTime}ms`
       });
 
       // 3-2. 결과를 Redis에 임시 저장 (오프라인 사용자용)
@@ -389,12 +433,19 @@ const processAiChatJob = async (job) => {
         // 그룹 채팅 SSE 방식: Redis Pub/Sub으로 SSE 클라이언트에 전송
         console.log(`📤 [WORKER] SSE 전송 중:`, { responseChannel, personaId: response.personaId });
         
+        // AI 이미지 정보 조회
+        const aiCharacter = await prismaConfig.prisma.persona.findUnique({
+          where: { id: response.personaId },
+          select: { clerkId: true, name: true, imageUrl: true },
+        });
+
         const sseMessage = {
           type: 'ai_response',
           content: response.content,
           aiName: response.personaName,
           aiId: String(response.personaId),
           personaId: response.personaId,
+          aiProfileImageUrl: aiCharacter?.imageUrl || null, // AI 프로필 이미지 URL을 명확히 구분
           timestamp: new Date().toISOString(),
         };
         
@@ -407,30 +458,51 @@ const processAiChatJob = async (job) => {
         
         await sendToSSE(responseChannel, sseMessage);
         
-        console.log(`✅ [WORKER] SSE 메시지 전송 완료:`, { responseChannel, personaId: response.personaId });
+        const sseSendTime = Date.now() - startTime;
+        console.log(`✅ [WORKER] SSE 메시지 전송 완료:`, { 
+          responseChannel, 
+          personaId: response.personaId,
+          totalTime: `${sseSendTime}ms`
+        });
       } else {
         // 기존 WebSocket 방식 (1대1 채팅이나 기존 그룹 채팅)
         console.log(`📤 [WORKER] WebSocket 전송 중:`, { roomId, personaId: response.personaId });
         
+        // AI 이미지 정보 조회 (WebSocket용)
+        const aiCharacterForWebSocket = await prismaConfig.prisma.persona.findUnique({
+          where: { id: response.personaId },
+          select: { clerkId: true, name: true, imageUrl: true },
+        });
+
         await sendToWebSocket(roomId, {
           type: 'ai_response',
           content: response.content,
           aiName: response.personaName,
           aiId: String(response.personaId),
           personaId: response.personaId,
+          aiProfileImageUrl: aiCharacterForWebSocket?.imageUrl || null, // AI 프로필 이미지 URL을 명확히 구분
           timestamp: new Date().toISOString(),
         });
         
-        console.log(`✅ [WORKER] WebSocket 전송 완료:`, { roomId, personaId: response.personaId });
+        const wsSendTime = Date.now() - startTime;
+        console.log(`✅ [WORKER] WebSocket 전송 완료:`, { 
+          roomId, 
+          personaId: response.personaId,
+          totalTime: `${wsSendTime}ms`
+        });
       }
 
       return savedMessage;
     });
 
+    const saveAndSendStartTime = Date.now();
     await Promise.all(saveAndSendPromises);
+    const saveAndSendTime = Date.now() - saveAndSendStartTime;
 
     console.log('🎯 [WORKER] 모든 AI 응답 저장/전송 완료 - 친밀도 업데이트 시작...', { 
-      responseCount: aiResponses.length 
+      responseCount: aiResponses.length,
+      saveAndSendTime: `${saveAndSendTime}ms`,
+      totalTimeSoFar: `${Date.now() - job.timestamp}ms`
     });
 
     // 4. 친밀도 업데이트
@@ -623,6 +695,9 @@ aiChatWorker.on('active', (job) => {
 });
 
 aiChatWorker.on('completed', (job, result) => {
+  const totalDuration = job.finishedOn - job.processedOn;
+  const totalTime = Date.now() - job.timestamp;
+  
   console.log('🎉 [WORKER] AI 채팅 작업 완료:', {
     jobId: job.id,
     roomId: job.data.roomId,
@@ -630,7 +705,8 @@ aiChatWorker.on('completed', (job, result) => {
     responsesCount: result?.responsesCount,
     userOnline: result?.userOnline,
     isGroupChat: result?.isGroupChat,
-    duration: job.finishedOn - job.processedOn,
+    processingDuration: `${totalDuration}ms`,
+    totalTime: `${totalTime}ms`,
     timestamp: new Date().toISOString()
   });
   
@@ -638,6 +714,8 @@ aiChatWorker.on('completed', (job, result) => {
     jobId: job.id,
     roomId: job.data.roomId,
     result,
+    processingDuration: totalDuration,
+    totalTime: totalTime
   });
 });
 
