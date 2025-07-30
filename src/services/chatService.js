@@ -624,71 +624,7 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
   try {
     console.log('createOneOnOneChatRoom - userId:', userId, 'personaId:', personaId, 'isPublic:', isPublic);
 
-    // 1. 먼저 기존 채팅방이 있는지 확인 (ChatRoomParticipant 기반)
-    const existingChatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-      where: {
-        isDeleted: false,
-        participants: {
-          every: {
-            OR: [
-              { user: { clerkId: userId } },
-              { persona: { id: personaId } }
-            ]
-          }
-        }
-      },
-      include: {
-        participants: {
-          include: {
-            persona: true,
-            user: true
-          }
-        }
-      }
-    });
-
-    if (existingChatRoom) {
-      console.log('createOneOnOneChatRoom - 기존 채팅방 발견:', existingChatRoom.id);
-
-      // AI 참가자 찾기
-      const aiParticipant = existingChatRoom.participants.find(p => p.persona);
-      const userParticipant = existingChatRoom.participants.find(p => p.user);
-
-      // 기존 채팅방의 메시지 히스토리 가져오기
-      const chatHistory = await prismaConfig.prisma.chatLog.findMany({
-        where: {
-          chatroomId: existingChatRoom.id,
-          isDeleted: false
-        },
-        orderBy: {
-          time: 'asc'
-        }
-      });
-
-      console.log('createOneOnOneChatRoom - 기존 채팅방으로 입장:', existingChatRoom.id, '히스토리 개수:', chatHistory.length);
-
-      return {
-        roomId: existingChatRoom.id,
-        persona: aiParticipant?.persona || null,
-        participants: [
-          {
-            id: aiParticipant?.persona.id || null,
-            personaId: aiParticipant?.persona.id || null,
-            name: aiParticipant?.persona.name || '알 수 없음',
-            imageUrl: aiParticipant?.persona.imageUrl || null,
-            exp: aiParticipant?.persona.exp || 0,
-            friendship: aiParticipant?.persona.friendship || 1,
-            introduction: aiParticipant?.persona.introduction || null
-          }
-        ],
-        chatHistory: chatHistory,
-        isNewRoom: false,
-        isPublic: existingChatRoom.isPublic,
-      };
-    }
-
-    // 2. 기존 채팅방이 없으면 새 채팅방 생성
-    // 캐릭터 정보를 먼저 조회하여 기본 이름 생성
+    // 캐릭터 정보를 먼저 조회
     const persona = await prismaConfig.prisma.persona.findUnique({
       where: { id: personaId },
     });
@@ -707,16 +643,20 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
       ? `${user.name}와 ${persona.name}의 채팅방`
       : `${persona.name}와의 채팅방`;
 
+    // 참가자 목록 준비 (현재 사용자 + 캐릭터)
+    const participants = [
+      { user: { connect: { clerkId: userId } } },
+      { persona: { connect: { id: personaId } } }
+    ];
+
+    // 항상 새로운 채팅방 생성 (기존 채팅방 확인 로직 제거)
     const newRoom = await prismaConfig.prisma.chatRoom.create({
       data: {
         name: defaultRoomName,
         description: description,
         isPublic: isPublic,
         participants: {
-          create: [
-            { user: { connect: { clerkId: userId } } },
-            { persona: { connect: { id: personaId } } }
-          ]
+          create: participants
         }
       },
       include: {

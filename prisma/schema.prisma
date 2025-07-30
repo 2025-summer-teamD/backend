@@ -24,6 +24,9 @@ model ChatRoom {
   id           Int                   @id @default(autoincrement())
   name         String?
   description  String?
+  clerkId      String?              @map("clerk_id")
+  personaId    Int?                 @map("persona_id")
+  likes        Boolean?              @default(false)
   isPublic     Boolean               @default(true) @map("is_public")
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime?             @map("updated_at")
