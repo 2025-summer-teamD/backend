@@ -143,32 +143,25 @@ export const sendSSEErrorAndClose = (res, message) => {
 };
 
 /**
- * 채팅방 참여자 검증 공통 함수
+ * 채팅방 참여자 검증 공통 함수 (새로운 스키마 적용)
  */
 export const validateChatRoomParticipant = async (roomId, userId) => {
-  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
-      chatroomId: parseInt(roomId, 10),
+      id: parseInt(roomId, 10),
       clerkId: userId,
+      isDeleted: false
     },
     include: {
-      chatRoom: {
-        include: {
-          participants: {
-            include: {
-              persona: true
-            }
-          }
-        }
-      }
+      persona: true
     }
   });
 
-  if (!participant || !participant.chatRoom) {
+  if (!chatRoom) {
     throw new Error(`채팅방 ID ${roomId}를 찾을 수 없습니다.`);
   }
 
-  return participant;
+  return chatRoom;
 };
 
 /**
@@ -195,15 +188,14 @@ export const validateChatInput = ({ message, sender, userName }) => {
 };
 
 /**
- * 채팅방 정보 조회 공통 함수
+ * 채팅방 정보 조회 공통 함수 (새로운 스키마 적용)
  */
 export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
   
   const includeConfig = {
-    participants: {
-      include: { persona: true }
-    }
+    persona: true,  // 직접 persona 관계 사용
+    user: true      // user 정보도 포함
   };
 
   if (includeChatLogs) {
@@ -222,14 +214,20 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
 };
 
 /**
- * AI 참여자 찾기 공통 함수
+ * AI 참여자 찾기 공통 함수 (새로운 스키마 적용)
+ * 새로운 스키마에서는 ChatRoom이 직접 persona를 가지므로 단순화됨
  */
-export const findAiParticipants = (participants, excludeUserId = null) => {
-  return participants.filter(p => {
-    const hasPersona = p.personaId && p.persona;
-    const isNotUser = excludeUserId ? p.userId !== excludeUserId : true;
-    return hasPersona && isNotUser;
-  });
+export const findAiParticipants = (chatRoom, excludeUserId = null) => {
+  if (!chatRoom || !chatRoom.persona) {
+    return [];
+  }
+  
+  // 새로운 스키마에서는 각 채팅방이 하나의 AI만 가짐
+  return [{
+    personaId: chatRoom.personaId,
+    persona: chatRoom.persona,
+    clerkId: chatRoom.clerkId
+  }];
 };
 
 /**

@@ -62,7 +62,7 @@ export const validateChatRoomAndAI = async ({ roomId, userId, isGroupChat = fals
   }
 
   // 2. AI 참여자 확인
-  const aiParticipants = findAiParticipants(chatRoom.participants, userId);
+  const aiParticipants = findAiParticipants(chatRoom, userId);
   if (aiParticipants.length === 0) {
     const errorMsg = isGroupChat 
       ? '이 채팅방에는 AI 참여자가 없습니다.' 
