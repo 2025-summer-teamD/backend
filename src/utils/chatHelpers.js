@@ -146,29 +146,22 @@ export const sendSSEErrorAndClose = (res, message) => {
  * 채팅방 참여자 검증 공통 함수
  */
 export const validateChatRoomParticipant = async (roomId, userId) => {
-  const participant = await prismaConfig.prisma.chatRoomParticipant.findFirst({
+  const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: {
-      chatroomId: parseInt(roomId, 10),
+      id: parseInt(roomId, 10),
       clerkId: userId,
+      isDeleted: false
     },
     include: {
-      chatRoom: {
-        include: {
-          participants: {
-            include: {
-              persona: true
-            }
-          }
-        }
-      }
+      persona: true
     }
   });
 
-  if (!participant || !participant.chatRoom) {
+  if (!chatRoom) {
     throw new Error(`채팅방 ID ${roomId}를 찾을 수 없습니다.`);
   }
 
-  return participant;
+  return chatRoom;
 };
 
 /**
@@ -201,9 +194,8 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
   
   const includeConfig = {
-    participants: {
-      include: { persona: true }
-    }
+    persona: true,
+    user: true
   };
 
   if (includeChatLogs) {
@@ -224,12 +216,16 @@ export const getChatRoomWithParticipants = async (roomId, options = {}) => {
 /**
  * AI 참여자 찾기 공통 함수
  */
-export const findAiParticipants = (participants, excludeUserId = null) => {
-  return participants.filter(p => {
-    const hasPersona = p.personaId && p.persona;
-    const isNotUser = excludeUserId ? p.userId !== excludeUserId : true;
-    return hasPersona && isNotUser;
-  });
+export const findAiParticipants = (chatRoom, excludeUserId = null) => {
+  // chatRoom now has direct persona and user fields
+  if (!chatRoom || !chatRoom.persona) {
+    return [];
+  }
+  
+  // Check if the persona should be excluded (if excludeUserId matches the persona's owner)
+  const isNotUser = excludeUserId ? chatRoom.persona.clerkId !== excludeUserId : true;
+  
+  return isNotUser ? [chatRoom.persona] : [];
 };
 
 /**
@@ -320,14 +316,15 @@ export const parseAndValidateRoomId = (roomId) => {
 };
 
 /**
- * 참가자 배열 검증 및 처리 공통 함수
+ * 참가자 배열 검증 및 처리 공통 함수 (새로운 스키마에 맞게 수정)
  */
 export const validateAndProcessParticipants = (participantIds, userId) => {
   if (!Array.isArray(participantIds) || participantIds.length < 1) {
     return { isValid: false, error: '참가자 배열이 1명 이상 필요합니다.' };
   }
   
-  const allParticipantIds = [userId, ...participantIds];
+  // participantIds는 personaId 배열이므로 userId는 포함하지 않음
+  const allParticipantIds = participantIds;
   return { isValid: true, allParticipantIds };
 };
 
