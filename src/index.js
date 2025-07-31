@@ -41,18 +41,18 @@ app.set('pubSubClient', pubSubClient);
 
 io.on('connection', (socket) => {
   console.log('🔌 새로운 WebSocket 연결:', socket.id);
-  
+
   // 방 입장
   socket.on('joinRoom', async ({ roomId, userId }) => {
     console.log('📡 joinRoom 이벤트 수신:', { socketId: socket.id, roomId, userId });
-    
+
     // 온라인 상태 및 방 참여 설정
     await onlineStatusService.setUserOnline(userId, socket.id);
     await onlineStatusService.joinRoom(userId, roomId);
-    
+
     socket.join(`room-${roomId}`);
     console.log(`✅ 소켓 ${socket.id}가 방 room-${roomId}에 입장함`);
-    
+
     // 오프라인 상태에서 쌓인 메시지들 전송
     const pendingMessages = await onlineStatusService.getPendingMessagesForUser(userId, roomId);
     if (pendingMessages.length > 0) {
@@ -61,14 +61,14 @@ io.on('connection', (socket) => {
         socket.emit('newMessage', msg);
       });
     }
-    
+
     io.to(`room-${roomId}`).emit('participants', { userId, joined: true });
   });
 
   // 메시지 송수신 + AI 응답 (BullMQ 사용)
   socket.on('sendMessage', async ({ roomId, message, senderType, senderId, aiName, aiId, userName }) => {
     console.log('📨 sendMessage 이벤트 수신:', { roomId, message, senderType, senderId, aiName, aiId, userName });
-    
+
     try {
       // 1. 사용자 메시지만 처리 (AI 메시지는 워커에서 처리됨)
       if (!senderType || senderType === 'user') {
@@ -83,20 +83,20 @@ io.on('connection', (socket) => {
             time: new Date()
           }
         });
-        
+
         // 2. 사용자 메시지를 온라인 사용자들에게 즉시 전송
-        const messageData = { 
-          message, 
-          senderType: 'user', 
+        const messageData = {
+          message,
+          senderType: 'user',
           senderId,
           userName,
           timestamp: new Date().toISOString()
         };
         io.to(`room-${roomId}`).emit('receiveMessage', messageData);
-        
+
         // 3. 오프라인 사용자 처리 (푸시 알림 제거됨)
         // 오프라인 사용자는 다음 접속 시 메시지 확인 가능
-        
+
         // 4. AI 응답 처리를 BullMQ 큐에 추가 (기존 WebSocket 그룹 채팅용)
         console.log('🤖 AI 응답 작업을 BullMQ 큐에 추가 (WebSocket 방식)');
         await addAiChatJob({
@@ -107,7 +107,7 @@ io.on('connection', (socket) => {
           isGroupChat: false, // WebSocket 방식은 기존 방식 유지
           responseChannel: null
         });
-        
+
         console.log('✅ 메시지 처리 완료 - AI 응답은 워커에서 처리됩니다');
       }
     } catch (error) {
@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: '메시지 전송 중 오류가 발생했습니다.' });
     }
   });
-  
+
   socket.on('disconnect', async () => {
     console.log('🔌 WebSocket 연결 해제:', socket.id);
     // 연결 해제 시 온라인 상태 정리 (userId가 필요하지만 여기서는 socket.id만 사용)

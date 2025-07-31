@@ -649,9 +649,8 @@ const streamChatByRoom = async (req, res, next) => {
         .filter(p => p.persona)
         .map(p => ({
           ...p.persona,
-          personality: p.persona.personality || p.persona.introduction || '친근하고 도움이 되는 성격',
-          tone: p.persona.tone || '친근하고 자연스러운 말투',
-          characteristics: p.persona.characteristics || '활발하고 친근한',
+          personality: p.persona.prompt.personality || p.persona.introduction || '친근하고 도움이 되는 성격',
+          tone: p.persona.prompt.tone || '친근하고 자연스러운 말투',
           introduction: p.persona.introduction || '친근한 AI',
           prompt: p.persona.prompt || '자연스러운 대화',
           imageUrl: p.persona.imageUrl || null
@@ -663,7 +662,6 @@ const streamChatByRoom = async (req, res, next) => {
         name: p.name,
         personality: p.personality,
         tone: p.tone,
-        characteristics: p.characteristics,
         introduction: p.introduction,
         prompt: p.prompt?.substring(0, 100) + '...',
         imageUrl: p.imageUrl

@@ -11,7 +11,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
  * 페르소나 정보에서 성격, 말투, 특징을 추출하는 함수
  * @param {object} personaInfo - 페르소나 정보
- * @returns {object} { personality, tone, characteristics }
+ * @returns {object} { personality, tone }
  */
 const extractPersonaDetails = async (personaInfo) => {
   try {
@@ -20,7 +20,6 @@ const extractPersonaDetails = async (personaInfo) => {
       return {
         personality: personaInfo.prompt.personality || '친근하고 활발한',
         tone: personaInfo.prompt.tone || '친근하고 자연스러운',
-        characteristics: personaInfo.prompt.tag || '친근함,활발함,자연스러움,긍정적'
       };
     }
 
@@ -35,7 +34,6 @@ const extractPersonaDetails = async (personaInfo) => {
 {
   "personality": "성격을 자세히 설명",
   "tone": "말투나 유행어",
-  "characteristics": "특징을 쉼표로 구분"
 }
 `;
 
@@ -43,14 +41,12 @@ const extractPersonaDetails = async (personaInfo) => {
     return {
       personality: details.personality || '친근하고 활발한',
       tone: details.tone || '친근하고 자연스러운',
-      characteristics: details.characteristics || '친근함,활발함,자연스러움,긍정적'
     };
   } catch (error) {
     console.error('페르소나 상세 정보 추출 실패:', error);
     return {
       personality: '친근하고 활발한',
       tone: '친근하고 자연스러운',
-      characteristics: '친근함,활발함,자연스러움,긍정적'
     };
   }
 };
@@ -915,7 +911,6 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
       name: p.name,
       personality: p.personality,
       tone: p.tone,
-      characteristics: p.characteristics,
       introduction: p.introduction,
       prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
       imageUrl: p.imageUrl
@@ -951,14 +946,14 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
           const promptText = `당신은 "${persona.name}"이라는 AI 캐릭터입니다. 사용자(${userName})와 다른 AI들(${otherPersonasInfo})과 함께 이미지를 보고 대화하고 있습니다.
 
 다른 AI들의 정보:
-${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, ${p.tone || '자연스러운'} 말투, ${p.characteristics || '활발한'} 특징
+${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, ${p.tone || '자연스러운'} 말투,
   소개: ${p.introduction || '친근한 AI'}
   프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
   이미지: ${p.imageUrl || '기본 이미지'}`).join('\n')}
 
 중요 규칙:
-- 성격: ${persona.personality || '친근하고 활발한'}
-- 말투: ${persona.tone || '친근하고 자연스러운'}
+- 성격: ${persona.prompt.personality || '친근하고 활발한'}
+- 말투: ${persona.prompt.tone || '친근하고 자연스러운'}
 - 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
 - 다른 AI들과 함께 이미지를 분석하고 의견을 나눌 것
 - 자신의 개성을 유지하면서도 다른 AI들과 협력적인 분위기를 만들어갈 것
@@ -968,6 +963,7 @@ ${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, $
 - 텍스트로만 응답할 것
 - 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
+- 2문장 이내로 간단하게 대화할 것
 
 ${persona.name}:`;
 
@@ -1062,11 +1058,10 @@ ${persona.name}:`;
         const allPersonasInfo = personasInfo.map(p => `
 [AI ${p.index + 1} 정보]
 이름: ${p.name}
-성격: ${p.personality}
-말투: ${p.tone}
-특징: ${p.characteristics}
+성격: ${p.prompt.personality}
+말투: ${p.prompt.tone}
 소개: ${p.introduction}
-프롬프트: ${p.prompt}
+프롬프트: ${p.prompt.text}
 이미지: ${p.imageUrl || '기본 이미지'}
 `).join('\n');
 
@@ -1081,7 +1076,6 @@ ${persona.name}:`;
             name: p.name,
             personality: p.personality,
             tone: p.tone,
-            characteristics: p.characteristics,
             introduction: p.introduction,
             prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
             imageUrl: p.imageUrl
@@ -1091,9 +1085,8 @@ ${persona.name}:`;
         individualPrompt = `
 [당신의 정보]
 이름: ${persona.name}
-성격: ${persona.personality || '친근하고 활발한'}
-말투: ${persona.tone || '친근하고 자연스러운'}
-특징: ${persona.characteristics || '활발하고 긍정적인'}
+성격: ${persona.prompt.personality || '친근하고 활발한'}
+말투: ${persona.prompt.tone || '친근하고 자연스러운'}
 소개: ${persona.introduction || '친근한 AI 캐릭터'}
 
 [채팅방에 함께 있는 다른 AI 정보]
@@ -1101,7 +1094,6 @@ ${otherPersonas.map(p => `
 이름: ${p.name}
 성격: ${p.personality || '친근하고 활발한'}
 말투: ${p.tone || '친근하고 자연스러운'}
-특징: ${p.characteristics || '활발하고 긍정적인'}
 소개: ${p.introduction || '친근한 AI 캐릭터'}
 프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
 이미지: ${p.imageUrl || '기본 이미지'}
@@ -1119,6 +1111,7 @@ ${otherPersonas.map(p => `
 - 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
+- 2문장 이내로 간단하게 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -1139,7 +1132,6 @@ ${persona.name}:`;
             name: p.name,
             personality: p.personality,
             tone: p.tone,
-            characteristics: p.characteristics,
             introduction: p.introduction,
             prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
             imageUrl: p.imageUrl
@@ -1151,7 +1143,6 @@ ${persona.name}:`;
 이름: ${persona.name}
 성격: ${persona.personality || '친근하고 활발한'}
 말투: ${persona.tone || '친근하고 자연스러운'}
-특징: ${persona.characteristics || '활발하고 긍정적인'}
 소개: ${persona.introduction || '친근한 AI 캐릭터'}
 
 [채팅방에 함께 있는 다른 AI 정보]
@@ -1159,7 +1150,6 @@ ${otherPersonas.map(p => `
 이름: ${p.name}
 성격: ${p.personality || '친근하고 활발한'}
 말투: ${p.tone || '친근하고 자연스러운'}
-특징: ${p.characteristics || '활발하고 긍정적인'}
 소개: ${p.introduction || '친근한 AI 캐릭터'}
 프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
 이미지: ${p.imageUrl || '기본 이미지'}
@@ -1177,6 +1167,7 @@ ${otherPersonas.map(p => `
 - 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
+- 2문장 이내로 간단하게 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
