@@ -228,17 +228,18 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   const { personas, totalCount, currentPage, totalPages } = await PersonaService.getPersonas(
   req.auth.userId,
   parseInt(req.query.page) || 1,
-  parseInt(req.query.limit) || 10,
+  parseInt(req.query.limit) || 100,
   req.query.sortBy || 'createdAt',
   req.query.sortOrder || 'desc',
   req.query.keyword || ''
 );
 
-  return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
-  total: totalCount,
-  currentPage,
-  totalPages
-});
+  return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', {
+    data: personas,
+    totalPages,
+    currentPage,
+    total: totalCount
+  });
 });
 
 /**
@@ -357,7 +358,18 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
   const personaId = parseInt(req.params.characterId, 10);
   const { name, introduction, personality, tone, tag, isPublic } = req.body;
-  const updateData = { name, introduction, personality, tone, tag, isPublic };
+  
+  // prompt 필드에 personality, tone, tag를 포함하여 업데이트 데이터 구성
+  const updateData = { 
+    name, 
+    introduction, 
+    isPublic,
+    prompt: {
+      personality,
+      tone,
+      tag
+    }
+  };
 
   console.log('🔍 updatePersona - Request data:', {
     personaId,
@@ -403,9 +415,16 @@ const deletePersona = errorHandler.asyncHandler(async (req, res) => {
   await PersonaService.deletePersona(personaId, userId);
 
   // 2. ★★★ 관련 캐시를 삭제하여 데이터를 최신 상태로 유지 ★★★
-  const cacheKeyToDelete = `user:${userId}:characters:${type}`;
-  await redisClient.del(cacheKeyToDelete);
-  console.log(`🧹 Cache invalidated for key: ${cacheKeyToDelete}`);
+  // 여러 캐시 키를 삭제하여 모든 관련 데이터를 최신 상태로 유지
+  const cacheKeysToDelete = [
+    `user:${userId}:characters:created`,
+    `user:${userId}:characters:liked`
+  ];
+  
+  for (const cacheKey of cacheKeysToDelete) {
+    await redisClient.del(cacheKey);
+    console.log(`🧹 Cache invalidated for key: ${cacheKey}`);
+  }
 
   // 사용자 활동 로깅
   logger.logUserActivity('DELETE_PERSONA', userId, {
