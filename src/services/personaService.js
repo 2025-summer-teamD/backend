@@ -151,10 +151,19 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
       })
     };
 
+    // 정렬 기준 매핑
+    const orderByMapping = {
+      'likesCount': 'likesCount',
+      'usesCount': 'usesCount',
+      'createdAt': 'createdAt'
+    };
+    
+    const orderByField = orderByMapping[sortBy] || 'createdAt';
+    
     // 공개된 페르소나 조회
     const personas = await prismaConfig.prisma.persona.findMany({
       where,
-      orderBy: { [sortBy]: sortOrder },
+      orderBy: { [orderByField]: sortOrder },
       skip: offset,
       take: limit
     });
@@ -295,6 +304,14 @@ const updatePersona = async (personaId, updateData, userId) => {
     if (!existingPersona) {
       throw new Error('존재하지 않는 페르소나입니다.');
     }
+
+    console.log('🔍 updatePersona service - 권한 확인:', {
+      existingPersonaClerkId: existingPersona.clerkId,
+      currentUserId: userId,
+      isMatch: existingPersona.clerkId === userId,
+      typeExisting: typeof existingPersona.clerkId,
+      typeCurrent: typeof userId
+    });
 
     if (existingPersona.clerkId !== userId) {
       throw new Error('페르소나를 수정할 권한이 없습니다.');

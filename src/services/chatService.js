@@ -576,8 +576,19 @@ async function checkAndGenerateVideoReward(roomId, options) {
  * @returns {Promise<object>} 생성된 채팅방 정보
  */
 const createMultiChatRoom = async (userIds, personaIds, isPublic = true, description = null) => {
+  // AI 참가자 정보 조회
+  const personas = await prismaConfig.prisma.persona.findMany({
+    where: { id: { in: personaIds } }
+  });
+  
+  // 기본 채팅방 이름 생성
+  const defaultRoomName = personas.length > 0 
+    ? `${personas.length}명의 AI와 대화`
+    : '새로운 채팅방';
+  
   const chatRoom = await prismaConfig.prisma.chatRoom.create({
     data: {
+      name: defaultRoomName,
       isPublic,
       description,
       clerkId: userIds[0], // 첫 번째 사용자를 채팅방 생성자로 설정
