@@ -19,6 +19,7 @@ import errorHandler from '../middlewares/errorHandler.js';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import redisClient from '../config/redisClient.js'; // BullMQ 및 Redis Pub/Sub을 위한 클라이언트
 import { addAiChatJob } from '../services/queueService.js';
+import { v4 as uuidv4 } from 'uuid';
 import {
   setupSSEHeaders,
   saveChatMessage,
@@ -78,10 +79,10 @@ const elevenlabs = new ElevenLabsClient({
  */
 const countEmojis = (text) => {
   if (!text) return 0;
-  
+
   // 이모지 정규식 패턴 (유니코드 이모지 범위)
   const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
-  
+
   const matches = text.match(emojiRegex);
   return matches ? matches.length : 0;
 };
@@ -128,7 +129,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     // 🎯 채팅방 타입 자동 감지 (1대1 + 그룹 모두 지원)
     const isOneOnOne = await isOneOnOneChat(roomId);
     logInfo(`채팅방 타입: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
-    
+
     // 🔄 그룹 채팅인 경우 기존 그룹 채팅 로직으로 위임
     if (!isOneOnOne) {
       logInfo('📡 그룹 채팅 → streamGroupChatByRoom 호출');
@@ -188,6 +189,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     // 1. 먼저 사용자 메시지를 즉시 DB에 저장
     try {
       await saveChatMessage({
+        id: uuidv4(), // UUID로 고유 ID 생성
         roomId,
         text: userMessage,
         senderType: 'user',
@@ -207,6 +209,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     setupSSEHeaders(res);
     // 3. AI 응답 스트리밍 생성 및 전송
     let fullResponseText = "";
+    const chatRogId = uuidv4(); // 고유 ID 생성 (BullMQ Job ID 등으로 사용 가능)
     try {
       // 1대1 채팅에서는 최적화된 함수 사용
       const aiResponseText = await chatService.generateAiChatResponseOneOnOne(
@@ -220,6 +223,7 @@ const streamChatByRoom2 = async (req, res, next) => {
       // 응답을 한 번에 전송 (스트리밍 대신)
       fullResponseText = aiResponseText;
       sendSSEAIResponse(res, {
+        id: chatRogId,
         content: aiResponseText,
         aiName: personaInfo.name,
         aiId: personaInfo.id,
@@ -236,6 +240,7 @@ const streamChatByRoom2 = async (req, res, next) => {
     // 4. 스트림 완료 후, AI 응답 전체를 DB에 저장
     try {
       const chatRog = await saveChatMessage({
+        id: chatRogId,
         roomId,
         text: fullResponseText,
         senderType: 'ai',
@@ -421,8 +426,8 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
 
     // 채팅방 정보 조회 (참여 여부와 관계없이)
     const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-      where: { 
-        id: parsedRoomId, 
+      where: {
+        id: parsedRoomId,
         isDeleted: false
       },
       include: {
@@ -434,7 +439,7 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
         },
       },
     });
-    
+
     if (!chatRoom) {
       return responseHandler.sendNotFound(res, '채팅방을 찾을 수 없습니다.');
     }
@@ -464,16 +469,16 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
 
     // AI 참가자만 필터링 (사용자 제거)
     const aiParticipants = chatRoom.participants.filter(p => p.persona);
-    
+
     console.log('🔍 getRoomInfo - 참여자 필터링 결과:', {
       totalParticipants: chatRoom.participants?.length || 0,
       aiParticipantsCount: aiParticipants.length
     });
 
-    
+
     // 대표 AI (첫 번째 AI)
     const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
-    
+
     // 참여자 정보 가공 (AI만 포함)
     const participants = aiParticipants.map(p => ({
       id: p.persona.id,
@@ -570,7 +575,7 @@ const updateChatRoomName = errorHandler.asyncHandler(async (req, res) => {
     if (!chatRoom) {
       return responseHandler.sendNotFound(res, '해당 채팅방에 참여하고 있지 않습니다.');
     }
-    
+
 
 
     // 채팅방 이름 업데이트
@@ -617,8 +622,8 @@ const streamChatByRoom = async (req, res, next) => {
       }
       // 내가 참여한 방인지 확인 (ChatRoomParticipant 기반)
       const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-        where: { 
-          id: parseInt(roomId, 10), 
+        where: {
+          id: parseInt(roomId, 10),
           isDeleted: false,
           participants: {
             some: {
@@ -708,7 +713,7 @@ const streamChatByRoom = async (req, res, next) => {
         isFirstMessage,
         userName
       });
-      
+
       const aiResponses = await chatService.generateAiChatResponseGroup(
         message,
         allPersonas,
@@ -793,7 +798,7 @@ const streamChatByRoom = async (req, res, next) => {
 
 /**
  * 그룹 채팅용 SSE 스트리밍 응답 생성 (BullMQ + Redis Pub/Sub 연동)
- * 
+ *
  * @param {object} req - Express request 객체
  * @param {object} res - Express response 객체
  * @param {function} next - Express next 함수
@@ -827,36 +832,38 @@ const streamGroupChatByRoom = async (req, res, next) => {
     logProgress('그룹 채팅 SSE 요청 수신', { roomId, userId, messageLength: message?.length });
 
     // 2. 완전한 채팅 검증 (입력, 인증, 권한)
-    const chatValidation = await validateCompleteChat({ 
-      message, sender, userName, roomId, userId, res 
+    const chatValidation = await validateCompleteChat({
+      message, sender, userName, roomId, userId, res
     });
     if (!chatValidation.isValid) return;
 
     // 3. 채팅방 타입 검증
-    const typeValidation = await validateChatRoomType({ 
-      roomId, expectedType: 'group', res 
+    const typeValidation = await validateChatRoomType({
+      roomId, expectedType: 'group', res
     });
     if (!typeValidation.isValid) return;
 
     // 4. 채팅방 정보 및 AI 참여자 검증
-    const roomValidation = await validateChatRoomAndAI({ 
-      roomId, userId, isGroupChat: true, res 
+    const roomValidation = await validateChatRoomAndAI({
+      roomId, userId, isGroupChat: true, res
     });
     if (!roomValidation.isValid) return;
 
     const { chatRoom, aiParticipants } = roomValidation;
-
+    const chatRogId = uuidv4(); // UUID로 고유 ID 생성
     // 4. 사용자 메시지를 즉시 DB에 저장
     try {
       await saveChatMessage({
+        id: chatRogId,
         roomId,
         text: message,
         senderType: 'user',
         senderId: userId
       });
       logSuccess('사용자 메시지 DB 저장 완료');
-      
+
       logUserActivity.groupChatMessageSaved(sender, {
+        id:chatRogId,
         roomId: roomId,
         messageLength: message.length,
         aiParticipantsCount: aiParticipants.length
@@ -872,9 +879,10 @@ const streamGroupChatByRoom = async (req, res, next) => {
     setupSSEHeaders(res);
     console.log('✅ SSE 헤더 설정 완료');
 
+
     // 6. 즉시 사용자 메시지 전송
-    res.write(`data: ${JSON.stringify({ 
-      type: 'user_message', 
+    res.write(`data: ${JSON.stringify({
+      type: 'user_message',
       content: message,
       sender: userName,
       senderId: userId,
@@ -896,13 +904,13 @@ const streamGroupChatByRoom = async (req, res, next) => {
       pubSubClient = redisClient.duplicate();
       await pubSubClient.connect();
       logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
-      
+
       // 구독 설정
       const messageHandler = createRedisMessageHandler(res, responseChannel, pubSubClient);
       await pubSubClient.subscribe(responseChannel, messageHandler);
 
       logSuccess('Redis 구독 설정 완료', { responseChannel });
-      
+
       // 타임아웃 설정 (90초로 증가 - 다중 AI 응답 시간 고려)
       setTimeout(async () => {
         if (!res.writableEnded) {
@@ -921,14 +929,14 @@ const streamGroupChatByRoom = async (req, res, next) => {
           res.end();
         }
       }, 90000);
-      
+
     } catch (redisError) {
       logError('Redis Pub/Sub 설정 실패', redisError);
       logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
       sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
       return;
     }
-    
+
   } catch (error) {
     logError('그룹 채팅 SSE 전체 에러', error);
     logErrorWithContext.chatFlowError(error, { roomId: req.params.roomId }, '그룹 채팅 SSE 스트리밍');
@@ -1035,7 +1043,15 @@ const getTts = async (req, res, next) => {
     const elevenLabsResponseStream = await elevenlabs.textToSpeech.convert(voiceId, {
       outputFormat: "mp3_44100_128", // MP3 형식임을 명시
       text: textToConvert,
-      modelId: "eleven_flash_v2_5"
+      modelId: "eleven_flash_v2_5",
+      voice_settings: {
+        stability: 0.75, // 안정성 조정 (0.0 ~ 1.0)
+        similarityBoost: 0.5, // 유사성 부스트 (0.0 ~ 1.0)
+        speed: 1.2, // 속도 조정 (1.0이 기본 속도)
+        use_speaker_boost: true, // 스피커 부스트 사용,
+        similarity_boost: 0.75, // 유사성 부스트 (0.0 ~ 1.0),
+        style: 1
+      }
     });
 
     // **핵심 변경 부분:**
@@ -1095,42 +1111,42 @@ const sendChatMessage = async (req, res, next) => {
   const { roomId } = req.params;
   const { message, sender, userName } = req.body;
   const userId = req.auth?.userId;
-  
+
   // 디버그 로그
-  console.log('🎯 통합 채팅 API 호출:', { 
-    roomId, 
-    userId, 
+  console.log('🎯 통합 채팅 API 호출:', {
+    roomId,
+    userId,
     messageLength: message?.length,
-    hasAuth: !!req.auth 
+    hasAuth: !!req.auth
   });
-  
+
   try {
     // 1. 기본 검증
     const inputValidation = validateChatInput({ message, sender, userName });
     if (!inputValidation.isValid) {
-      console.log('❌ 입력 검증 실패:', { 
-        message: !!message, 
-        sender: !!sender, 
-        userName: !!userName 
+      console.log('❌ 입력 검증 실패:', {
+        message: !!message,
+        sender: !!sender,
+        userName: !!userName
       });
       return responseHandler.sendBadRequest(res, inputValidation.error);
     }
-    
+
     if (!userId) {
       logError('사용자 인증 실패');
       return responseHandler.sendUnauthorized(res, '사용자 인증이 필요합니다.');
     }
-    
+
     // 2. 채팅방 타입 자동 감지
     logProgress('채팅방 타입 확인 중...');
     const isOneOnOne = await isOneOnOneChat(roomId);
-    
+
     logSuccess(`채팅방 타입 확인 완료: ${isOneOnOne ? '1대1' : '그룹'} 채팅`);
-    
+
     // 3. 공통 SSE 헤더 설정
     setupSSEHeaders(res);
     logSuccess('SSE 헤더 설정 완료');
-    
+
     // 4. 타입에 따른 내부 처리 분기
     if (isOneOnOne) {
       logProgress('1대1 채팅 플로우 시작');
@@ -1139,20 +1155,20 @@ const sendChatMessage = async (req, res, next) => {
       logProgress('그룹 채팅 플로우 시작');
       await handleGroupChatFlow(req, res, next);
     }
-    
+
   } catch (error) {
     logError('통합 채팅 API 에러', error);
-    logger.logError('통합 채팅 메시지 처리 실패', error, { 
-      roomId, 
-      userId, 
-      messageLength: message?.length 
+    logger.logError('통합 채팅 메시지 처리 실패', error, {
+      roomId,
+      userId,
+      messageLength: message?.length
     });
-    
+
     // SSE 헤더가 이미 전송된 경우 에러 메시지만 전송
     if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ 
-        type: 'error', 
-        message: '채팅 처리 중 오류가 발생했습니다.' 
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: '채팅 처리 중 오류가 발생했습니다.'
       })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
@@ -1169,12 +1185,12 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
   const { roomId } = req.params;
   const { message: userMessage, sender, userName } = req.body;
   const userId = req.auth.userId;
-  
+
   let personaInfo = null;
-  
+
   try {
     console.log('🔄 1대1 채팅 처리 시작:', { roomId, userId, messageLength: userMessage?.length });
-    
+
     // 1. 채팅방 정보 및 AI 캐릭터 조회 (ChatRoomParticipant 기반)
     const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
       where: {
@@ -1200,28 +1216,28 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
         }
       }
     });
-    
+
     if (!chatRoom) {
       sendSSEError(res, '채팅방을 찾을 수 없습니다.');
       return;
     }
-    
+
     // AI 참여자 확인 (ChatRoomParticipant 기반)
     const aiParticipant = chatRoom.participants.find(p => p.persona);
     if (!aiParticipant) {
       sendSSEError(res, 'AI 캐릭터를 찾을 수 없습니다.');
       return;
     }
-    
+
     personaInfo = aiParticipant.persona;
     console.log('✅ AI 캐릭터 정보 조회 완료:', { personaName: personaInfo.name });
-    
+
     // 2. 채팅 히스토리 생성
     const chatHistory = generateChatHistory(chatRoom.ChatLogs, personaInfo.name);
-    
+
     // 첫 번째 메시지인지 확인
     const isFirstMessage = checkIsFirstMessage(chatRoom.ChatLogs);
-    
+
     // 3. 사용자 메시지를 DB에 저장
     try {
       await saveChatMessage({
@@ -1236,13 +1252,14 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
-    
+
     // 4. 사용자 메시지 즉시 전송
     sendSSEUserMessage(res, { message: userMessage, userName, userId });
     logSuccess('사용자 메시지 SSE 전송 완료');
-    
+
     // 5. AI 응답 생성 및 전송
     let fullResponseText = "";
+    const chatRogId = uuidv4(); // 고유 ID 생성 (SSE 메시지 식별용)
     try {
       console.log('🤖 AI 응답 생성 시작');
       const aiResponseText = await chatService.generateAiChatResponseOneOnOne(
@@ -1252,37 +1269,39 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
         isFirstMessage,
         userName
       );
-      
+      console.log('✅ AI 응답 생성 완료: id: ', chatRogId);
       fullResponseText = aiResponseText;
       sendSSEAIResponse(res, {
+        id: chatRogId,
         content: aiResponseText,
         aiName: personaInfo.name,
         aiId: personaInfo.id,
         personaId: personaInfo.id
       });
       logSuccess('AI 응답 SSE 전송 완료');
-      
+
     } catch (aiError) {
       console.error('❌ AI 응답 생성 실패:', aiError);
       logger.logError('AI 응답 생성 중 오류 발생', aiError, { roomId: roomId });
       sendSSEError(res, 'AI 응답 생성 중 오류가 발생했습니다.');
       return;
     }
-    
+
     // 6. AI 응답을 DB에 저장
     try {
-      await saveChatMessage({
+      const savedMessage = await saveChatMessage({
+        chatRogId,
         roomId,
         text: fullResponseText,
         senderType: 'ai',
         senderId: personaInfo.id
       });
       console.log('✅ AI 응답 DB 저장 완료');
-      
+
       // 7. 친밀도 업데이트
       const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
-      
+
       // 친밀도 업데이트를 SSE로 전송
       if (friendshipResult) {
         sendSSEExpUpdate(res, {
@@ -1290,23 +1309,24 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
           personaName: personaInfo.name,
           newExp: friendshipResult.exp,
           newLevel: friendshipResult.friendship,
+          chatLogId: savedMessage.id,
           expIncrease,
           userId
         });
         console.log('✅ 친밀도 업데이트 SSE 전송 완료');
       }
-      
+
     } catch (dbError) {
       logError('AI 메시지 저장 실패', dbError);
       logger.logError('AI 메시지 저장 실패', dbError, { roomId: roomId });
       sendSSEError(res, 'AI 응답 저장에 실패했습니다.');
       return;
     }
-    
+
     // 8. 완료 신호 전송
     sendSSEComplete(res);
     console.log('✅ 1대1 채팅 플로우 완료');
-    
+
   } catch (error) {
     logError('1대1 채팅 플로우 에러', error);
     logger.logError('1대1 채팅 플로우 에러', error, { roomId, userId });
@@ -1322,9 +1342,9 @@ const handleGroupChatFlow = async (req, res, next) => {
   const { roomId } = req.params;
   const { message, sender, userName } = req.body;
   const userId = req.auth.userId;
-  
+
   let pubSubClient = null;
-  
+
   // 클라이언트 연결 종료 처리
   const handleClientClose = () => {
     logInfo('그룹 채팅 클라이언트 연결 종료');
@@ -1335,27 +1355,27 @@ const handleGroupChatFlow = async (req, res, next) => {
       res.end();
     }
   };
-  
+
   req.on('close', handleClientClose);
   res.on('close', handleClientClose);
-  
+
   try {
     logProgress('그룹 채팅 처리 시작', { roomId, userId, messageLength: message?.length });
-    
+
     // 1. 완전한 채팅 검증 (입력, 인증, 권한)
-    const chatValidation = await validateCompleteChat({ 
-      message, sender, userName, roomId, userId, res 
+    const chatValidation = await validateCompleteChat({
+      message, sender, userName, roomId, userId, res
     });
     if (!chatValidation.isValid) return;
 
-    // 2. 채팅방 정보 및 AI 참여자 검증  
-    const roomValidation = await validateChatRoomAndAI({ 
-      roomId, userId, isGroupChat: true, res 
+    // 2. 채팅방 정보 및 AI 참여자 검증
+    const roomValidation = await validateChatRoomAndAI({
+      roomId, userId, isGroupChat: true, res
     });
     if (!roomValidation.isValid) return;
 
     const { chatRoom, aiParticipants } = roomValidation;
-    
+
     // 3. 사용자 메시지를 DB에 저장
     try {
       await saveChatMessage({
@@ -1365,7 +1385,7 @@ const handleGroupChatFlow = async (req, res, next) => {
         senderId: userId
       });
       logSuccess('사용자 메시지 DB 저장 완료');
-      
+
       logUserActivity.groupChatMessageSaved(sender, {
         roomId: roomId,
         messageLength: message.length,
@@ -1377,11 +1397,11 @@ const handleGroupChatFlow = async (req, res, next) => {
       sendSSEError(res, '메시지 저장에 실패했습니다.');
       return;
     }
-    
+
     // 4. 사용자 메시지 즉시 전송
     sendSSEUserMessage(res, { message, userName, userId });
     logSuccess('사용자 메시지 SSE 전송 완료');
-    
+
     // 5. BullMQ에 AI 처리 작업 추가
     const queueResult = await createAndProcessGroupChatJob({
       roomId, message, senderId: userId, userName, userId, res
@@ -1395,13 +1415,13 @@ const handleGroupChatFlow = async (req, res, next) => {
       pubSubClient = redisClient.duplicate();
       await pubSubClient.connect();
       logSuccess('Redis Pub/Sub 클라이언트 연결 완료');
-      
+
       // 구독 설정
       const messageHandler = createRedisMessageHandler(res, responseChannel, pubSubClient);
       await pubSubClient.subscribe(responseChannel, messageHandler);
 
       logSuccess('Redis 구독 설정 완료', { responseChannel });
-      
+
       // 타임아웃 설정 (90초로 증가 - 다중 AI 응답 시간 고려)
       setTimeout(async () => {
         if (!res.writableEnded) {
@@ -1420,14 +1440,14 @@ const handleGroupChatFlow = async (req, res, next) => {
           res.end();
         }
       }, 90000);
-      
+
     } catch (redisError) {
       logError('Redis Pub/Sub 설정 실패', redisError);
       logErrorWithContext.redisSetupFailed(redisError, { roomId: roomId });
       sendSSEErrorAndClose(res, 'Redis 연결에 실패했습니다.');
       return;
     }
-    
+
   } catch (error) {
     logError('그룹 채팅 플로우 에러', error);
     logger.logError('그룹 채팅 플로우 에러', error, { roomId, userId });
@@ -1459,8 +1479,8 @@ const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
 
   // 내가 참여한 방인지 확인 (N:N 스키마에 맞게 수정)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: { 
-      id: parseInt(roomId), 
+    where: {
+      id: parseInt(roomId),
       isDeleted: false,
       participants: {
         some: {
@@ -1491,7 +1511,7 @@ const updateChatRoomPublic = errorHandler.asyncHandler(async (req, res) => {
  */
 const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
   const { userId } = req.auth;
-  
+
   try {
     // 공개된 채팅방만 조회 (N:N 스키마에 맞게 수정)
     const publicRooms = await prismaConfig.prisma.chatRoom.findMany({
