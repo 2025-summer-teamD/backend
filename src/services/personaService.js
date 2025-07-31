@@ -133,8 +133,6 @@ const createPersonaWithAI = async (initialData, userId) => {
  * @returns {Promise<{personas: Array<object>, total: number}>} 페르소나 목록과 총 개수
  */
 const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc', keyword = '') => {
-  console.log('🔍 getPersonas service - 시작:', { userId, page, limit, sortBy, sortOrder, keyword });
-
   try {
     const offset = (page - 1) * limit;
     
@@ -147,12 +145,6 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
     
     const mappedSortBy = orderByMapping[sortBy] || sortBy;
     
-    console.log('🔍 getPersonas service - 정렬 필드 매핑:', { 
-      originalSortBy: sortBy, 
-      mappedSortBy, 
-      orderByMapping 
-    });
-    
     // where 조건 분리
     const where = {
       isPublic: true,
@@ -164,15 +156,6 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
         ]
       })
     };
-
-    // 정렬 기준 매핑
-    const orderByMapping = {
-      'likesCount': 'likesCount',
-      'usesCount': 'usesCount',
-      'createdAt': 'createdAt'
-    };
-    
-    const orderByField = orderByMapping[sortBy] || 'createdAt';
     
     // 공개된 페르소나 조회
     const personas = await prismaConfig.prisma.persona.findMany({
@@ -190,13 +173,6 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
 
     // 전체 개수 조회
     const totalCount = await prismaConfig.prisma.persona.count({ where });
-
-    console.log('🔍 getPersonas service - 결과:', { 
-      count: personasWithLikedStatus.length, 
-      totalCount,
-      page,
-      limit 
-    });
 
     return {
       personas: personasWithLikedStatus,
@@ -340,6 +316,9 @@ const updatePersona = async (personaId, updateData, userId) => {
         ...existingPrompt,
         ...updateData.prompt
       };
+    } else {
+      // prompt가 없으면 기존 prompt 유지
+      delete finalUpdateData.prompt;
     }
 
     console.log('🔍 updatePersona service - 최종 업데이트 데이터:', finalUpdateData);

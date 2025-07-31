@@ -217,13 +217,6 @@ const previewAiPersona = errorHandler.asyncHandler(async (req, res) => {
  * @param {function} next - Express next 함수
  */
 const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
-  // 요청의 쿼리 파라미터를 서비스에 전달할 옵션 객체로 만듦
-  const options = {
-    keyword: req.query.keyword,
-    sort: req.query.sort,
-    currentUserId: req.auth ? req.auth.userId : null,
-  };
-
   // 정렬 기준 매핑
   const sortByMapping = {
     'likes': 'likesCount',
@@ -233,15 +226,15 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   
   const sortBy = sortByMapping[req.query.sortBy] || 'createdAt';
   
-  // 서비스 호출
+  // 서비스 호출 - 인증이 필요하지 않으므로 null을 전달
   const { personas, totalCount, currentPage, totalPages } = await PersonaService.getPersonas(
-  req.auth.userId,
-  parseInt(req.query.page) || 1,
-  parseInt(req.query.limit) || 100,
-  req.query.sortBy || 'createdAt',
-  req.query.sortOrder || 'desc',
-  req.query.keyword || ''
-);
+    req.auth?.userId || null,
+    parseInt(req.query.page) || 1,
+    parseInt(req.query.limit) || 100,
+    sortBy, // 수정: 매핑된 sortBy 사용
+    req.query.sortOrder || 'desc',
+    req.query.keyword || ''
+  );
 
   return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', {
     data: personas,
