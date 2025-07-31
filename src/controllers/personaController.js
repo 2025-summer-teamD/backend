@@ -224,21 +224,30 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
     currentUserId: req.auth ? req.auth.userId : null,
   };
 
+  // 정렬 기준 매핑
+  const sortByMapping = {
+    'likes': 'likesCount',
+    'usesCount': 'usesCount',
+    'createdAt': 'createdAt'
+  };
+  
+  const sortBy = sortByMapping[req.query.sortBy] || 'createdAt';
+  
   // 서비스 호출
   const { personas, totalCount, currentPage, totalPages } = await PersonaService.getPersonas(
-  req.auth.userId,
-  parseInt(req.query.page) || 1,
-  parseInt(req.query.limit) || 10,
-  req.query.sortBy || 'createdAt',
-  req.query.sortOrder || 'desc',
-  req.query.keyword || ''
-);
+    req.auth.userId,
+    parseInt(req.query.page) || 1,
+    parseInt(req.query.limit) || 20,
+    sortBy,
+    req.query.sortOrder || 'desc',
+    req.query.keyword || ''
+  );
 
   return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
-  total: totalCount,
-  currentPage,
-  totalPages
-});
+    total: totalCount,
+    currentPage,
+    totalPages
+  });
 });
 
 /**
@@ -329,11 +338,7 @@ const getMyPersonaDetails = errorHandler.asyncHandler(async (req, res) => {
     friendshipLevel = persona.friendship;
   }
 
-  const personaDetails = await PersonaService.getPersonaDetails({
-    personaId,
-    ownerId: userId,
-    currentUserId: userId,
-  });
+  const personaDetails = await PersonaService.getPersonaDetails(personaId, userId);
 
   if (!personaDetails) {
     return responseHandler.sendNotFound(res, '해당 페르소나를 찾을 수 없거나 조회 권한이 없습니다.');
