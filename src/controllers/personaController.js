@@ -225,11 +225,20 @@ const getPersonaList = errorHandler.asyncHandler(async (req, res) => {
   };
 
   // 서비스 호출
-  const { personas, total } = await PersonaService.getPersonas(options);
+  const { personas, totalCount, currentPage, totalPages } = await PersonaService.getPersonas(
+  req.auth.userId,
+  parseInt(req.query.page) || 1,
+  parseInt(req.query.limit) || 10,
+  req.query.sortBy || 'createdAt',
+  req.query.sortOrder || 'desc',
+  req.query.keyword || ''
+);
 
   return responseHandler.sendSuccess(res, 200, '페르소나 목록을 성공적으로 조회했습니다.', personas, {
-    totalElements: total
-  });
+  total: totalCount,
+  currentPage,
+  totalPages
+});
 });
 
 /**
@@ -460,6 +469,22 @@ const incrementViewCount = errorHandler.asyncHandler(async (req, res) => {
   return responseHandler.sendSuccess(res, 200, '조회수가 증가되었습니다.');
 });
 
+/**
+ * 특정 사용자가 특정 페르소나를 좋아요했는지 확인
+ *
+ * @param {object} req - Express request 객체
+ * @param {object} res - Express response 객체
+ * @param {function} next - Express next 함수
+ */
+const checkIfLiked = errorHandler.asyncHandler(async (req, res) => {
+  const { userId } = req.auth;
+  const personaId = parseInt(req.params.characterId, 10);
+
+  const isLiked = await PersonaService.checkIfLiked(personaId, userId);
+
+  return responseHandler.sendSuccess(res, 200, '좋아요 상태를 확인했습니다.', { isLiked });
+});
+
 export default {
   createCustomPersona,
   createAiPersona,
@@ -473,4 +498,5 @@ export default {
   deletePersona,
   toggleLike,
   incrementViewCount,
+  checkIfLiked,
 };

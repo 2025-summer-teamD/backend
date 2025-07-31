@@ -1507,9 +1507,7 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
           }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      },
+      orderBy: { createdAt: 'desc' }, // 생성일 기준 내림차순 정렬
       take: 50 // 최대 50개까지만 조회
     });
 
@@ -1521,6 +1519,7 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
         name: room.name,
         description: room.description,
         isPublic: room.isPublic,
+
         createdAt: room.createdAt,
         participants: aiParticipants.map(p => ({
           personaId: p.persona.id,

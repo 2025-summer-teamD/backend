@@ -26,7 +26,6 @@ model ChatRoom {
   description  String?
   clerkId      String?              @map("clerk_id")
   personaId    Int?                 @map("persona_id")
-  likes        Boolean?              @default(false)
   isPublic     Boolean               @default(true) @map("is_public")
   createdAt    DateTime              @default(now()) @map("created_at")
   updatedAt    DateTime?             @map("updated_at")
@@ -78,6 +77,8 @@ model Persona {
   updatedAt            DateTime? @map("updated_at")
   isDeleted            Boolean   @default(false) @map("is_deleted")
   chatRooms            ChatRoomParticipant[]
+  isLiked              Boolean   @default(false) @map("is_liked")
+  likedByUserId        String?   @map("liked_by_user_id")
   @@index([clerkId])
 }
 
@@ -93,3 +94,4 @@ model ChatLog {
   isDeleted  Boolean     @default(false) @map("is_deleted")
   @@index([chatroomId])
 }
+
