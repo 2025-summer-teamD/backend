@@ -138,11 +138,25 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
   try {
     const offset = (page - 1) * limit;
     
+    // 정렬 필드 매핑
+    const orderByMapping = {
+      'likes': 'likesCount',
+      'usesCount': 'usesCount',
+      'createdAt': 'createdAt'
+    };
+    
+    const mappedSortBy = orderByMapping[sortBy] || sortBy;
+    
+    console.log('🔍 getPersonas service - 정렬 필드 매핑:', { 
+      originalSortBy: sortBy, 
+      mappedSortBy, 
+      orderByMapping 
+    });
+    
     // where 조건 분리
     const where = {
       isPublic: true,
       isDeleted: false,
-      ...(userId && { clerkId: { not: userId } }),
       ...(keyword && {
         OR: [
           { name: { contains: keyword, mode: 'insensitive' } },
@@ -163,7 +177,7 @@ const getPersonas = async (userId, page = 1, limit = 10, sortBy = 'createdAt', s
     // 공개된 페르소나 조회
     const personas = await prismaConfig.prisma.persona.findMany({
       where,
-      orderBy: { [orderByField]: sortOrder },
+      orderBy: { [mappedSortBy]: sortOrder },
       skip: offset,
       take: limit
     });
@@ -317,10 +331,23 @@ const updatePersona = async (personaId, updateData, userId) => {
       throw new Error('페르소나를 수정할 권한이 없습니다.');
     }
 
-    // 2. 페르소나 업데이트
+    // 2. prompt 필드 처리 - 기존 데이터와 새로운 데이터 병합
+    let finalUpdateData = { ...updateData };
+    
+    if (updateData.prompt) {
+      const existingPrompt = existingPersona.prompt || {};
+      finalUpdateData.prompt = {
+        ...existingPrompt,
+        ...updateData.prompt
+      };
+    }
+
+    console.log('🔍 updatePersona service - 최종 업데이트 데이터:', finalUpdateData);
+
+    // 3. 페르소나 업데이트
     const updatedPersona = await prismaConfig.prisma.persona.update({
       where: { id: personaId },
-      data: updateData
+      data: finalUpdateData
     });
 
     // 3. liked 상태 확인
