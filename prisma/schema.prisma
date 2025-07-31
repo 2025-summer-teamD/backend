@@ -83,7 +83,7 @@ model Persona {
 }
 
 model ChatLog {
-  id         Int         @id @default(autoincrement())
+  id         String      @id @default(cuid())  // 또는 @default(uuid())
   chatroomId Int         @map("chatroom_id")
   chatRoom   ChatRoom    @relation(fields: [chatroomId], references: [id], onDelete: Cascade)
   senderType String      @map("sender_type") // 'user' | 'ai'

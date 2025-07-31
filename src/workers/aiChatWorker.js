@@ -1,6 +1,6 @@
 /**
  * AI 채팅 처리 워커
- * 
+ *
  * 기능:
  * - 큐에서 AI 채팅 처리 작업 수행
  * - Vertex AI 호출 및 응답 생성
@@ -15,6 +15,7 @@ import prismaConfig from '../config/prisma.js';
 import logger from '../utils/logger.js';
 import redisClient from '../config/redisClient.js';
 import { AiResponseCache } from '../services/cacheService.js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Redis 연결 설정
 const redisConnection = {
@@ -34,7 +35,7 @@ const sendToWebSocket = async (roomId, messageData) => {
       roomId,
       ...messageData,
     }));
-    
+
     logger.logInfo('WebSocket으로 메시지 전송', {
       roomId,
       messageType: messageData.type || 'message',
@@ -51,7 +52,7 @@ const sendToWebSocket = async (roomId, messageData) => {
 const sendToSSE = async (responseChannel, messageData) => {
   try {
     await redisClient.publish(responseChannel, JSON.stringify(messageData));
-    
+
     logger.logInfo('SSE로 메시지 전송', {
       responseChannel,
       messageType: messageData.type || 'message',
@@ -69,12 +70,12 @@ const isUserOnline = async (userId, roomId) => {
     // Redis에서 사용자 온라인 상태 확인
     const onlineKey = `user:${userId}:online`;
     const roomKey = `room:${roomId}:users`;
-    
+
     const [isOnline, isInRoom] = await Promise.all([
       redisClient.exists(onlineKey),
       redisClient.sIsMember(roomKey, userId),
     ]);
-    
+
     return isOnline && isInRoom;
   } catch (error) {
     logger.logError('사용자 온라인 상태 확인 실패', error, { userId, roomId });
@@ -86,10 +87,10 @@ const isUserOnline = async (userId, roomId) => {
  * AI 채팅 처리 작업 함수
  */
 const processAiChatJob = async (job) => {
-  const { 
-    roomId, 
-    message, 
-    senderId, 
+  const {
+    roomId,
+    message,
+    senderId,
     userName,
     isGroupChat = false,
     responseChannel = null
@@ -118,10 +119,10 @@ const processAiChatJob = async (job) => {
 
   // 1. 채팅방 정보 및 AI 참여자 조회
   console.log('🔍 [WORKER] 채팅방 정보 조회 중...', { roomId });
-  
+
   const chatRoom = await prismaConfig.prisma.chatRoom.findUnique({
     where: { id: parseInt(roomId, 10) },
-    include: { 
+    include: {
       participants: {
         include: {
           persona: true
@@ -158,7 +159,7 @@ const processAiChatJob = async (job) => {
 
   // 2. 최근 채팅 기록 조회
   console.log('📝 [WORKER] 채팅 기록 조회 중...', { roomId });
-  
+
   const recentLogs = await prismaConfig.prisma.chatLog.findMany({
     where: { chatroomId: chatRoom.id, isDeleted: false },
     orderBy: { time: 'desc' },
@@ -204,11 +205,11 @@ const processAiChatJob = async (job) => {
   try {
     // 1. 사용자 온라인 상태 확인
     console.log('👤 [WORKER] 사용자 온라인 상태 확인 중...', { userId, roomId });
-    
+
     const userOnline = await isUserOnline(userId, roomId);
-    
+
     console.log('✅ [WORKER] 사용자 온라인 상태 확인 완료:', { userId, roomId, userOnline });
-    
+
     logger.logInfo('사용자 온라인 상태', { userId, roomId, userOnline });
 
     // 2. AI 응답 생성 (캐시 우선 확인)
@@ -217,22 +218,22 @@ const processAiChatJob = async (job) => {
       aiParticipantsCount: aiParticipants.length,
       isFirstMessage
     });
-    
+
     let aiResponses;
     if (isOneOnOne) {
       // 1대1 채팅: 단일 AI 응답
       const participant = aiParticipants[0];
       const persona = participant.persona; // 실제 persona 객체
-      
+
       console.log('🔍 [WORKER] 1대1 채팅 - 캐시 확인 중...', { personaId: persona.id });
-      
+
       // 캐시에서 AI 응답 확인
       const cachedResponse = await AiResponseCache.get(
-        persona.id, 
-        message, 
+        persona.id,
+        message,
         chatHistory.substring(0, 200) // 맥락 요약
       );
-      
+
       let response;
       if (cachedResponse) {
         response = cachedResponse.response;
@@ -244,7 +245,7 @@ const processAiChatJob = async (job) => {
       } else {
         // 캐시 미스 - AI API 호출
         console.log('🔗 [WORKER] 캐시 미스 - AI API 호출 중...', { personaId: persona.id });
-        
+
         response = await chatService.generateAiChatResponseOneOnOne(
           message,
           persona,
@@ -252,9 +253,9 @@ const processAiChatJob = async (job) => {
           false, // isFirstMessage
           userName
         );
-        
+
         console.log('✅ [WORKER] AI API 호출 완료:', { personaId: persona.id, responseLength: response.length });
-        
+
         // 응답을 캐시에 저장
         await AiResponseCache.set(
           persona.id,
@@ -263,16 +264,16 @@ const processAiChatJob = async (job) => {
           chatHistory.substring(0, 200),
           3600 // 1시간 TTL
         );
-        
+
         console.log('💾 [WORKER] AI 응답 캐시 저장 완료:', { personaId: persona.id });
       }
-      
+
       // AI 응답에서 이미지 URL이 포함되어 있는지 확인하고 제거
       let cleanedResponse = response;
       if (response && typeof response === 'string') {
         const imageUrlPattern = /https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i;
         const imageMatches = response.match(imageUrlPattern);
-        
+
         if (imageMatches) {
           console.warn(`⚠️ [WORKER] AI 응답에 이미지 URL이 포함됨 (1대1) - 제거 중:`, {
             personaId: persona.id,
@@ -280,13 +281,13 @@ const processAiChatJob = async (job) => {
             imageUrls: imageMatches,
             responsePreview: response.substring(0, 200) + '...'
           });
-          
+
           // 이미지 URL 제거
           cleanedResponse = response.replace(imageUrlPattern, '').trim();
-          
+
           // 연속된 공백 정리
           cleanedResponse = cleanedResponse.replace(/\s+/g, ' ');
-          
+
           console.log(`✅ [WORKER] 이미지 URL 제거 완료 (1대1):`, {
             personaId: persona.id,
             personaName: persona.name,
@@ -294,7 +295,7 @@ const processAiChatJob = async (job) => {
           });
         }
       }
-      
+
       aiResponses = [{
         content: cleanedResponse,
         personaId: persona.id,
@@ -303,10 +304,10 @@ const processAiChatJob = async (job) => {
     } else {
       // 그룹 채팅: 다중 AI 응답 (한 번에 모든 AI 응답 생성)
       console.log('👥 [WORKER] 그룹 채팅 - 다중 AI 응답 생성 중...', { participantCount: aiParticipants.length });
-      
+
       // 모든 AI의 persona 정보 수집
       const allPersonas = aiParticipants.map(p => p.persona);
-      
+
       // 한 번에 모든 AI 응답 생성
       const groupResponses = await chatService.generateAiChatResponseGroup(
         message,
@@ -315,12 +316,12 @@ const processAiChatJob = async (job) => {
         false, // isFirstMessage
         userName
       );
-      
-      console.log('✅ [WORKER] 그룹 채팅 - 모든 AI 응답 생성 완료:', { 
+
+      console.log('✅ [WORKER] 그룹 채팅 - 모든 AI 응답 생성 완료:', {
         responseCount: groupResponses.length,
         responses: groupResponses.map(r => ({ personaId: r.personaId, personaName: r.personaName, length: r.content.length }))
       });
-      
+
       // 각 AI 응답을 캐시에 저장
       for (const response of groupResponses) {
         await AiResponseCache.set(
@@ -332,14 +333,14 @@ const processAiChatJob = async (job) => {
         );
         console.log(`💾 [WORKER] 그룹 - AI ${response.personaId} 캐시 저장 완료`);
       }
-      
+
       // AI 응답에서 이미지 URL이 포함되어 있는지 확인하고 제거
       aiResponses = groupResponses.map(response => {
         let cleanedResponse = response.content;
         if (response.content && typeof response.content === 'string') {
           const imageUrlPattern = /https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i;
           const imageMatches = response.content.match(imageUrlPattern);
-          
+
           if (imageMatches) {
             console.warn(`⚠️ [WORKER] AI 응답에 이미지 URL이 포함됨 - 제거 중:`, {
               personaId: response.personaId,
@@ -347,13 +348,13 @@ const processAiChatJob = async (job) => {
               imageUrls: imageMatches,
               responsePreview: response.content.substring(0, 200) + '...'
             });
-            
+
             // 이미지 URL 제거
             cleanedResponse = response.content.replace(imageUrlPattern, '').trim();
-            
+
             // 연속된 공백 정리
             cleanedResponse = cleanedResponse.replace(/\s+/g, ' ');
-            
+
             console.log(`✅ [WORKER] 이미지 URL 제거 완료:`, {
               personaId: response.personaId,
               personaName: response.personaName,
@@ -361,7 +362,7 @@ const processAiChatJob = async (job) => {
             });
           }
         }
-        
+
         return {
           content: cleanedResponse,
           personaId: response.personaId,
@@ -387,22 +388,23 @@ const processAiChatJob = async (job) => {
     });
 
     // 3. 응답을 DB에 저장하고 실시간 전송
-    console.log('💾 [WORKER] DB 저장 및 실시간 전송 시작...', { 
+    console.log('💾 [WORKER] DB 저장 및 실시간 전송 시작...', {
       responseCount: aiResponses.length,
       startTime: Date.now()
     });
     const saveAndSendPromises = aiResponses.map(async (response, index) => {
       const startTime = Date.now();
-      console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} DB 저장 시작:`, { 
+      console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} DB 저장 시작:`, {
         personaId: response.personaId,
         personaName: response.personaName,
         responseLength: response.content.length,
         startTime
       });
-      
+
       // 3-1. DB 저장
       const savedMessage = await prismaConfig.prisma.chatLog.create({
         data: {
+          id: uuidv4(),
           chatroomId: parseInt(roomId, 10),
           text: response.content,
           type: 'text',
@@ -413,7 +415,7 @@ const processAiChatJob = async (job) => {
       });
 
       const dbSaveTime = Date.now() - startTime;
-      console.log(`✅ [WORKER] AI 응답 ${index + 1} DB 저장 완료:`, { 
+      console.log(`✅ [WORKER] AI 응답 ${index + 1} DB 저장 완료:`, {
         chatLogId: savedMessage.id,
         personaId: response.personaId,
         dbSaveTime: `${dbSaveTime}ms`
@@ -422,6 +424,7 @@ const processAiChatJob = async (job) => {
       // 3-2. 결과를 Redis에 임시 저장 (오프라인 사용자용)
       const cacheKey = `ai-response:${roomId}:${userId}:${Date.now()}-${index}`;
       const messageData = {
+        id: savedMessage.id,
         message: response.content,
         senderType: 'ai',
         senderId: String(response.personaId),
@@ -429,22 +432,22 @@ const processAiChatJob = async (job) => {
         aiId: String(response.personaId),
         timestamp: new Date().toISOString(),
       };
-      
+
       await redisClient.setEx(cacheKey, 3600, JSON.stringify(messageData));
 
       console.log(`💾 [WORKER] AI 응답 ${index + 1} Redis 캐시 저장 완료:`, { cacheKey });
 
       // 3-3. 실시간 전송 (그룹 채팅 SSE vs WebSocket 방식 구분)
       // SSE 연결이 있으면 항상 전송 (온라인 체크 제거)
-      console.log(`📡 [WORKER] AI 응답 ${index + 1} 실시간 전송 시작:`, { 
-        isGroupChat, 
+      console.log(`📡 [WORKER] AI 응답 ${index + 1} 실시간 전송 시작:`, {
+        isGroupChat,
         responseChannel: responseChannel || 'N/A'
       });
-      
+
       if (isGroupChat && responseChannel) {
         // 그룹 채팅 SSE 방식: Redis Pub/Sub으로 SSE 클라이언트에 전송
         console.log(`📤 [WORKER] SSE 전송 중:`, { responseChannel, personaId: response.personaId });
-        
+
         // AI 이미지 정보 조회
         const aiCharacter = await prismaConfig.prisma.persona.findUnique({
           where: { id: response.personaId },
@@ -453,6 +456,7 @@ const processAiChatJob = async (job) => {
 
         const sseMessage = {
           type: 'ai_response',
+          id: savedMessage.id,
           content: response.content,
           aiName: response.personaName,
           aiId: String(response.personaId),
@@ -460,26 +464,28 @@ const processAiChatJob = async (job) => {
           aiProfileImageUrl: aiCharacter?.imageUrl || null, // AI 프로필 이미지 URL을 명확히 구분
           timestamp: new Date().toISOString(),
         };
-        
-        console.log(`🔥 [WORKER] SSE 메시지 전송 시도:`, { 
-          responseChannel, 
+
+        console.log(`🔥 [WORKER] SSE 메시지 전송 시도:`, {
+          responseChannel,
           messageType: sseMessage.type,
           contentLength: sseMessage.content.length,
+          chatRogId: savedMessage.id,
           aiName: sseMessage.aiName
         });
-        
+
         await sendToSSE(responseChannel, sseMessage);
-        
+
         const sseSendTime = Date.now() - startTime;
-        console.log(`✅ [WORKER] SSE 메시지 전송 완료:`, { 
-          responseChannel, 
+        console.log(`✅ [WORKER] SSE 메시지 전송 완료:`, {
+          responseChannel,
           personaId: response.personaId,
+          chatRogId: savedMessage.id,
           totalTime: `${sseSendTime}ms`
         });
       } else {
         // 기존 WebSocket 방식 (1대1 채팅이나 기존 그룹 채팅)
         console.log(`📤 [WORKER] WebSocket 전송 중:`, { roomId, personaId: response.personaId });
-        
+
         // AI 이미지 정보 조회 (WebSocket용)
         const aiCharacterForWebSocket = await prismaConfig.prisma.persona.findUnique({
           where: { id: response.personaId },
@@ -488,6 +494,7 @@ const processAiChatJob = async (job) => {
 
         await sendToWebSocket(roomId, {
           type: 'ai_response',
+          id: savedMessage.id,
           content: response.content,
           aiName: response.personaName,
           aiId: String(response.personaId),
@@ -495,10 +502,10 @@ const processAiChatJob = async (job) => {
           aiProfileImageUrl: aiCharacterForWebSocket?.imageUrl || null, // AI 프로필 이미지 URL을 명확히 구분
           timestamp: new Date().toISOString(),
         });
-        
+
         const wsSendTime = Date.now() - startTime;
-        console.log(`✅ [WORKER] WebSocket 전송 완료:`, { 
-          roomId, 
+        console.log(`✅ [WORKER] WebSocket 전송 완료:`, {
+          roomId,
           personaId: response.personaId,
           totalTime: `${wsSendTime}ms`
         });
@@ -511,7 +518,7 @@ const processAiChatJob = async (job) => {
     await Promise.all(saveAndSendPromises);
     const saveAndSendTime = Date.now() - saveAndSendStartTime;
 
-    console.log('🎯 [WORKER] 모든 AI 응답 저장/전송 완료 - 친밀도 업데이트 시작...', { 
+    console.log('🎯 [WORKER] 모든 AI 응답 저장/전송 완료 - 친밀도 업데이트 시작...', {
       responseCount: aiResponses.length,
       saveAndSendTime: `${saveAndSendTime}ms`,
       totalTimeSoFar: `${Date.now() - job.timestamp}ms`
@@ -520,32 +527,32 @@ const processAiChatJob = async (job) => {
     // 4. 친밀도 업데이트
     const friendshipPromises = aiResponses.map(async (response) => {
       try {
-        console.log(`💖 [WORKER] 친밀도 업데이트 시작:`, { 
+        console.log(`💖 [WORKER] 친밀도 업데이트 시작:`, {
           personaId: response.personaId,
-          personaName: response.personaName 
+          personaName: response.personaName
         });
-        
+
         const expIncrease = Math.max(1, Math.floor(response.content.length / 10));
-        
+
         const aiCharacter = await prismaConfig.prisma.persona.findUnique({
           where: { id: response.personaId },
           select: { clerkId: true, name: true },
         });
 
         if (aiCharacter) {
-          console.log(`🔍 [WORKER] AI 캐릭터 정보 조회 완료:`, { 
+          console.log(`🔍 [WORKER] AI 캐릭터 정보 조회 완료:`, {
             personaId: response.personaId,
             clerkId: aiCharacter.clerkId,
             expIncrease
           });
-          
+
           const friendshipResult = await chatService.increaseFriendship(
             aiCharacter.clerkId,
             response.personaId,
             expIncrease
           );
 
-          console.log(`✅ [WORKER] 친밀도 업데이트 완료:`, { 
+          console.log(`✅ [WORKER] 친밀도 업데이트 완료:`, {
             personaId: response.personaId,
             newExp: friendshipResult?.exp,
             newLevel: friendshipResult?.friendship,
@@ -553,10 +560,10 @@ const processAiChatJob = async (job) => {
           });
 
           if (friendshipResult && userOnline) {
-            console.log(`📤 [WORKER] 친밀도 업데이트 실시간 전송 시작:`, { 
-              personaId: response.personaId 
+            console.log(`📤 [WORKER] 친밀도 업데이트 실시간 전송 시작:`, {
+              personaId: response.personaId
             });
-            
+
             const expUpdateData = {
               type: 'exp_updated',
               roomId,
@@ -570,32 +577,32 @@ const processAiChatJob = async (job) => {
 
             if (isGroupChat && responseChannel) {
               // 그룹 채팅 SSE 방식: Redis Pub/Sub으로 SSE 클라이언트에 전송
-              console.log(`📤 [WORKER] 친밀도 SSE 전송 중:`, { 
-                responseChannel, 
-                personaId: response.personaId 
+              console.log(`📤 [WORKER] 친밀도 SSE 전송 중:`, {
+                responseChannel,
+                personaId: response.personaId
               });
-              
+
               await sendToSSE(responseChannel, expUpdateData);
-              
-              console.log(`✅ [WORKER] 친밀도 SSE 전송 완료:`, { 
-                responseChannel, 
-                personaId: response.personaId 
+
+              console.log(`✅ [WORKER] 친밀도 SSE 전송 완료:`, {
+                responseChannel,
+                personaId: response.personaId
               });
             } else {
               // 기존 WebSocket 방식
-              console.log(`📤 [WORKER] 친밀도 WebSocket 전송 중:`, { 
-                roomId, 
-                personaId: response.personaId 
+              console.log(`📤 [WORKER] 친밀도 WebSocket 전송 중:`, {
+                roomId,
+                personaId: response.personaId
               });
-              
+
               await sendToWebSocket(roomId, {
                 type: 'expUpdated',
                 ...expUpdateData,
               });
-              
-              console.log(`✅ [WORKER] 친밀도 WebSocket 전송 완료:`, { 
-                roomId, 
-                personaId: response.personaId 
+
+              console.log(`✅ [WORKER] 친밀도 WebSocket 전송 완료:`, {
+                roomId,
+                personaId: response.personaId
               });
             }
           }
@@ -603,11 +610,11 @@ const processAiChatJob = async (job) => {
           console.warn(`⚠️ [WORKER] AI 캐릭터를 찾을 수 없음:`, { personaId: response.personaId });
         }
       } catch (error) {
-        console.error(`❌ [WORKER] 친밀도 업데이트 실패:`, { 
+        console.error(`❌ [WORKER] 친밀도 업데이트 실패:`, {
           personaId: response.personaId,
-          error: error.message 
+          error: error.message
         });
-        
+
         logger.logError('친밀도 업데이트 실패', error, {
           personaId: response.personaId,
         });
@@ -621,13 +628,13 @@ const processAiChatJob = async (job) => {
     // 4. 그룹 채팅 SSE의 경우 완료 신호 전송
     if (isGroupChat && responseChannel && userOnline) {
       console.log('🏁 [WORKER] 그룹 채팅 완료 신호 전송 중...', { responseChannel });
-      
+
       await sendToSSE(responseChannel, {
         type: 'complete',
         message: '모든 AI 응답이 완료되었습니다.',
         timestamp: new Date().toISOString(),
       });
-      
+
       console.log('✅ [WORKER] 그룹 채팅 완료 신호 전송 완료', { responseChannel });
     }
 
@@ -699,7 +706,7 @@ aiChatWorker.on('active', (job) => {
     isGroupChat: job.data.isGroupChat,
     timestamp: new Date().toISOString()
   });
-  
+
   logger.logInfo('AI 채팅 작업 시작', {
     jobId: job.id,
     roomId: job.data.roomId,
@@ -709,7 +716,7 @@ aiChatWorker.on('active', (job) => {
 aiChatWorker.on('completed', (job, result) => {
   const totalDuration = job.finishedOn - job.processedOn;
   const totalTime = Date.now() - job.timestamp;
-  
+
   console.log('🎉 [WORKER] AI 채팅 작업 완료:', {
     jobId: job.id,
     roomId: job.data.roomId,
@@ -721,7 +728,7 @@ aiChatWorker.on('completed', (job, result) => {
     totalTime: `${totalTime}ms`,
     timestamp: new Date().toISOString()
   });
-  
+
   logger.logInfo('AI 채팅 작업 완료', {
     jobId: job.id,
     roomId: job.data.roomId,
@@ -741,7 +748,7 @@ aiChatWorker.on('failed', (job, err) => {
     stack: err.stack,
     timestamp: new Date().toISOString()
   });
-  
+
   logger.logError('AI 채팅 작업 실패', err, {
     jobId: job?.id,
     roomId: job?.data?.roomId,
@@ -754,7 +761,7 @@ aiChatWorker.on('error', (err) => {
     stack: err.stack,
     timestamp: new Date().toISOString()
   });
-  
+
   logger.logError('AI 채팅 워커 에러', err);
 });
 
@@ -765,4 +772,4 @@ aiChatWorker.on('stalled', (jobId) => {
   });
 });
 
-export default aiChatWorker; 
+export default aiChatWorker;

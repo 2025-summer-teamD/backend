@@ -11,7 +11,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
  * 페르소나 정보에서 성격, 말투, 특징을 추출하는 함수
  * @param {object} personaInfo - 페르소나 정보
- * @returns {object} { personality, tone, characteristics }
+ * @returns {object} { personality, tone }
  */
 const extractPersonaDetails = async (personaInfo) => {
   try {
@@ -20,7 +20,6 @@ const extractPersonaDetails = async (personaInfo) => {
       return {
         personality: personaInfo.prompt.personality || '친근하고 활발한',
         tone: personaInfo.prompt.tone || '친근하고 자연스러운',
-        characteristics: personaInfo.prompt.tag || '친근함,활발함,자연스러움,긍정적'
       };
     }
 
@@ -35,7 +34,6 @@ const extractPersonaDetails = async (personaInfo) => {
 {
   "personality": "성격을 자세히 설명",
   "tone": "말투나 유행어",
-  "characteristics": "특징을 쉼표로 구분"
 }
 `;
 
@@ -43,14 +41,12 @@ const extractPersonaDetails = async (personaInfo) => {
     return {
       personality: details.personality || '친근하고 활발한',
       tone: details.tone || '친근하고 자연스러운',
-      characteristics: details.characteristics || '친근함,활발함,자연스러움,긍정적'
     };
   } catch (error) {
     console.error('페르소나 상세 정보 추출 실패:', error);
     return {
       personality: '친근하고 활발한',
       tone: '친근하고 자연스러운',
-      characteristics: '친근함,활발함,자연스러움,긍정적'
     };
   }
 };
@@ -102,7 +98,7 @@ const getMyChatList = async (userId, pagination) => {
       },
       ChatLogs: {
         orderBy: { time: 'desc' },
-        take: 1, 
+        take: 1,
         select: { text: true, time: true },
       },
     },
@@ -112,7 +108,7 @@ const getMyChatList = async (userId, pagination) => {
   const chatList = chatRooms.map(room => {
     // AI 참가자들만 찾기 (사용자 제거)
     const aiParticipants = room.participants.filter(p => p.persona);
-    
+
     // 대표 AI (첫 번째 AI 또는 null)
     const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
@@ -171,10 +167,10 @@ const generateAiChatResponseOneOnOne = async (
   if (imageMatch) {
     const imageUrl = imageMatch[1].trim();
     try {
-      console.log('🖼️ [CHAT SERVICE] 이미지 메시지 감지:', { 
+      console.log('🖼️ [CHAT SERVICE] 이미지 메시지 감지:', {
         originalMessage: userMessage,
         extractedImageUrl: imageUrl,
-        personaName: personaInfo.name 
+        personaName: personaInfo.name
       });
 
       // 캐릭터 설정을 포함한 프롬프트
@@ -187,22 +183,23 @@ const generateAiChatResponseOneOnOne = async (
 - 텍스트로만 응답할 것
 - 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
+- 1문장 또는 2문장으로 간결하게 표현할 것
 
 ${personaInfo.name}:`;
-      
+
       console.log('📝 [CHAT SERVICE] 이미지 프롬프트:', promptText);
 
       const aiResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
-      
-      console.log('✅ [CHAT SERVICE] 이미지 응답 생성 완료:', { 
+
+      console.log('✅ [CHAT SERVICE] 이미지 응답 생성 완료:', {
         responseLength: aiResponse.length,
         responsePreview: aiResponse.substring(0, 100) + '...',
         personaName: personaInfo.name
       });
-      
+
       // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
       let cleanedResponse = aiResponse;
-      
+
       // 응답 끝에 AI 이름이 붙어있는지 확인
       const namePatterns = [
         new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*$`, 'i'),
@@ -210,7 +207,7 @@ ${personaInfo.name}:`;
         new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*$`, 'i'),
         new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
       ];
-      
+
       for (const pattern of namePatterns) {
         if (pattern.test(cleanedResponse)) {
           console.log(`🧹 ${personaInfo.name} 이미지 응답에서 자기 이름 제거:`, {
@@ -220,7 +217,7 @@ ${personaInfo.name}:`;
           cleanedResponse = cleanedResponse.replace(pattern, '').trim();
         }
       }
-      
+
       return cleanedResponse;
     } catch (error) {
       console.error('❌ [CHAT SERVICE] Gemini 이미지 응답 실패:', error.message);
@@ -231,11 +228,11 @@ ${personaInfo.name}:`;
 
   // 게임 모드 감지
   const gameMode = detectGameMode(userMessage);
-  
+
   if (gameMode) {
     // 게임 모드인 경우 게임 서비스 사용
     console.log(`🎮 게임 모드 감지: ${gameMode}`);
-    
+
     // 게임별 필요한 매개변수 설정
     let gameResponse;
     if (gameMode === 'wordchain') {
@@ -245,7 +242,7 @@ ${personaInfo.name}:`;
     } else if (gameMode === 'balancegame') {
       gameResponse = await generateGameResponse(gameMode, personaInfo, userMessage, [], chatHistory, '', 1, 1, []);
     }
-    
+
     if (gameResponse) {
       return gameResponse;
     }
@@ -276,6 +273,8 @@ ${myInfo}
 - 절대 이미지 URL이나 링크를 포함하지 말 것
 - 텍스트로만 응답할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
+- 1문장 또는 2문장으로 간결하게 표현할 것
+- 반말로 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -293,6 +292,8 @@ ${personaInfo.name}:`;
 - 절대 이미지 URL이나 링크를 포함하지 말 것
 - 텍스트로만 응답할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
+- 1문장 또는 2문장으로 간결하게 표현할 것
+- 반말로 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -308,10 +309,10 @@ ${personaInfo.name}:`;
     console.log('📝 프롬프트:', prompt.trim());
     aiResponseText = await gemini25.generateText(prompt.trim());
     console.log('✅ Google AI 응답 성공 (1대1):', aiResponseText);
-    
+
     // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
     let cleanedResponse = aiResponseText;
-    
+
     // 응답 끝에 AI 이름이 붙어있는지 확인
     const namePatterns = [
       new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*$`, 'i'),
@@ -319,7 +320,7 @@ ${personaInfo.name}:`;
       new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*$`, 'i'),
       new RegExp(`\\s*[-\\s]*${personaInfo.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
     ];
-    
+
     for (const pattern of namePatterns) {
       if (pattern.test(cleanedResponse)) {
         console.log(`🧹 ${personaInfo.name} 응답에서 자기 이름 제거:`, {
@@ -329,7 +330,7 @@ ${personaInfo.name}:`;
         cleanedResponse = cleanedResponse.replace(pattern, '').trim();
       }
     }
-    
+
     aiResponseText = cleanedResponse;
   } catch (error) {
     console.error('❌ Google AI 호출 실패 (1대1):', error.message);
@@ -350,33 +351,33 @@ ${personaInfo.name}:`;
 const deleteChatRoom = async (roomId, userId) => {
   // 1. 채팅방 정보 조회 (생성자 확인을 위해 clerkId 포함)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
-    where: { 
+    where: {
       id: parseInt(roomId, 10),
       isDeleted: false
     }
   });
-  
+
   if (!chatRoom) {
     throw new Error('존재하지 않는 채팅방입니다.');
   }
-  
+
   // 2. 채팅방 생성자만 삭제 가능하도록 권한 확인
   if (chatRoom.clerkId !== userId) {
     throw new Error('채팅방 생성자만 삭제할 수 있습니다.');
   }
-  
+
   // 3. 채팅방을 소프트 삭제
   const deleted = await prismaConfig.prisma.chatRoom.update({
     where: { id: parseInt(roomId, 10) },
     data: { isDeleted: true },
   });
-  
+
   // 4. 관련 채팅 로그도 소프트 삭제
   await prismaConfig.prisma.chatLog.updateMany({
     where: { chatroomId: deleted.id },
     data: { isDeleted: true },
   });
-  
+
   return deleted;
 };
 /**
@@ -607,7 +608,7 @@ const createMultiChatRoom = async (userIds, personaIds, isPublic = true, descrip
   });
   // AI 참가자만 필터링 (사용자 제거)
   const aiParticipants = chatRoom.participants.filter(p => p.persona);
-  
+
   return {
     roomId: chatRoom.id,
     isNewRoom: true,
@@ -652,7 +653,7 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
     });
 
     // 기본 채팅방 이름 생성: "사용자명과 캐릭터명의 채팅방"
-    const defaultRoomName = user && user.name 
+    const defaultRoomName = user && user.name
       ? `${user.name}와 ${persona.name}의 채팅방`
       : `${persona.name}와의 채팅방`;
 
@@ -740,7 +741,7 @@ const increaseFriendship = async (userId, personaId, expGain = 1) => {
     if (isMyCharacter) {
       // 새로운 경험치와 친밀도 계산
       const newExp = persona.exp + expGain;
-      
+
       // 30레벨 시스템: 공식으로 계산
       let newFriendshipLevel = 1;
       if (newExp >= 10) {
@@ -833,16 +834,16 @@ const getFriendship = async (userId, personaId) => {
 const getChatLog = async (chatLogId) => {
   try {
     // chatLogId가 문자열로 넘어올 경우, Prisma의 Int 타입과 맞추기 위해 숫자로 변환합니다.
-    const numericChatLogId = parseInt(chatLogId, 10);
+    // const numericChatLogId = chatLogId;
 
     // 숫자로 변환할 수 없거나 유효하지 않은 ID인 경우
-    if (isNaN(numericChatLogId)) {
-      throw new Error('유효하지 않은 chatLogId 형식입니다.');
-    }
+    // if (typeof numericChatLogId !== 'string') {
+    //   throw new Error('유효하지 않은 chatLogId 형식입니다.');
+    // }
 
     const chatLog = await prismaConfig.prisma.chatLog.findUnique({
       where: {
-        id: numericChatLogId, // 'id'는 chatLog 모델의 고유 식별자 필드여야 합니다.
+        id: chatLogId, // 'id'는 chatLog 모델의 고유 식별자 필드여야 합니다.
       },
       // 필요하다면 select 또는 include를 사용하여 특정 필드만 가져오거나 관계된 데이터를 포함할 수 있습니다.
       // select: {
@@ -921,7 +922,6 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
       name: p.name,
       personality: p.personality,
       tone: p.tone,
-      characteristics: p.characteristics,
       introduction: p.introduction,
       prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
       imageUrl: p.imageUrl
@@ -938,33 +938,33 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
   // 이미지 메시지인 경우 → 멀티모달 호출
   if (imageMatch) {
     const imageUrl = imageMatch[1].trim();
-    console.log(`🖼️ [GROUP CHAT] 단체 채팅 이미지 감지:`, { 
+    console.log(`🖼️ [GROUP CHAT] 단체 채팅 이미지 감지:`, {
       originalMessage: userMessage,
       extractedImageUrl: imageUrl,
-      aiCount: allPersonas.length 
+      aiCount: allPersonas.length
     });
-    
+
     // 각 AI가 이미지에 대해 개별적으로 반응
     const imageResponses = await Promise.all(
       allPersonas.map(async (persona) => {
         try {
           console.log(`🖼️ [GROUP CHAT] ${persona.name} 이미지 처리 시작`);
-          
+
           // 다른 AI들의 정보를 포함한 이미지 프롬프트
           const otherPersonas = allPersonas.filter(p => p.id !== persona.id);
           const otherPersonasInfo = otherPersonas.map(p => `${p.name}(${p.personality || '친근한'}, ${p.tone || '자연스러운'})`).join(', ');
-          
+
           const promptText = `당신은 "${persona.name}"이라는 AI 캐릭터입니다. 사용자(${userName})와 다른 AI들(${otherPersonasInfo})과 함께 이미지를 보고 대화하고 있습니다.
 
 다른 AI들의 정보:
-${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, ${p.tone || '자연스러운'} 말투, ${p.characteristics || '활발한'} 특징
+${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, ${p.tone || '자연스러운'} 말투,
   소개: ${p.introduction || '친근한 AI'}
   프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
   이미지: ${p.imageUrl || '기본 이미지'}`).join('\n')}
 
 중요 규칙:
-- 성격: ${persona.personality || '친근하고 활발한'}
-- 말투: ${persona.tone || '친근하고 자연스러운'}
+- 성격: ${persona.prompt.personality || '친근하고 활발한'}
+- 말투: ${persona.prompt.tone || '친근하고 자연스러운'}
 - 다른 AI들의 이름을 언급하면서 자연스럽게 대화할 것
 - 다른 AI들과 함께 이미지를 분석하고 의견을 나눌 것
 - 자신의 개성을 유지하면서도 다른 AI들과 협력적인 분위기를 만들어갈 것
@@ -974,20 +974,21 @@ ${otherPersonas.map(p => `- ${p.name}: ${p.personality || '친근한'} 성격, $
 - 텍스트로만 응답할 것
 - 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
+- 2문장 이내로 간단하게 대화할 것
 
 ${persona.name}:`;
 
           console.log(`📝 [GROUP CHAT] ${persona.name} 이미지 프롬프트:`, promptText);
 
           const imageResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
-          console.log(`✅ [GROUP CHAT] ${persona.name} 이미지 응답 완료:`, { 
+          console.log(`✅ [GROUP CHAT] ${persona.name} 이미지 응답 완료:`, {
             responseLength: imageResponse.length,
             responsePreview: imageResponse.substring(0, 100) + '...'
           });
-          
+
           // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
           let cleanedResponse = imageResponse;
-          
+
           // 응답 끝에 AI 이름이 붙어있는지 확인
           const namePatterns = [
             new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
@@ -995,7 +996,7 @@ ${persona.name}:`;
             new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
             new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
           ];
-          
+
           for (const pattern of namePatterns) {
             if (pattern.test(cleanedResponse)) {
               console.log(`🧹 ${persona.name} 그룹 채팅 이미지 응답에서 자기 이름 제거:`, {
@@ -1005,7 +1006,7 @@ ${persona.name}:`;
               cleanedResponse = cleanedResponse.replace(pattern, '').trim();
             }
           }
-          
+
           return {
             personaId: persona.id,
             personaName: persona.name,
@@ -1022,12 +1023,12 @@ ${persona.name}:`;
         }
       })
     );
-    
-    console.log(`🎉 [GROUP CHAT] 모든 AI 이미지 응답 완료:`, { 
+
+    console.log(`🎉 [GROUP CHAT] 모든 AI 이미지 응답 완료:`, {
       responseCount: imageResponses.length,
       responses: imageResponses.map(r => ({ name: r.personaName, length: r.content.length }))
     });
-    
+
     return imageResponses;
   }
 
@@ -1048,15 +1049,15 @@ ${persona.name}:`;
   // AI들이 순차적으로 응답 생성 (실제 채팅처럼)
   const responses = [];
   const aiResponses = []; // 다른 AI들의 응답을 저장할 배열
-  
+
   for (let i = 0; i < personasInfo.length; i++) {
     const persona = personasInfo[i];
     console.log(`🤖 ${persona.name} AI 응답 생성 중... (${i + 1}/${personasInfo.length})`);
-    
+
     // 이전 AI들의 응답을 포함한 채팅 히스토리 업데이트
     let updatedChatHistory = chatHistory;
     if (aiResponses.length > 0) {
-      const recentAiMessages = aiResponses.map(response => 
+      const recentAiMessages = aiResponses.map(response =>
         `${response.personaName}: ${response.content}`
       ).join('\n');
       updatedChatHistory = `${chatHistory}\n${recentAiMessages}`;
@@ -1068,11 +1069,10 @@ ${persona.name}:`;
         const allPersonasInfo = personasInfo.map(p => `
 [AI ${p.index + 1} 정보]
 이름: ${p.name}
-성격: ${p.personality}
-말투: ${p.tone}
-특징: ${p.characteristics}
+성격: ${p.prompt.personality}
+말투: ${p.prompt.tone}
 소개: ${p.introduction}
-프롬프트: ${p.prompt}
+프롬프트: ${p.prompt.text}
 이미지: ${p.imageUrl || '기본 이미지'}
 `).join('\n');
 
@@ -1087,7 +1087,6 @@ ${persona.name}:`;
             name: p.name,
             personality: p.personality,
             tone: p.tone,
-            characteristics: p.characteristics,
             introduction: p.introduction,
             prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
             imageUrl: p.imageUrl
@@ -1097,9 +1096,8 @@ ${persona.name}:`;
         individualPrompt = `
 [당신의 정보]
 이름: ${persona.name}
-성격: ${persona.personality || '친근하고 활발한'}
-말투: ${persona.tone || '친근하고 자연스러운'}
-특징: ${persona.characteristics || '활발하고 긍정적인'}
+성격: ${persona.prompt.personality || '친근하고 활발한'}
+말투: ${persona.prompt.tone || '친근하고 자연스러운'}
 소개: ${persona.introduction || '친근한 AI 캐릭터'}
 
 [채팅방에 함께 있는 다른 AI 정보]
@@ -1107,7 +1105,6 @@ ${otherPersonas.map(p => `
 이름: ${p.name}
 성격: ${p.personality || '친근하고 활발한'}
 말투: ${p.tone || '친근하고 자연스러운'}
-특징: ${p.characteristics || '활발하고 긍정적인'}
 소개: ${p.introduction || '친근한 AI 캐릭터'}
 프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
 이미지: ${p.imageUrl || '기본 이미지'}
@@ -1125,6 +1122,7 @@ ${otherPersonas.map(p => `
 - 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
+- 2문장 이내로 간단하게 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -1145,7 +1143,6 @@ ${persona.name}:`;
             name: p.name,
             personality: p.personality,
             tone: p.tone,
-            characteristics: p.characteristics,
             introduction: p.introduction,
             prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
             imageUrl: p.imageUrl
@@ -1157,7 +1154,6 @@ ${persona.name}:`;
 이름: ${persona.name}
 성격: ${persona.personality || '친근하고 활발한'}
 말투: ${persona.tone || '친근하고 자연스러운'}
-특징: ${persona.characteristics || '활발하고 긍정적인'}
 소개: ${persona.introduction || '친근한 AI 캐릭터'}
 
 [채팅방에 함께 있는 다른 AI 정보]
@@ -1165,7 +1161,6 @@ ${otherPersonas.map(p => `
 이름: ${p.name}
 성격: ${p.personality || '친근하고 활발한'}
 말투: ${p.tone || '친근하고 자연스러운'}
-특징: ${p.characteristics || '활발하고 긍정적인'}
 소개: ${p.introduction || '친근한 AI 캐릭터'}
 프롬프트: ${typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화')}
 이미지: ${p.imageUrl || '기본 이미지'}
@@ -1183,6 +1178,7 @@ ${otherPersonas.map(p => `
 - 사용자(${userName})가 "너희 둘이 아는사이야?" 같은 질문을 하면, 다른 AI들의 정보를 바탕으로 답변할 것
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
+- 2문장 이내로 간단하게 대화할 것
 
 [최근 대화 기록]
 ${chatHistory}
@@ -1194,25 +1190,25 @@ ${persona.name}:`;
       try {
         console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
         console.log(`📝 ${persona.name} 프롬프트 (첫 200자):`, individualPrompt.trim().substring(0, 200) + '...');
-        
+
         // 다른 AI 정보가 실제로 포함되어 있는지 확인
         const otherPersonasSection = individualPrompt.includes('다른 AI들의 상세 정보:');
         const otherPersonasContent = individualPrompt.match(/다른 AI들의 상세 정보:\s*([\s\S]*?)(?=중요 규칙:|$)/);
-        
+
         console.log(`🔍 ${persona.name} - 다른 AI 정보 포함 여부:`, {
           hasOtherPersonasSection: otherPersonasSection,
           otherPersonasContent: otherPersonasContent ? otherPersonasContent[1].trim().substring(0, 300) + '...' : '없음'
         });
-        
+
         // 전체 프롬프트 로깅 (디버깅용)
         console.log(`📝 ${persona.name} - 전체 프롬프트:`, individualPrompt);
-        
+
         const response = await gemini25.generateText(individualPrompt.trim());
         console.log(`✅ ${persona.name} AI 응답 완료:`, response.substring(0, 100) + '...');
-        
+
         // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
         let cleanedResponse = response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
-        
+
         // 응답 끝에 AI 이름이 붙어있는지 확인
         const namePatterns = [
           new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
@@ -1220,7 +1216,7 @@ ${persona.name}:`;
           new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
           new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
         ];
-        
+
         for (const pattern of namePatterns) {
           if (pattern.test(cleanedResponse)) {
             console.log(`🧹 ${persona.name} 응답에서 자기 이름 제거:`, {
@@ -1230,23 +1226,23 @@ ${persona.name}:`;
             cleanedResponse = cleanedResponse.replace(pattern, '').trim();
           }
         }
-        
+
         const aiResponse = {
           personaId: persona.id,
           personaName: persona.name,
           content: cleanedResponse
         };
-        
+
         responses.push(aiResponse);
         aiResponses.push(aiResponse);
-        
+
         // 다음 AI 응답 전에 잠시 대기 (실제 채팅처럼)
         if (i < personasInfo.length - 1) {
           const delay = 1000 + Math.random() * 2000; // 1-3초 랜덤 대기
           console.log(`⏳ ${persona.name} 응답 완료. ${delay}ms 후 다음 AI 응답 시작...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
-        
+
       } catch (error) {
         console.error(`❌ ${persona.name} AI 응답 생성 실패:`, error.message);
         const errorResponse = {
@@ -1267,7 +1263,7 @@ ${persona.name}:`;
 const chatService = {
   getMyChatList,
   generateAiChatResponseOneOnOne,
-  deleteChatRoom, 
+  deleteChatRoom,
   makeVeo3Prompt,
   generateVideoWithVeo3,
   uploadVideoToGCS,

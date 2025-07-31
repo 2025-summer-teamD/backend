@@ -12,13 +12,13 @@ export const createRedisMessageHandler = (res, responseChannel, pubSubClient) =>
   return (message) => {
     try {
       const responseData = JSON.parse(message);
-      logSuccess('Redis 메시지 수신', { 
+      logSuccess('Redis 메시지 수신', {
         type: responseData.type,
         responseChannel: responseChannel,
         aiName: responseData.aiName,
         contentLength: responseData.content?.length
       });
-      
+
       if (responseData.type === 'ai_response') {
         handleAiResponseMessage(res, responseData);
       } else if (responseData.type === 'exp_updated') {
@@ -28,8 +28,8 @@ export const createRedisMessageHandler = (res, responseChannel, pubSubClient) =>
       }
     } catch (error) {
       logError('Redis 메시지 파싱 실패', error);
-      logger.logError('Redis Pub/Sub 메시지 파싱 실패', error, { 
-        responseChannel: responseChannel 
+      logger.logError('Redis Pub/Sub 메시지 파싱 실패', error, {
+        responseChannel: responseChannel
       });
     }
   };
@@ -44,9 +44,10 @@ const handleAiResponseMessage = (res, responseData) => {
     aiId: responseData.aiId,
     personaId: responseData.personaId
   });
-  
+
   res.write(`data: ${JSON.stringify({
     type: 'ai_response',
+    id: responseData.id, // AI 메시지 ID 추가
     content: responseData.content,
     aiName: responseData.aiName,
     aiId: responseData.aiId,
@@ -81,4 +82,4 @@ const handleCompleteMessage = (res, responseChannel, pubSubClient) => {
   pubSubClient.disconnect();
   res.end();
   logSuccess('그룹 채팅 플로우 완료');
-}; 
+};

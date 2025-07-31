@@ -106,15 +106,15 @@ const validateTTSParam = (req, res, next) => {
 
     // roomId와 chatLogId가 유효한 숫자인지 확인합니다.
     const roomIdNum = parseInt(roomId, 10);
-    const chatLogIdNum = parseInt(chatLogId, 10);
+    // const chatLogIdNum = parseInt(chatLogId, 10);
 
     if (isNaN(roomIdNum) || roomIdNum <= 0) {
         return res.status(400).json({ error: '유효하지 않은 roomId입니다. ID는 양의 정수여야 합니다.' });
     }
 
-    if (isNaN(chatLogIdNum) || chatLogIdNum <= 0) {
-        return res.status(400).json({ error: '유효하지 않은 chatLogId입니다. ID는 양의 정수여야 합니다.' });
-    }
+    // if (chatLogIdNum <= 0) {
+    //     return res.status(400).json({ error: '유효하지 않은 chatLogId입니다. ID는 양의 정수여야 합니다.' });
+    // }
 
     // 모든 필수 파라미터가 존재하면 다음 미들웨어로 넘어갑니다.
     next();
