@@ -513,9 +513,12 @@ const getRoomInfo = errorHandler.asyncHandler(async (req, res) => {
     const isOneOnOne = await isOneOnOneChat(parsedRoomId);
     console.log('🔍 getRoomInfo - isOneOnOneChat 완료:', { isOneOnOne });
 
+    // 채팅방 이름이 없으면 기본 이름 생성
+    const roomName = chatRoom.name || `${aiParticipants.length}명의 AI와 대화`;
+    
     const responseData = {
       roomId: chatRoom.id,
-      name: chatRoom.name,
+      name: roomName,
       description: chatRoom.description,
       persona: mainPersona ? {
         id: mainPersona.id,
