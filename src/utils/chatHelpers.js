@@ -23,6 +23,7 @@ export const saveChatMessage = async (messageData) => {
   try {
     const savedMessage = await prismaConfig.prisma.chatLog.create({
       data: {
+        id: messageData.id || undefined, // id가 없으면 자동 생성
         chatroomId: parseInt(messageData.roomId, 10),
         text: messageData.text,
         type: messageData.type || 'text',
@@ -31,12 +32,12 @@ export const saveChatMessage = async (messageData) => {
         time: messageData.time || new Date()
       }
     });
-    
+
     logger.logUserActivity(`${messageData.senderType.toUpperCase()}_MESSAGE_SAVED`, messageData.senderId, {
       roomId: messageData.roomId,
       messageLength: messageData.text.length
     });
-    
+
     return savedMessage;
   } catch (error) {
     logger.logError('메시지 저장 실패', error, { roomId: messageData.roomId });
@@ -69,9 +70,10 @@ export const sendSSEUserMessage = (res, { message, userName, userId }) => {
 /**
  * SSE AI 응답 전송 공통 함수
  */
-export const sendSSEAIResponse = (res, { content, aiName, aiId, personaId }) => {
+export const sendSSEAIResponse = (res, { id, content, aiName, aiId, personaId }) => {
   res.write(`data: ${JSON.stringify({
     type: 'ai_response',
+    id,
     content,
     aiName,
     aiId,
@@ -190,7 +192,7 @@ export const validateChatInput = ({ message, sender, userName }) => {
  */
 export const getChatRoomWithParticipants = async (roomId, options = {}) => {
   const { includeChatLogs = false, chatLogLimit = 20 } = options;
-  
+
   const includeConfig = {
     participants: {
       include: {
@@ -230,7 +232,7 @@ export const findAiParticipants = (chatRoom, excludeUserId = null) => {
     console.log('❌ 채팅방 또는 참여자 정보 없음');
     return [];
   }
-  
+
   // AI 참가자들 찾기
   const aiParticipants = chatRoom.participants.filter(p => p.persona);
   console.log('🔍 AI 참여자 필터링 결과:', {
@@ -243,7 +245,7 @@ export const findAiParticipants = (chatRoom, excludeUserId = null) => {
       personaClerkId: p.persona?.clerkId
     }))
   });
-  
+
   // excludeUserId가 있는 경우 해당 유저가 소유한 AI는 제외
   if (excludeUserId) {
     const filteredParticipants = aiParticipants.filter(p => p.persona.clerkId !== excludeUserId);
@@ -263,7 +265,7 @@ export const findAiParticipants = (chatRoom, excludeUserId = null) => {
       imageUrl: p.persona.imageUrl || null
     }));
   }
-  
+
   // 모든 필드를 포함한 AI 참여자 정보 반환
   return aiParticipants.map(p => ({
     ...p.persona,
@@ -309,10 +311,10 @@ export const isFirstMessage = (chatLogs) => {
 export const handleFriendshipUpdate = async (req, res, { userId, personaId, personaName, userMessage, roomId, calculateExpFn }) => {
   try {
     const { default: chatService } = await import('../services/chatService.js');
-    
+
     const expIncrease = calculateExpFn(userMessage);
     const friendshipResult = await chatService.increaseFriendship(userId, personaId, expIncrease);
-    
+
     if (friendshipResult) {
       // SSE로 친밀도 업데이트 전송
       if (res) {
@@ -325,7 +327,7 @@ export const handleFriendshipUpdate = async (req, res, { userId, personaId, pers
           userId
         });
       }
-      
+
       // WebSocket 이벤트 전송
       const io = req.app.getIo ? req.app.getIo() : null;
       if (io) {
@@ -340,7 +342,7 @@ export const handleFriendshipUpdate = async (req, res, { userId, personaId, pers
         });
       }
     }
-    
+
     return friendshipResult;
   } catch (error) {
     logger.logError('친밀도 업데이트 실패', error, { userId, personaId, roomId });
@@ -355,12 +357,12 @@ export const parseAndValidateRoomId = (roomId) => {
   if (!roomId) {
     return { isValid: false, error: 'roomId가 필요합니다.' };
   }
-  
+
   const parsedRoomId = parseInt(roomId, 10);
   if (isNaN(parsedRoomId)) {
     return { isValid: false, error: 'roomId는 숫자여야 합니다.' };
   }
-  
+
   return { isValid: true, roomId: parsedRoomId };
 };
 
@@ -371,7 +373,7 @@ export const validateAndProcessParticipants = (participantIds, userId) => {
   if (!Array.isArray(participantIds) || participantIds.length < 1) {
     return { isValid: false, error: '참가자 배열이 1명 이상 필요합니다.' };
   }
-  
+
   // participantIds는 personaId 배열이므로 userId는 포함하지 않음
   const allParticipantIds = participantIds;
   return { isValid: true, allParticipantIds };
@@ -404,4 +406,3 @@ export const sendFriendshipUpdateEvent = (req, { roomId, personaId, personaName,
   }
 };
 
- 
