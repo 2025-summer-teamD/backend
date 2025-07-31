@@ -54,18 +54,6 @@ services:
       - "traefik.http.routers.api.middlewares=cors"
     command: npm run start
 
-  # frontend: # 프론트엔드 서비스 (예시, 실제 서비스명에 맞게 수정)
-  #   image: your-frontend-image:latest
-  #   container_name: frontend_app
-  #   networks:
-  #     - app-network
-  #   labels:
-  #     - "traefik.enable=true"
-  #     # 프론트엔드 라우터 (anima.io.kr)
-  #     - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
-  #     - "traefik.http.routers.frontend.entrypoints=websecure"
-  #     - "traefik.http.routers.frontend.tls.certresolver=myresolver"
-  #     - "traefik.http.services.frontend.loadbalancer.server.port=80" # 프론트엔드 컨테이너 포트
 
   redis:
     image: redis:7
@@ -80,13 +68,10 @@ services:
   worker:
     build: .
     container_name: bullmq_worker
-    volumes:
-      - ./google-credentials:/app/google-credentials:ro
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google-credentials/summer-bootcamp-465614-e3b0e0dffe15.json
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
