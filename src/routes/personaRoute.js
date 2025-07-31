@@ -258,6 +258,49 @@ router.post(
 
 /**
  * @swagger
+ * /characters/{characterId}/check-like:
+ *   get:
+ *     summary: 페르소나 좋아요 상태 확인
+ *     description: 현재 사용자가 특정 페르소나를 좋아요했는지 확인합니다.
+ *     tags:
+ *       - like
+ *     parameters:
+ *       - in: path
+ *         name: characterId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 페르소나 ID
+ *     responses:
+ *       200:
+ *         description: 좋아요 상태 확인 성공
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: 좋아요 상태를 확인했습니다.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     isLiked:
+ *                       type: boolean
+ *                       example: true
+ *       404:
+ *         description: 페르소나를 찾을 수 없음
+ */
+router.get(
+  '/:characterId/check-like',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  ensureUserInDB,
+  personaController.checkIfLiked
+);
+
+/**
+ * @swagger
  * /characters/{characterId}/view:
  *   post:
  *     summary: 페르소나 조회수 증가

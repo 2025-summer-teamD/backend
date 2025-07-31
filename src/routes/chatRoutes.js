@@ -186,6 +186,13 @@ router.put('/rooms/:roomId/public',
     personaValidator.validateRoomIdParam,
     chatController.updateChatRoomPublic);
 
+// 채팅방 삭제 (소프트 삭제)
+router.delete('/rooms/:roomId',
+    authMiddleware.clerkAuthMiddleware,
+    authMiddleware.requireAuth,
+    personaValidator.validateRoomIdParam,
+    chatController.deleteChatRoom);
+
 // 공개 채팅방 조회
 router.get('/public-rooms',
     authMiddleware.clerkAuthMiddleware,

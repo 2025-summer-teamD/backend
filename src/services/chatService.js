@@ -126,6 +126,7 @@ const getMyChatList = async (userId, pagination) => {
       lastChat: lastChat ? lastChat.text : null,
       time: lastChat ? lastChat.time.toISOString() : null,
       isPublic: room.isPublic,
+      clerkId: room.clerkId, // 생성자 정보 추가
       persona: mainPersona ? {
         id: mainPersona.id,
         name: mainPersona.name,
@@ -347,30 +348,30 @@ ${personaInfo.name}:`;
  * @returns {Promise<object>} 삭제된 채팅방 객체
  */
 const deleteChatRoom = async (roomId, userId) => {
-  // 1. 본인 참여 채팅방인지 확인 (ChatRoomParticipant 기반)
+  // 1. 채팅방 정보 조회 (생성자 확인을 위해 clerkId 포함)
   const chatRoom = await prismaConfig.prisma.chatRoom.findFirst({
     where: { 
       id: parseInt(roomId, 10),
-      isDeleted: false,
-      participants: {
-        some: {
-          userId: userId
-        }
-      }
+      isDeleted: false
     }
   });
   
   if (!chatRoom) {
-    throw new Error('삭제 권한이 없거나 존재하지 않는 채팅방입니다.');
+    throw new Error('존재하지 않는 채팅방입니다.');
   }
   
-  // 2. 채팅방을 소프트 삭제
+  // 2. 채팅방 생성자만 삭제 가능하도록 권한 확인
+  if (chatRoom.clerkId !== userId) {
+    throw new Error('채팅방 생성자만 삭제할 수 있습니다.');
+  }
+  
+  // 3. 채팅방을 소프트 삭제
   const deleted = await prismaConfig.prisma.chatRoom.update({
     where: { id: parseInt(roomId, 10) },
     data: { isDeleted: true },
   });
   
-  // 3. 관련 채팅 로그도 소프트 삭제
+  // 4. 관련 채팅 로그도 소프트 삭제
   await prismaConfig.prisma.chatLog.updateMany({
     where: { chatroomId: deleted.id },
     data: { isDeleted: true },
@@ -579,6 +580,7 @@ const createMultiChatRoom = async (userIds, personaIds, isPublic = true, descrip
     data: {
       isPublic,
       description,
+      clerkId: userIds[0], // 첫 번째 사용자를 채팅방 생성자로 설정
       participants: {
         create: [
           ...userIds.map(userId => ({ user: { connect: { clerkId: userId } } })),
@@ -655,6 +657,7 @@ const createOneOnOneChatRoom = async (userId, personaId, isPublic = true, descri
         name: defaultRoomName,
         description: description,
         isPublic: isPublic,
+        clerkId: userId, // 채팅방 생성자 설정
         participants: {
           create: participants
         }
@@ -1264,7 +1267,7 @@ const chatService = {
   getFriendship,
   getUserFriendships,
   generateAiChatResponseGroup,
-  getChatLog
+  getChatLog,
 };
 
 export default chatService;
