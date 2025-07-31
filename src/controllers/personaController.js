@@ -366,7 +366,7 @@ const updatePersona = errorHandler.asyncHandler(async (req, res) => {
     isPublic: typeof isPublic
   });
 
-  const updated = await PersonaService.updatePersona(personaId, userId, updateData);
+  const updated = await PersonaService.updatePersona(personaId, updateData, userId);
 
   console.log('✅ updatePersona - Updated character:', updated);
 
