@@ -214,6 +214,14 @@ router.get(   // 나의 채팅 목록 조회 (GET /api/my/chat-characters?page=1
   chatController.getMyChats          // 3. 컨트롤러 실행
 );
 
+// 테스트용 엔드포인트
+router.get(
+  '/test-auth',
+  authMiddleware.clerkAuthMiddleware,
+  authMiddleware.requireAuth,
+  chatController.testAuth
+);
+
 /**
  * @swagger
  * /my/characters/{characterId}:
