@@ -1560,6 +1560,19 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * 테스트용 엔드포인트 - 인증 정보 확인
+ */
+const testAuth = errorHandler.asyncHandler(async (req, res) => {
+  return responseHandler.sendSuccess(res, 200, '인증 정보 확인', {
+    auth: req.auth,
+    userId: req.auth?.userId,
+    headers: {
+      authorization: req.headers.authorization ? 'present' : 'missing'
+    }
+  });
+});
+
 export default {
   streamChatByRoom,
   streamChatByRoom2,
@@ -1575,5 +1588,6 @@ export default {
   getTts,
   streamGroupChatByRoom,
   sendChatMessage,
-  getPublicChatRooms
+  getPublicChatRooms,
+  testAuth
 };

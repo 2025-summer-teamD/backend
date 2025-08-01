@@ -14,7 +14,7 @@ ENV NODE_ENV=$NODE_ENV
 RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 
 # Prisma 클라이언트 생성을 위해 prisma 스키마 먼저 복사
-COPY ..
+COPY . .
 
 # Prisma 클라이언트 생성
 RUN npx prisma generate
