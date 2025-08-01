@@ -211,11 +211,32 @@ const getPersonaDetails = async (personaId, userId) => {
     // liked 상태 확인
     const liked = persona.isLiked && persona.likedByUserId === userId;
 
+    // 디버깅을 위한 로그 추가
+    console.log('🔍 getPersonaDetails - creatorName 디버깅:', {
+      personaId,
+      personaCreatorName: persona.creatorName,
+      user: persona.user,
+      userName: persona.user?.name,
+      userFirstName: persona.user?.firstName,
+      userClerkId: persona.user?.clerkId
+    });
+
+    // creatorName이 clerkId 형태인지 확인 (user_로 시작하거나 clerkId와 같은 경우)
+    const isCreatorNameClerkId = persona.creatorName && (
+      persona.creatorName === persona.user?.clerkId || 
+      persona.creatorName.startsWith('user_') ||
+      persona.creatorName.length > 20 // clerkId는 보통 20자 이상
+    );
+
     const result = {
       ...persona,
       liked: liked,
-      creatorName: persona.creatorName || persona.user?.name || persona.user?.firstName || persona.user?.clerkId || '알 수 없음'
+      creatorName: isCreatorNameClerkId 
+        ? (persona.user?.name || persona.user?.firstName || (persona.user?.clerkId ? `사용자_${persona.user.clerkId.slice(-6)}` : '알 수 없음'))
+        : (persona.creatorName || persona.user?.name || persona.user?.firstName || (persona.user?.clerkId ? `사용자_${persona.user.clerkId.slice(-6)}` : '알 수 없음'))
     };
+
+    console.log('🔍 getPersonaDetails - 최종 creatorName:', result.creatorName);
 
     console.log('🔍 getPersonaDetails service - 결과:', { personaId, liked });
     return result;

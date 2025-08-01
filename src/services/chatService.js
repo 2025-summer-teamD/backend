@@ -113,7 +113,12 @@ const getMyChatList = async (userId, pagination) => {
       ChatLogs: {
         orderBy: { time: 'desc' },
         take: 1,
-        select: { text: true, time: true },
+        select: { 
+          text: true, 
+          time: true, 
+          senderId: true,
+          senderType: true
+        },
       },
     },
   });
@@ -126,6 +131,18 @@ const getMyChatList = async (userId, pagination) => {
     // 대표 AI (첫 번째 AI 또는 null)
     const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
+    
+    // senderId 타입 안전성 보장 (TTS 기능과 호환성 유지)
+    if (lastChat) {
+      // senderId가 null이거나 undefined인 경우 빈 문자열로 설정
+      if (lastChat.senderId === null || lastChat.senderId === undefined) {
+        lastChat.senderId = '';
+      }
+      // senderId가 숫자인 경우 문자열로 변환 (API 응답용)
+      else if (typeof lastChat.senderId === 'number') {
+        lastChat.senderId = lastChat.senderId.toString();
+      }
+    }
 
     return {
       roomId: room.id,

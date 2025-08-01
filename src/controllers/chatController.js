@@ -1532,16 +1532,67 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
       take: 50 // 최대 50개까지만 조회
     });
 
+    console.log('🔍 Backend - Raw Public Rooms:', publicRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      clerkId: room.clerkId,
+      hasClerkId: !!room.clerkId
+    })));
+
+    // 각 채팅방의 생성자 정보 조회
+    const roomsWithCreator = await Promise.all(
+      publicRooms.map(async (room) => {
+        let creatorName = null;
+        
+        // 디버깅을 위한 로그 추가
+        console.log('🔍 Backend - Room ClerkId:', {
+          roomId: room.id,
+          roomName: room.name,
+          clerkId: room.clerkId,
+          hasClerkId: !!room.clerkId
+        });
+        
+        if (room.clerkId) {
+          // User 테이블에서 생성자 정보 조회
+          const creator = await prismaConfig.prisma.user.findUnique({
+            where: { clerkId: room.clerkId },
+            select: { name: true, firstName: true, lastName: true }
+          });
+          
+          console.log('🔍 Backend - Creator Query Result:', {
+            roomId: room.id,
+            clerkId: room.clerkId,
+            creator: creator,
+            hasCreator: !!creator
+          });
+          
+          if (creator) {
+            // 이름 우선순위: name > firstName + lastName > clerkId
+            creatorName = creator.name || 
+                        (creator.firstName && creator.lastName ? `${creator.firstName} ${creator.lastName}` : null) ||
+                        room.clerkId;
+          } else {
+            creatorName = room.clerkId;
+          }
+        }
+        
+        return {
+          ...room,
+          creatorName
+        };
+      })
+    );
+
     // 응답 데이터 가공 (AI 참여자만 포함)
-    const formattedRooms = publicRooms.map(room => {
+    const formattedRooms = roomsWithCreator.map(room => {
       const aiParticipants = room.participants.filter(p => p.persona);
-      return {
+      const formattedRoom = {
         id: room.id,
         name: room.name,
         description: room.description,
         isPublic: room.isPublic,
-
         createdAt: room.createdAt,
+        creatorName: room.creatorName, // 만든사람 이름 추가
         participants: aiParticipants.map(p => ({
           personaId: p.persona.id,
           persona: {
@@ -1551,6 +1602,16 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
           }
         }))
       };
+      
+      // 디버깅을 위한 로그 추가
+      console.log('🔍 Backend - Formatted Room:', {
+        roomId: formattedRoom.id,
+        roomName: formattedRoom.name,
+        creatorName: formattedRoom.creatorName,
+        allKeys: Object.keys(formattedRoom)
+      });
+      
+      return formattedRoom;
     });
 
     return responseHandler.sendSuccess(res, 200, '공개 채팅방 목록을 성공적으로 조회했습니다.', formattedRooms);
