@@ -302,13 +302,13 @@ const processAiChatJob = async (job) => {
         personaName: persona.name,
       }];
     } else {
-      // 그룹 채팅: 다중 AI 응답 (한 번에 모든 AI 응답 생성)
-      console.log('👥 [WORKER] 그룹 채팅 - 다중 AI 응답 생성 중...', { participantCount: aiParticipants.length });
+      // 그룹 채팅: 순차적 AI 응답 생성 및 즉시 전송
+      console.log('👥 [WORKER] 그룹 채팅 - 순차적 AI 응답 생성 중...', { participantCount: aiParticipants.length });
 
       // 모든 AI의 persona 정보 수집
       const allPersonas = aiParticipants.map(p => p.persona);
 
-      // 한 번에 모든 AI 응답 생성
+      // 순차적으로 AI 응답 생성 및 즉시 전송
       const groupResponses = await chatService.generateAiChatResponseGroup(
         message,
         allPersonas,
@@ -392,14 +392,18 @@ const processAiChatJob = async (job) => {
       responseCount: aiResponses.length,
       startTime: Date.now()
     });
-    const saveAndSendPromises = aiResponses.map(async (response, index) => {
-      const startTime = Date.now();
-      console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} DB 저장 시작:`, {
-        personaId: response.personaId,
-        personaName: response.personaName,
-        responseLength: response.content.length,
-        startTime
-      });
+    
+    // 단체 채팅에서는 순차적으로 처리
+    if (isGroupChat) {
+      for (let index = 0; index < aiResponses.length; index++) {
+        const response = aiResponses[index];
+        const startTime = Date.now();
+        console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} 순차 처리 시작:`, {
+          personaId: response.personaId,
+          personaName: response.personaName,
+          responseLength: response.content.length,
+          startTime
+        });
 
       // 3-1. DB 저장
       const savedMessage = await prismaConfig.prisma.chatLog.create({
@@ -482,6 +486,20 @@ const processAiChatJob = async (job) => {
           chatRogId: savedMessage.id,
           totalTime: `${sseSendTime}ms`
         });
+
+        // 🆕 AI 응답 완료 신호 전송
+        await sendToSSE(responseChannel, {
+          type: 'ai_response_complete',
+          aiId: response.personaId,
+          aiName: response.personaName,
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(`✅ [WORKER] AI 응답 완료 신호 전송:`, {
+          responseChannel,
+          personaId: response.personaId,
+          personaName: response.personaName
+        });
       } else {
         // 기존 WebSocket 방식 (1대1 채팅이나 기존 그룹 채팅)
         console.log(`📤 [WORKER] WebSocket 전송 중:`, { roomId, personaId: response.personaId });
@@ -509,15 +527,113 @@ const processAiChatJob = async (job) => {
           personaId: response.personaId,
           totalTime: `${wsSendTime}ms`
         });
+
+        // 🆕 AI 응답 완료 신호 전송 (WebSocket용)
+        await sendToWebSocket(roomId, {
+          type: 'ai_response_complete',
+          aiId: String(response.personaId),
+          aiName: response.personaName,
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(`✅ [WORKER] AI 응답 완료 신호 전송 (WebSocket):`, {
+          roomId,
+          personaId: response.personaId,
+          personaName: response.personaName
+        });
       }
 
-      return savedMessage;
-    });
+      // 다음 AI 응답 전에 잠시 대기 (실제 채팅처럼)
+      if (index < aiResponses.length - 1) {
+        const delay = 1000; // 1초 고정 대기
+        console.log(`⏳ ${response.personaName} 응답 완료. ${delay}ms 후 다음 AI 응답 시작...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    } // for loop 종료
+    } else {
+      // 1대1 채팅에서는 기존 병렬 처리 방식 유지
+      console.log('💾 [WORKER] 1대1 채팅 - 병렬 처리 시작...');
+      
+      const saveAndSendPromises = aiResponses.map(async (response, index) => {
+        const startTime = Date.now();
+        console.log(`💾 [WORKER] AI 응답 ${index + 1}/${aiResponses.length} 병렬 처리 시작:`, {
+          personaId: response.personaId,
+          personaName: response.personaName,
+          responseLength: response.content.length,
+          startTime
+        });
 
-    const saveAndSendStartTime = Date.now();
-    await Promise.all(saveAndSendPromises);
-    const saveAndSendTime = Date.now() - saveAndSendStartTime;
+        // 3-1. DB 저장
+        const savedMessage = await prismaConfig.prisma.chatLog.create({
+          data: {
+            id: uuidv4(),
+            chatroomId: parseInt(roomId, 10),
+            text: response.content,
+            type: 'text',
+            senderType: 'ai',
+            senderId: String(response.personaId),
+            time: new Date(),
+          },
+        });
 
+        const dbSaveTime = Date.now() - startTime;
+        console.log(`✅ [WORKER] AI 응답 ${index + 1} DB 저장 완료:`, {
+          chatLogId: savedMessage.id,
+          personaId: response.personaId,
+          dbSaveTime: `${dbSaveTime}ms`
+        });
+
+        // 3-2. 결과를 Redis에 임시 저장 (오프라인 사용자용)
+        const cacheKey = `ai-response:${roomId}:${userId}:${Date.now()}-${index}`;
+        const messageData = {
+          id: savedMessage.id,
+          message: response.content,
+          senderType: 'ai',
+          senderId: String(response.personaId),
+          aiName: response.personaName,
+          aiId: String(response.personaId),
+          timestamp: new Date().toISOString(),
+        };
+
+        await redisClient.setEx(cacheKey, 3600, JSON.stringify(messageData));
+
+        console.log(`💾 [WORKER] AI 응답 ${index + 1} Redis 캐시 저장 완료:`, { cacheKey });
+
+        // 3-3. 실시간 전송 (WebSocket 방식)
+        console.log(`📡 [WORKER] AI 응답 ${index + 1} 실시간 전송 시작:`, {
+          roomId,
+          personaId: response.personaId
+        });
+
+        // AI 이미지 정보 조회 (WebSocket용)
+        const aiCharacterForWebSocket = await prismaConfig.prisma.persona.findUnique({
+          where: { id: response.personaId },
+          select: { clerkId: true, name: true, imageUrl: true },
+        });
+
+        await sendToWebSocket(roomId, {
+          type: 'ai_response',
+          id: savedMessage.id,
+          content: response.content,
+          aiName: response.personaName,
+          aiId: String(response.personaId),
+          personaId: response.personaId,
+          aiProfileImageUrl: aiCharacterForWebSocket?.imageUrl || null,
+          timestamp: new Date().toISOString(),
+        });
+
+        const wsSendTime = Date.now() - startTime;
+        console.log(`✅ [WORKER] WebSocket 전송 완료:`, {
+          roomId,
+          personaId: response.personaId,
+          totalTime: `${wsSendTime}ms`
+        });
+      });
+
+      await Promise.all(saveAndSendPromises);
+    }
+
+    const saveAndSendTime = Date.now() - job.timestamp;
     console.log('🎯 [WORKER] 모든 AI 응답 저장/전송 완료 - 친밀도 업데이트 시작...', {
       responseCount: aiResponses.length,
       saveAndSendTime: `${saveAndSendTime}ms`,
