@@ -617,8 +617,8 @@ const streamChatByRoom = async (req, res, next) => {
     const { roomId } = req.params;
     const { userId } = req.auth;
     if (req.method === 'POST') {
-      // 메시지 전송: message, sender, timestamp 필요
-      const { message, sender, timestamp } = req.body;
+      // 메시지 전송: message, sender, timestamp, imageUrl 필요
+      const { message, sender, timestamp, imageUrl } = req.body;
       const inputValidation = validateChatInput({ message, sender, userName: sender });
       if (!inputValidation.isValid || !timestamp) {
         return responseHandler.sendBadRequest(res, 'message, sender, timestamp 필드가 모두 필요합니다.');
@@ -687,7 +687,8 @@ const streamChatByRoom = async (req, res, next) => {
       // 1. 사용자 메시지 저장
       await saveChatMessage({
         roomId,
-        text: message,
+        text: imageUrl ? '' : message, // 이미지가 있으면 텍스트는 비움
+        imageUrl: imageUrl || null, // 이미지 URL 저장
         senderType: 'user',
         senderId: userId,
         time: new Date(timestamp)
@@ -720,7 +721,9 @@ const streamChatByRoom = async (req, res, next) => {
         allPersonas,
         chatHistory,
         isFirstMessage,
-        userName
+        userName,
+        imageUrl, // 이미지 URL 전달
+        roomId
       );
 
       console.log('✅ 단체 채팅 AI 응답 생성 완료:', aiResponses.length, '개의 응답');
@@ -892,7 +895,20 @@ const streamGroupChatByRoom = async (req, res, next) => {
 
     console.log('✅ 사용자 메시지 SSE 전송 완료');
 
-    // 7. BullMQ에 AI 처리 작업 추가
+    // 🆕 7. 각 AI별 로딩 상태 전송
+    if (aiParticipants && aiParticipants.length > 0) {
+      for (const participant of aiParticipants) {
+        res.write(`data: ${JSON.stringify({
+          type: 'ai_loading',
+          aiId: participant.id,
+          aiName: participant.name,
+          timestamp: new Date().toISOString()
+        })}\n\n`);
+      }
+      console.log('✅ AI 로딩 상태 SSE 전송 완료');
+    }
+
+    // 8. BullMQ에 AI 처리 작업 추가
     const queueResult = await createAndProcessGroupChatJob({
       roomId, message, senderId: userId, userName, userId, res
     });
@@ -1184,7 +1200,7 @@ const sendChatMessage = async (req, res, next) => {
  */
 const handleOneOnOneChatFlow = async (req, res, next) => {
   const { roomId } = req.params;
-  const { message: userMessage, sender, userName } = req.body;
+  const { message: userMessage, sender, userName, imageUrl } = req.body;
   const userId = req.auth.userId;
 
   let personaInfo = null;
@@ -1239,11 +1255,16 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
     // 첫 번째 메시지인지 확인
     const isFirstMessage = checkIsFirstMessage(chatRoom.ChatLogs);
 
-    // 3. 사용자 메시지를 DB에 저장
+    // 3. SSE 헤더 설정
+    setupSSEHeaders(res);
+    console.log('✅ SSE 헤더 설정 완료');
+
+    // 4. 사용자 메시지를 DB에 저장
     try {
       await saveChatMessage({
         roomId,
-        text: userMessage,
+        text: imageUrl ? '' : userMessage, // 이미지가 있으면 텍스트는 비움
+        imageUrl: imageUrl || null, // 이미지 URL 저장
         senderType: 'user',
         senderId: userId
       });
@@ -1254,11 +1275,20 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       return;
     }
 
-    // 4. 사용자 메시지 즉시 전송
+    // 5. 사용자 메시지 즉시 전송
     sendSSEUserMessage(res, { message: userMessage, userName, userId });
     logSuccess('사용자 메시지 SSE 전송 완료');
 
-    // 5. AI 응답 생성 및 전송
+    // 🆕 6. AI 로딩 상태 전송 (클라이언트에서 타이핑 인디케이터 표시용)
+    res.write(`data: ${JSON.stringify({
+      type: 'ai_loading',
+      aiId: personaInfo.id,
+      aiName: personaInfo.name,
+      timestamp: new Date().toISOString()
+    })}\n\n`);
+    console.log('✅ AI 로딩 상태 SSE 전송 완료');
+
+    // 7. AI 응답 생성 및 전송
     let fullResponseText = "";
     const chatRogId = uuidv4(); // 고유 ID 생성 (SSE 메시지 식별용)
     try {
@@ -1268,10 +1298,20 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
         personaInfo,
         chatHistory,
         isFirstMessage,
-        userName
+        userName,
+        imageUrl // 이미지 URL 전달
       );
       console.log('✅ AI 응답 생성 완료: id: ', chatRogId);
       fullResponseText = aiResponseText;
+      
+      // 🆕 AI 응답 완료 신호 전송
+      res.write(`data: ${JSON.stringify({
+        type: 'ai_response_complete',
+        aiId: personaInfo.id,
+        aiName: personaInfo.name,
+        timestamp: new Date().toISOString()
+      })}\n\n`);
+      
       sendSSEAIResponse(res, {
         id: chatRogId,
         content: aiResponseText,
@@ -1288,7 +1328,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       return;
     }
 
-    // 6. AI 응답을 DB에 저장
+    // 8. AI 응답을 DB에 저장
     try {
       const savedMessage = await saveChatMessage({
         chatRogId,
@@ -1299,7 +1339,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       });
       console.log('✅ AI 응답 DB 저장 완료');
 
-      // 7. 친밀도 업데이트
+      // 9. 친밀도 업데이트
       const expIncrease = calculateExp(userMessage);
       const friendshipResult = await chatService.increaseFriendship(userId, personaInfo.id, expIncrease);
 
@@ -1324,7 +1364,7 @@ const handleOneOnOneChatFlow = async (req, res, next) => {
       return;
     }
 
-    // 8. 완료 신호 전송
+    // 10. 완료 신호 전송
     sendSSEComplete(res);
     console.log('✅ 1대1 채팅 플로우 완료');
 
@@ -1403,7 +1443,20 @@ const handleGroupChatFlow = async (req, res, next) => {
     sendSSEUserMessage(res, { message, userName, userId });
     logSuccess('사용자 메시지 SSE 전송 완료');
 
-    // 5. BullMQ에 AI 처리 작업 추가
+    // 🆕 7. 각 AI별 로딩 상태 전송
+    if (aiParticipants && aiParticipants.length > 0) {
+      for (const participant of aiParticipants) {
+        res.write(`data: ${JSON.stringify({
+          type: 'ai_loading',
+          aiId: participant.id,
+          aiName: participant.name,
+          timestamp: new Date().toISOString()
+        })}\n\n`);
+      }
+      console.log('✅ AI 로딩 상태 SSE 전송 완료');
+    }
+
+    // 8. BullMQ에 AI 처리 작업 추가
     const queueResult = await createAndProcessGroupChatJob({
       roomId, message, senderId: userId, userName, userId, res
     });
@@ -1532,16 +1585,67 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
       take: 50 // 최대 50개까지만 조회
     });
 
+    console.log('🔍 Backend - Raw Public Rooms:', publicRooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      clerkId: room.clerkId,
+      hasClerkId: !!room.clerkId
+    })));
+
+    // 각 채팅방의 생성자 정보 조회
+    const roomsWithCreator = await Promise.all(
+      publicRooms.map(async (room) => {
+        let creatorName = null;
+        
+        // 디버깅을 위한 로그 추가
+        console.log('🔍 Backend - Room ClerkId:', {
+          roomId: room.id,
+          roomName: room.name,
+          clerkId: room.clerkId,
+          hasClerkId: !!room.clerkId
+        });
+        
+        if (room.clerkId) {
+          // User 테이블에서 생성자 정보 조회
+          const creator = await prismaConfig.prisma.user.findUnique({
+            where: { clerkId: room.clerkId },
+            select: { name: true, firstName: true, lastName: true }
+          });
+          
+          console.log('🔍 Backend - Creator Query Result:', {
+            roomId: room.id,
+            clerkId: room.clerkId,
+            creator: creator,
+            hasCreator: !!creator
+          });
+          
+          if (creator) {
+            // 이름 우선순위: name > firstName + lastName > clerkId
+            creatorName = creator.name || 
+                        (creator.firstName && creator.lastName ? `${creator.firstName} ${creator.lastName}` : null) ||
+                        room.clerkId;
+          } else {
+            creatorName = room.clerkId;
+          }
+        }
+        
+        return {
+          ...room,
+          creatorName
+        };
+      })
+    );
+
     // 응답 데이터 가공 (AI 참여자만 포함)
-    const formattedRooms = publicRooms.map(room => {
+    const formattedRooms = roomsWithCreator.map(room => {
       const aiParticipants = room.participants.filter(p => p.persona);
-      return {
+      const formattedRoom = {
         id: room.id,
         name: room.name,
         description: room.description,
         isPublic: room.isPublic,
-
         createdAt: room.createdAt,
+        creatorName: room.creatorName, // 만든사람 이름 추가
         participants: aiParticipants.map(p => ({
           personaId: p.persona.id,
           persona: {
@@ -1551,6 +1655,16 @@ const getPublicChatRooms = errorHandler.asyncHandler(async (req, res) => {
           }
         }))
       };
+      
+      // 디버깅을 위한 로그 추가
+      console.log('🔍 Backend - Formatted Room:', {
+        roomId: formattedRoom.id,
+        roomName: formattedRoom.name,
+        creatorName: formattedRoom.creatorName,
+        allKeys: Object.keys(formattedRoom)
+      });
+      
+      return formattedRoom;
     });
 
     return responseHandler.sendSuccess(res, 200, '공개 채팅방 목록을 성공적으로 조회했습니다.', formattedRooms);

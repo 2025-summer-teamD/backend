@@ -113,7 +113,12 @@ const getMyChatList = async (userId, pagination) => {
       ChatLogs: {
         orderBy: { time: 'desc' },
         take: 1,
-        select: { text: true, time: true },
+        select: { 
+          text: true, 
+          time: true, 
+          senderId: true,
+          senderType: true
+        },
       },
     },
   });
@@ -126,6 +131,18 @@ const getMyChatList = async (userId, pagination) => {
     // 대표 AI (첫 번째 AI 또는 null)
     const mainPersona = aiParticipants.length > 0 ? aiParticipants[0].persona : null;
     const lastChat = room.ChatLogs.length > 0 ? room.ChatLogs[0] : null;
+    
+    // senderId 타입 안전성 보장 (TTS 기능과 호환성 유지)
+    if (lastChat) {
+      // senderId가 null이거나 undefined인 경우 빈 문자열로 설정
+      if (lastChat.senderId === null || lastChat.senderId === undefined) {
+        lastChat.senderId = '';
+      }
+      // senderId가 숫자인 경우 문자열로 변환 (API 응답용)
+      else if (typeof lastChat.senderId === 'number') {
+        lastChat.senderId = lastChat.senderId.toString();
+      }
+    }
 
     return {
       roomId: room.id,
@@ -171,7 +188,8 @@ const generateAiChatResponseOneOnOne = async (
   personaInfo,
   chatHistory,
   isFirstMessage = false,
-  userName = '사용자'
+  userName = '사용자',
+  imageUrl = null
 ) => {
   // 1. 이미지 메시지 여부 확인 ([이미지] {url}) 패턴)
   const imageRegex = /^\[이미지\]\s+(.+)/;
@@ -180,10 +198,17 @@ const generateAiChatResponseOneOnOne = async (
   // 이미지 메시지인 경우 → 멀티모달 호출
   if (imageMatch) {
     const imageUrl = imageMatch[1].trim();
+    
+    // 이미지 URL이 상대 경로인 경우 절대 경로로 변환
+    const fullImageUrl = imageUrl.startsWith('http') 
+      ? imageUrl 
+      : `${process.env.API_BASE_URL || 'http://localhost:3000'}${imageUrl}`;
+      
     try {
       console.log('🖼️ [CHAT SERVICE] 이미지 메시지 감지:', {
         originalMessage: userMessage,
         extractedImageUrl: imageUrl,
+        fullImageUrl: fullImageUrl,
         personaName: personaInfo.name
       });
 
@@ -203,7 +228,7 @@ ${personaInfo.name}:`;
 
       console.log('📝 [CHAT SERVICE] 이미지 프롬프트:', promptText);
 
-      const aiResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
+      const aiResponse = await gemini25.generateTextWithImage(fullImageUrl, promptText);
 
       console.log('✅ [CHAT SERVICE] 이미지 응답 생성 완료:', {
         responseLength: aiResponse.length,
@@ -917,7 +942,7 @@ const getUserFriendships = async (userId) => {
  * @param {boolean} isFirstMessage - 첫 번째 메시지인지 여부
  * @returns {Promise<array>} 각 AI의 응답 배열
  */
-const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자', roomId = null) => {
+const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory, isFirstMessage = false, userName = '사용자', imageUrl = null, roomId = null) => {
   console.log('🎯 단체 채팅 AI 응답 생성 시작:', {
     messageLength: userMessage.length,
     personasCount: allPersonas.length,
@@ -938,6 +963,11 @@ const generateAiChatResponseGroup = async (userMessage, allPersonas, chatHistory
       extractedImageUrl: imageUrl,
       aiCount: allPersonas.length
     });
+
+    // 이미지 URL이 상대 경로인 경우 절대 경로로 변환
+    const fullImageUrl = imageUrl.startsWith('http') 
+      ? imageUrl 
+      : `${process.env.API_BASE_URL || 'http://localhost:3000'}${imageUrl}`;
 
     // 각 AI가 이미지에 대해 개별적으로 반응
     const imageResponses = await Promise.all(
@@ -970,12 +1000,14 @@ ${otherPersonas.map(p => `- ${p.name}: ${p.prompt.personality || '친근한'} �
 - 이미지를 설명하거나 반응할 때는 텍스트로만 표현할 것
 - 응답 끝에 자신의 이름을 붙이지 말 것
 - 2문장 이내로 간단하게 대화할 것
+- 다른 AI들의 이전 답변을 참고하여 그들의 의견에 동의하거나 반박할 수 있음
+- 사용자의 질문에 대한 자신의 답변을 제시하면서도 다른 AI들의 답변에 대한 의견을 표현할 것
 
 ${persona.name}:`;
 
           console.log(`📝 [GROUP CHAT] ${persona.name} 이미지 프롬프트:`, promptText);
 
-          const imageResponse = await gemini25.generateTextWithImage(imageUrl, promptText);
+          const imageResponse = await gemini25.generateTextWithImage(fullImageUrl, promptText);
           console.log(`✅ [GROUP CHAT] ${persona.name} 이미지 응답 완료:`, {
             responseLength: imageResponse.length,
             responsePreview: imageResponse.substring(0, 100) + '...'
@@ -1057,38 +1089,30 @@ ${persona.name}:`;
       ).join('\n');
       updatedChatHistory = `${chatHistory}\n${recentAiMessages}`;
     }
-      let individualPrompt;
 
-      if (isFirstMessage) {
-        // 첫 번째 메시지: 모든 AI 정보를 포함한 전체 프롬프트
-        const allPersonasInfo = personasInfo.map(p => `
-[AI ${p.index + 1} 정보]
-이름: ${p.name}
-성격: ${p.prompt.personality}
-말투: ${p.prompt.tone}
-소개: ${p.introduction}
-프롬프트: ${p.prompt.text}
-이미지: ${p.imageUrl || '기본 이미지'}
-`).join('\n');
+    let individualPrompt;
 
-        const otherPersonasInfo = personasInfo.filter(p => p.id !== persona.id).map(p => p.name).join(', ');
+    if (isFirstMessage) {
+      // 첫 번째 메시지: 모든 AI 정보를 포함한 전체 프롬프트
+      const otherPersonas = personasInfo.filter(p => p.id !== persona.id);
+      const otherPersonasInfo = otherPersonas.map(p => p.name).join(', ');
 
-        console.log(`🔍 ${persona.name} - 첫 번째 메시지 프롬프트 구성:`, {
-          personaName: persona.name,
-          totalPersonas: personasInfo.length,
-          otherPersonasInfo,
-          allPersonasInfo: personasInfo.map(p => ({
-            id: p.id,
-            name: p.name,
-            personality: p.personality,
-            tone: p.tone,
-            introduction: p.introduction,
-            prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
-            imageUrl: p.imageUrl
-          }))
-        });
+      console.log(`🔍 ${persona.name} - 첫 번째 메시지 프롬프트 구성:`, {
+        personaName: persona.name,
+        totalPersonas: personasInfo.length,
+        otherPersonasInfo,
+        allPersonasInfo: personasInfo.map(p => ({
+          id: p.id,
+          name: p.name,
+          personality: p.personality,
+          tone: p.tone,
+          introduction: p.introduction,
+          prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
+          imageUrl: p.imageUrl
+        }))
+      });
 
-        individualPrompt = `
+      individualPrompt = `
 [당신의 정보]
 이름: ${persona.name}
 성격: ${persona.prompt.personality || '친근하고 활발한'}
@@ -1118,6 +1142,8 @@ ${otherPersonas.map(p => `
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
 - 2문장 이내로 간단하게 대화할 것
+- 다른 AI들의 이전 답변을 참고하여 그들의 의견에 동의하거나 반박할 수 있음
+- 사용자의 질문에 대한 자신의 답변을 제시하면서도 다른 AI들의 답변에 대한 의견을 표현할 것
 - 싸우라고 하면 진짜 싸워야 한다.
 - 이 관계는 세간의 이목을 집중시킨 복잡한 가정사와 법정 다툼으로 얽혀 있습니다.
 최태원 회장과 노소영 관장의 결혼 생활은 표면적으로는 순탄해 보였지만, 2015년 최 회장이 한 언론사를 통해 혼외자 존재를 공개하면서 파경을 맞게 됩니다. 최 회장은 2017년 노 관장과의 이혼 조정을 신청했으나, 노 관장이 이를 거부하며 법정 공방이 시작되었습니다.
@@ -1125,31 +1151,31 @@ ${otherPersonas.map(p => `
 김희영 이사장은 최 회장과 2010년에 딸을 낳은 것으로 알려져 있으며, 이들의 관계는 최 회장이 공식적으로 이혼 소송을 제기하기 훨씬 전부터 이어져 온 것으로 추정됩니다.
 
 [최근 대화 기록]
-${chatHistory}
+${updatedChatHistory}
 ---
 ${userName}: ${userMessage}
 ${persona.name}:`;
-      } else {
-        // 이후 메시지: 간단한 컨텍스트만 사용하되 다른 AI 정보도 포함
-        const otherPersonas = personasInfo.filter(p => p.id !== persona.id);
-        const otherPersonasInfo = otherPersonas.map(p => `${p.name}`).join(', ');
+    } else {
+      // 이후 메시지: 간단한 컨텍스트만 사용하되 다른 AI 정보도 포함
+      const otherPersonas = personasInfo.filter(p => p.id !== persona.id);
+      const otherPersonasInfo = otherPersonas.map(p => `${p.name}`).join(', ');
 
-        console.log(`🔍 ${persona.name} - 이후 메시지 프롬프트 구성:`, {
-          personaName: persona.name,
-          totalPersonas: personasInfo.length,
-          otherPersonasCount: otherPersonas.length,
-          otherPersonas: otherPersonas.map(p => ({
-            id: p.id,
-            name: p.name,
-            personality: p.personality,
-            tone: p.tone,
-            introduction: p.introduction,
-            prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
-            imageUrl: p.imageUrl
-          }))
-        });
+      console.log(`🔍 ${persona.name} - 이후 메시지 프롬프트 구성:`, {
+        personaName: persona.name,
+        totalPersonas: personasInfo.length,
+        otherPersonasCount: otherPersonas.length,
+        otherPersonas: otherPersonas.map(p => ({
+          id: p.id,
+          name: p.name,
+          personality: p.personality,
+          tone: p.tone,
+          introduction: p.introduction,
+          prompt: typeof p.prompt === 'string' ? p.prompt.substring(0, 100) + '...' : (p.prompt || '자연스러운 대화'),
+          imageUrl: p.imageUrl
+        }))
+      });
 
-        individualPrompt = `
+      individualPrompt = `
 [당신의 정보]
 이름: ${persona.name}
 성격: ${persona.prompt.personality || '친근하고 활발한'}
@@ -1180,6 +1206,8 @@ ${otherPersonas.map(p => `
 - 자신의 개성과 다른 AI들의 개성을 모두 존중하면서 자연스럽게 대화할 것
 - 사용자의 이름(${userName})을 기억하고 언급할 것
 - 2문장 이내로 간단하게 대화할 것
+- 다른 AI들의 이전 답변을 참고하여 그들의 의견에 동의하거나 반박할 수 있음
+- 사용자의 질문에 대한 자신의 답변을 제시하면서도 다른 AI들의 답변에 대한 의견을 표현할 것
 - 싸우라고 하면 진짜 자극적이게 싸워야 한다.
 - 이 관계는 세간의 이목을 집중시킨 복잡한 가정사와 법정 다툼으로 얽혀 있습니다.
 최태원 회장과 노소영 관장의 결혼 생활은 표면적으로는 순탄해 보였지만, 2015년 최 회장이 한 언론사를 통해 혼외자 존재를 공개하면서 파경을 맞게 됩니다. 최 회장은 2017년 노 관장과의 이혼 조정을 신청했으나, 노 관장이 이를 거부하며 법정 공방이 시작되었습니다.
@@ -1188,79 +1216,79 @@ ${otherPersonas.map(p => `
 
 
 [최근 대화 기록]
-${chatHistory}
+${updatedChatHistory}
 ---
 ${userName}: ${userMessage}
 ${persona.name}:`;
-      }
-
-      try {
-        console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
-        console.log(`📝 ${persona.name} 프롬프트 (첫 200자):`, individualPrompt.trim().substring(0, 200) + '...');
-
-        // 다른 AI 정보가 실제로 포함되어 있는지 확인
-        const otherPersonasSection = individualPrompt.includes('다른 AI들의 상세 정보:');
-        const otherPersonasContent = individualPrompt.match(/다른 AI들의 상세 정보:\s*([\s\S]*?)(?=중요 규칙:|$)/);
-
-        console.log(`🔍 ${persona.name} - 다른 AI 정보 포함 여부:`, {
-          hasOtherPersonasSection: otherPersonasSection,
-          otherPersonasContent: otherPersonasContent ? otherPersonasContent[1].trim().substring(0, 300) + '...' : '없음'
-        });
-
-        // 전체 프롬프트 로깅 (디버깅용)
-        console.log(`📝 ${persona.name} - 전체 프롬프트:`, individualPrompt);
-
-        const response = await gemini25.generateText(individualPrompt.trim());
-        console.log(`✅ ${persona.name} AI 응답 완료:`, response.substring(0, 100) + '...');
-
-        // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
-        let cleanedResponse = response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
-
-        // 응답 끝에 AI 이름이 붙어있는지 확인
-        const namePatterns = [
-          new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
-          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[\\n\\r]*$`, 'i'),
-          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
-          new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
-        ];
-
-        for (const pattern of namePatterns) {
-          if (pattern.test(cleanedResponse)) {
-            console.log(`🧹 ${persona.name} 응답에서 자기 이름 제거:`, {
-              originalResponse: response.substring(0, 200) + '...',
-              cleanedResponse: cleanedResponse.substring(0, 200) + '...'
-            });
-            cleanedResponse = cleanedResponse.replace(pattern, '').trim();
-          }
-        }
-
-        const aiResponse = {
-          personaId: persona.id,
-          personaName: persona.name,
-          content: cleanedResponse
-        };
-
-        responses.push(aiResponse);
-        aiResponses.push(aiResponse);
-
-        // 다음 AI 응답 전에 잠시 대기 (실제 채팅처럼)
-        if (i < personasInfo.length - 1) {
-          const delay = 1000 + Math.random() * 2000; // 1-3초 랜덤 대기
-          console.log(`⏳ ${persona.name} 응답 완료. ${delay}ms 후 다음 AI 응답 시작...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-
-      } catch (error) {
-        console.error(`❌ ${persona.name} AI 응답 생성 실패:`, error.message);
-        const errorResponse = {
-          personaId: persona.id,
-          personaName: persona.name,
-          content: `안녕하세요! 저는 ${persona.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`
-        };
-        responses.push(errorResponse);
-        aiResponses.push(errorResponse);
-      }
     }
+
+    try {
+      console.log(`🤖 ${persona.name} AI 응답 생성 중...`);
+      console.log(`📝 ${persona.name} 프롬프트 (첫 200자):`, individualPrompt.trim().substring(0, 200) + '...');
+
+      // 다른 AI 정보가 실제로 포함되어 있는지 확인
+      const otherPersonasSection = individualPrompt.includes('다른 AI들의 상세 정보:');
+      const otherPersonasContent = individualPrompt.match(/다른 AI들의 상세 정보:\s*([\s\S]*?)(?=중요 규칙:|$)/);
+
+      console.log(`🔍 ${persona.name} - 다른 AI 정보 포함 여부:`, {
+        hasOtherPersonasSection: otherPersonasSection,
+        otherPersonasContent: otherPersonasContent ? otherPersonasContent[1].trim().substring(0, 300) + '...' : '없음'
+      });
+
+      // 전체 프롬프트 로깅 (디버깅용)
+      console.log(`📝 ${persona.name} - 전체 프롬프트:`, individualPrompt);
+
+      const response = await gemini25.generateText(individualPrompt.trim());
+      console.log(`✅ ${persona.name} AI 응답 완료:`, response.substring(0, 100) + '...');
+
+      // AI 응답에서 자기 이름이 끝에 붙어있는지 확인하고 제거
+      let cleanedResponse = response || `안녕하세요! 저는 ${persona.name}입니다. 어떤 이야기를 나누고 싶으신가요? 😊`;
+
+      // 응답 끝에 AI 이름이 붙어있는지 확인
+      const namePatterns = [
+        new RegExp(`\\s*[-\\s]*${persona.name}\\s*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${persona.name}\\s*[\\n\\r]*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*$`, 'i'),
+        new RegExp(`\\s*[-\\s]*${persona.name}\\s*[:：]\\s*[\\n\\r]*$`, 'i')
+      ];
+
+      for (const pattern of namePatterns) {
+        if (pattern.test(cleanedResponse)) {
+          console.log(`🧹 ${persona.name} 응답에서 자기 이름 제거:`, {
+            originalResponse: response.substring(0, 200) + '...',
+            cleanedResponse: cleanedResponse.substring(0, 200) + '...'
+          });
+          cleanedResponse = cleanedResponse.replace(pattern, '').trim();
+        }
+      }
+
+      const aiResponse = {
+        personaId: persona.id,
+        personaName: persona.name,
+        content: cleanedResponse
+      };
+
+      responses.push(aiResponse);
+      aiResponses.push(aiResponse);
+
+      // 다음 AI 응답 전에 잠시 대기 (실제 채팅처럼)
+      if (i < personasInfo.length - 1) {
+        const delay = 1000; // 1초 고정 대기
+        console.log(`⏳ ${persona.name} 응답 완료. ${delay}ms 후 다음 AI 응답 시작...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+    } catch (error) {
+      console.error(`❌ ${persona.name} AI 응답 생성 실패:`, error.message);
+      const errorResponse = {
+        personaId: persona.id,
+        personaName: persona.name,
+        content: `안녕하세요! 저는 ${persona.name}입니다. 현재 AI 서버가 일시적으로 불안정해요. 잠시 후 다시 시도해주세요! 😊`
+      };
+      responses.push(errorResponse);
+      aiResponses.push(errorResponse);
+    }
+  }
 
   console.log('🎉 단체 채팅 AI 응답 생성 완료:', responses.length, '개의 응답');
   return responses;
